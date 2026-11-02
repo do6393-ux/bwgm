@@ -40,7 +40,7 @@ function TabWork({ currentUser, currentTheme }) {
   const [tasks, setTasks] = useState([]);
   const [selectedCat, setSelectedCat] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
-  const [searchKeyword, setSearchKeyword] = useState(""); // 🎯 키워드 검색 상태
+  const [searchKeyword, setSearchKeyword] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState(null);
 
@@ -66,7 +66,6 @@ function TabWork({ currentUser, currentTheme }) {
     done: tasks.filter((t) => t.status === "done").length,
   };
 
-  // 🎯 카테고리 + 상태 + 제목/요약/본문 검색어 동시 필터링
   const filteredTasks = tasks.filter((t) => {
     if (selectedCat !== "all" && t.category !== selectedCat) return false;
     if (selectedStatus !== "all" && t.status !== selectedStatus) return false;
@@ -130,21 +129,19 @@ function TabWork({ currentUser, currentTheme }) {
 
   return (
     <div className="space-y-16 animate-in fade-in duration-500 pb-20">
-      {/* 1. 상단 관제 텔레메트리 바 */}
-      <section className="border border-black/[0.08] bg-[#F4F4F6] rounded-3xl p-8 shadow-sm">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-black/[0.06] pb-6 mb-6">
+      <section className="border border-black/[0.08] bg-[#F4F4F6] rounded-3xl p-5 md:p-8 shadow-sm">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-black/[0.06] pb-6 md:mb-6 mb-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
                 <span className="w-2 h-2 rounded-full bg-[#0066FF] shadow-[0_0_8px_#0066FF] animate-pulse"></span>
                 <span className="font-semibold text-neutral-700">TASK CONTROL MATRIX</span>
               </div>
-              <h2 className="text-[32px] font-normal tracking-tight text-neutral-900 leading-tight">
+              <h2 className="text-[26px] md:text-[32px] font-normal tracking-tight text-neutral-900 leading-tight">
                 정보기획 업무 관제탑
               </h2>
             </div>
 
-            {/* 🎯 관제탑 제목 옆 검색 캡슐 인풋 */}
             <div className="relative flex items-center mt-1 sm:mt-5">
               <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 pointer-events-none" />
               <input
@@ -177,8 +174,7 @@ function TabWork({ currentUser, currentTheme }) {
           )}
         </div>
 
-        {/* 4종 통계 카드 (클릭 필터링 연동) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-[13px]">
+        <div className="hidden md:grid grid-cols-4 gap-4 text-[13px]">
           <div 
             onClick={() => setSelectedStatus("all")}
             className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
@@ -221,7 +217,6 @@ function TabWork({ currentUser, currentTheme }) {
         </div>
       </section>
 
-      {/* 2. 카테고리 필터 바 */}
       <section className="space-y-6">
         <div className="flex justify-between items-center border-b border-black/[0.06] pb-4">
           <div className="flex overflow-x-auto whitespace-nowrap gap-2 py-1 no-scrollbar">
@@ -248,7 +243,6 @@ function TabWork({ currentUser, currentTheme }) {
           </span>
         </div>
 
-        {/* 3. 업무 카드 그리드 */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredTasks.length === 0 ? (
             <div className="col-span-full py-20 text-center font-mono text-neutral-400 text-sm">
@@ -337,7 +331,6 @@ function TabWork({ currentUser, currentTheme }) {
         </div>
       </section>
 
-      {/* 4. 업무 등록 / 수정 모달 */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl p-8 max-w-xl w-full shadow-2xl border border-black/[0.08] animate-in fade-in zoom-in-95 duration-200">

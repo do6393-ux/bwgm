@@ -96,7 +96,7 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, curr
     try {
       await setDoc(doc(db, "homeroom_contacts", key), { userId, grade, classNum, list: updatedList, updatedAt: new Date().toISOString() });
     } catch (e) { console.error(e); }
-    onContactsUpdated(); // 🎯 DB 동기화 후 상위 컴포넌트 업데이트 호출
+    onContactsUpdated();
   };
 
   const handleOpenAddModal = () => {
@@ -160,7 +160,7 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, curr
               전체 초기화
             </button>
             <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-medium bg-[#333333] border border-[#666666] hover:bg-[#555555] text-[#E0E0E0] transition-colors">
-              <ClipboardPaste className="w-3.5 h-3.5" /><span>명렬표 일괄 붙여넣기</span>
+              <ClipboardPaste className="w-3.5 h-3.5" /><span>명렬표 붙여넣기</span>
             </button>
             <button onClick={handleOpenAddModal} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-white text-black hover:bg-neutral-200 transition-colors">
               <UserPlus className="w-3.5 h-3.5" /><span>개별 추가</span>
@@ -169,16 +169,17 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, curr
         )}
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+      {/* 🎯 모바일 4열(grid-cols-4) 강제 적용 및 간격 조절 */}
+      <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2 sm:gap-3">
         {contacts.length === 0 ? (
           <div className="col-span-full py-20 text-center font-mono text-[#A0A0A0] text-sm border border-dashed border-[#666666] rounded-3xl bg-[#444444]">
             등록된 연락처가 없습니다. 명렬표 일괄 붙여넣기로 추가하세요.
           </div>
         ) : (
           contacts.map((c) => (
-            <div key={c.id} onClick={() => setSelectedContact(c)} className="group flex flex-col items-center justify-center p-3.5 bg-[#444444] border border-[#666666] hover:border-rose-400 rounded-2xl shadow-sm transition-all cursor-pointer text-center">
-              <span className="text-[10px] font-mono font-bold text-rose-300 bg-rose-500/20 px-2 py-0.5 rounded-full mb-1">{c.num}번</span>
-              <span className="text-[14px] font-medium text-white group-hover:text-rose-300 transition-colors">{c.name}</span>
+            <div key={c.id} onClick={() => setSelectedContact(c)} className="group flex flex-col items-center justify-center p-2 sm:p-3.5 bg-[#444444] border border-[#666666] hover:border-rose-400 rounded-xl sm:rounded-2xl shadow-sm transition-all cursor-pointer text-center">
+              <span className="text-[9px] sm:text-[10px] font-mono font-bold text-rose-300 bg-rose-500/20 px-1.5 sm:px-2 py-0.5 rounded-full mb-1">{c.num}번</span>
+              <span className="text-[12px] sm:text-[14px] font-medium text-white group-hover:text-rose-300 transition-colors w-full whitespace-nowrap overflow-hidden text-ellipsis">{c.name}</span>
             </div>
           ))
         )}

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import SettingsModal from "./SettingsModal"; // 🎯 추가됨
+import SettingsModal from "./SettingsModal";
 
 export default function Header({
   activeTab,
@@ -12,20 +12,23 @@ export default function Header({
   cutoutColor,
   onOpenLogin,
 }) {
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false); // 🎯 설정 모달 상태 추가
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   return (
     <>
       <header className={`w-full border-b transition-colors duration-500 ${currentTheme.border} px-6 md:px-12 py-[clamp(1.5rem,2.2vw,2rem)]`}>
-        <div className="max-w-[1360px] w-full mx-auto flex flex-row items-start justify-between gap-[clamp(1rem,3vw,2rem)] overflow-x-auto no-scrollbar">
+        {/* 🎯 부모 컨테이너 간격(gap) 확대 */}
+        <div className="max-w-[1360px] w-full mx-auto flex flex-row items-start justify-between gap-[clamp(2rem,4vw,4rem)] overflow-x-auto no-scrollbar">
           
-          <div className="flex-shrink-0">
+          {/* 🎯 로고 영역: min-w-max 추가 */}
+          <div className="flex-shrink-0 min-w-max">
             <h1 className="font-normal leading-[1.0] tracking-tighter text-[clamp(18px,2.4vw,34px)]">
               buwon<br/>informatics
             </h1>
           </div>
 
-          <div className="flex flex-row flex-nowrap items-start flex-1 gap-[clamp(1rem,3vw,3rem)]">
+          {/* 🎯 탭 영역: min-w-max 추가하여 찌그러짐 원천 차단 */}
+          <div className="flex flex-row flex-nowrap items-start flex-1 min-w-max gap-[clamp(1.5rem,3vw,3rem)] pr-4">
             
             {/* 탭 1: 정보 수업 */}
             <div 
@@ -156,11 +159,11 @@ export default function Header({
             </div>
           </div>
 
-          <div className="flex items-start flex-shrink-0 gap-[clamp(1rem,1.5vw,1.5rem)]">
+          {/* 🎯 로그인 영역: min-w-max와 ml-auto 추가로 무조건 우측으로 밀어내기 */}
+          <div className="flex items-start flex-shrink-0 min-w-max gap-[clamp(1rem,1.5vw,1.5rem)] ml-auto pl-4">
             <div className="flex flex-col items-end text-right font-mono pt-[clamp(4px,0.5vw,8px)]">
               {currentUser ? (
                 <>
-                  {/* 🎯 오리지널 감성에 맞게 settings 버튼 추가 */}
                   <button onClick={() => setIsSettingsOpen(true)} className={`transition-colors text-[clamp(10px,0.9vw,13px)] ${currentTheme.navText} hover:underline`}>
                     settings
                   </button>
@@ -202,7 +205,6 @@ export default function Header({
         </div>
       </header>
       
-      {/* 🎯 설정 모달 렌더링 */}
       {currentUser && (
         <SettingsModal 
           isOpen={isSettingsOpen} 

@@ -6,7 +6,6 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 const EVENT_KEYWORDS = ["자치", "동아", "봉사", "진로"];
 const DAYS = ["월", "화", "수", "목", "금"];
 
-// Firestore 및 LocalStorage 2차원 매트릭스 안전 파서
 function parseMatrixData(raw) {
   if (!raw) return null;
   if (typeof raw === "string") {
@@ -27,7 +26,6 @@ function parseMatrixData(raw) {
   return null;
 }
 
-// 🎯 기본 시간표가 등록되어 있는지 확인하는 함수 (모든 셀이 공백인지 검사)
 function isBaseMatrixEmpty(baseMatrix) {
   if (!baseMatrix) return true;
   for (let r = 0; r < 7; r++) {
@@ -39,7 +37,6 @@ function isBaseMatrixEmpty(baseMatrix) {
 }
 
 function isCellChanged(r, c, scheduleMap, baseMatrix, isClass = false) {
-  // 🎯 기본 시간표가 없으면 무조건 변동 없음(false)으로 처리
   if (isBaseMatrixEmpty(baseMatrix)) return false;
 
   const cellKey = `${r + 1}_${c}`;
@@ -283,11 +280,7 @@ export default function TabOffice({ currentUser }) {
     }
 
     const cleanText = text.trim().replace(/\s+/g, "");
-    
-    // 🎯 기본 시간표가 등록되어 있을 때만 색상 하이라이트를 허용
     const hasBase = !isBaseMatrixEmpty(baseMatrix);
-    
-    // 기본 시간표가 없으면 창체(Mint) 여부도 무시하여 색상이 입혀지지 않게 처리
     const isMint = hasBase ? EVENT_KEYWORDS.some(k => cleanText.includes(k)) : false;
     const isChanged = hasBase ? isCellChanged(periodIdx, dayIdx, currentScheduleMap, baseMatrix, isClass) : false;
 
@@ -315,30 +308,30 @@ export default function TabOffice({ currentUser }) {
 
   return (
     <div className="space-y-16 animate-in fade-in duration-500 pb-20">
-      <section className="border border-[#222222] bg-[#111111] p-8">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-[#222222] pb-6 mb-6">
+      <section className="border border-[#222222] bg-[#111111] p-5 md:p-8">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-[#222222] pb-6 md:mb-6 mb-2">
           <div>
             <div className="flex items-center gap-3 mb-2 font-mono text-[11px] uppercase tracking-widest text-[#666666]">
               <span>[ 교무 시스템 // 실시간 시간표 연동 ]</span>
               <span className="w-1.5 h-1.5 bg-[#FF5000] rounded-full animate-ping"></span>
               <span className="text-[#E5E5E5]">{isNextWeek ? "다음 주 조회 모드" : "이번 주 조회 모드"}</span>
             </div>
-            <h2 className="text-[32px] font-normal tracking-tight text-white leading-none">
+            <h2 className="text-[26px] md:text-[32px] font-normal tracking-tight text-white leading-none">
               교무실 시간표 & 급식 관제
             </h2>
           </div>
 
-          <div className="flex flex-wrap items-center gap-4 font-mono text-[12px]">
+          <div className="flex flex-wrap items-center gap-3 md:gap-4 font-mono text-[11px] md:text-[12px]">
             <div className="flex border border-[#222222] bg-[#050505]">
               <button
                 onClick={() => setIsNextWeek(false)}
-                className={`px-5 py-2.5 transition-colors font-bold ${!isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
+                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${!isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
               >
                 이번 주 시간표
               </button>
               <button
                 onClick={() => setIsNextWeek(true)}
-                className={`px-5 py-2.5 transition-colors font-bold ${isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
+                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
               >
                 다음 주 시간표
               </button>
@@ -348,7 +341,7 @@ export default function TabOffice({ currentUser }) {
               href="http://comci.net:4082/st"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-2 border border-[#222222] px-4 py-2.5 hover:border-[#FF5000] hover:text-[#FF5000] transition-colors"
+              className="hidden sm:flex items-center gap-2 border border-[#222222] px-4 py-2.5 hover:border-[#FF5000] hover:text-[#FF5000] transition-colors"
             >
               <span>컴시간 바로가기</span>
               <ExternalLink className="w-3.5 h-3.5" />
@@ -356,7 +349,7 @@ export default function TabOffice({ currentUser }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-[11px]">
+        <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-[11px]">
           <div
             onClick={() => {
               setTempTeacherName(teacherName);
@@ -482,7 +475,6 @@ export default function TabOffice({ currentUser }) {
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-        
         <div className="lg:col-span-7 space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-[#222222] pb-4 gap-4">
             <div>
@@ -610,7 +602,6 @@ export default function TabOffice({ currentUser }) {
             </div>
           </div>
         </div>
-
       </section>
 
       {/* 모달 레이어 */}
