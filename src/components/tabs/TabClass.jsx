@@ -1,0 +1,442 @@
+import React, { useState, useEffect } from "react";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { ExternalLink } from "lucide-react";
+
+const QUICK_TOOLS = [
+  { id: "01", name: "엔트리", desc: "블록 코딩", url: "https://playentry.org" },
+  { id: "02", name: "멘티미터", desc: "실시간 투표", url: "https://menti.com" },
+  { id: "03", name: "인천에듀", desc: "교육 포털", url: "https://icedu.kr" },
+  { id: "04", name: "자리배치", desc: "추첨 유틸리티", url: "https://letsgoteacher.kr/seat-arrangement.html" },
+  { id: "05", name: "룰렛추첨", desc: "랜덤 뽑기", url: "https://lazygyu.github.io/roulette/" },
+];
+
+const UNITS = [
+  { id: "all", label: "전체 자료" },
+  { id: "unit1", label: "1단원 시스템" },
+  { id: "unit2", label: "2단원 데이터" },
+  { id: "unit3", label: "3단원 알고리즘" },
+  { id: "unit4", label: "4단원 인공지능" },
+  { id: "unit5", label: "5단원 디지털 문화" },
+];
+
+function TabClass({ currentUser, currentTheme }) {
+  const [notices, setNotices] = useState([]);
+  const [showNoticeForm, setShowNoticeForm] = useState(false);
+  const [newNotice, setNewNotice] = useState({ title: "", body: "", type: "normal" });
+  const [editingNoticeId, setEditingNoticeId] = useState(null);
+  const [editNoticeData, setEditNoticeData] = useState({ title: "", body: "" });
+
+  const [lessons, setLessons] = useState([]);
+  const [selectedUnit, setSelectedUnit] = useState("all");
+  const [showLessonForm, setShowLessonForm] = useState(false);
+  const [newLesson, setNewLesson] = useState({ title: "", summary: "", lessonNum: "", unit: "unit1" });
+  const [editingLessonId, setEditingLessonId] = useState(null);
+  const [editLessonData, setEditLessonData] = useState({ title: "", summary: "", lessonNum: "", unit: "unit1" });
+
+  const [assignments, setAssignments] = useState([]);
+  const [studentNum, setStudentNum] = useState("");
+  const [studentName, setStudentName] = useState("");
+  const [assignmentText, setAssignmentText] = useState("");
+
+  useEffect(() => {
+    const unsubNotices = onSnapshot(query(collection(db, "notices"), orderBy("createdAt", "desc")), (snap) => {
+      setNotices(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubLessons = onSnapshot(query(collection(db, "lessons"), orderBy("createdAt", "desc")), (snap) => {
+      setLessons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    const unsubAssignments = onSnapshot(query(collection(db, "assignments"), orderBy("createdAt", "desc")), (snap) => {
+      setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => {
+      unsubNotices();
+      unsubLessons();
+      unsubAssignments();
+    };
+  }, []);
+
+  const handleCreateNotice = async (e) => {
+    e.preventDefault();
+    if (!newNotice.title.trim() || !newNotice.body.trim()) return;
+    await addDoc(collection(db, "notices"), { ...newNotice, createdAt: serverTimestamp() });
+    setNewNotice({ title: "", body: "", type: "normal" });
+    setShowNoticeForm(false);
+  };
+
+  const handleUpdateNotice = async (e, id) => {
+    e.preventDefault();
+    if (!editNoticeData.title.trim() || !editNoticeData.body.trim()) return;
+    await updateDoc(doc(db, "notices", id), { title: editNoticeData.title, body: editNoticeData.body });
+    setEditingNoticeId(null);
+  };
+
+  const handleCreateLesson = async (e) => {
+    e.preventDefault();
+    if (!newLesson.title.trim()) return;
+    await addDoc(collection(db, "lessons"), { ...newLesson, createdAt: serverTimestamp() });
+    setNewLesson({ title: "", summary: "", lessonNum: "", unit: "unit1" });
+    setShowLessonForm(false);
+  };
+
+  const handleUpdateLesson = async (e, id) => {
+    e.preventDefault();
+    if (!editLessonData.title.trim()) return;
+    await updateDoc(doc(db, "lessons", id), {
+      title: editLessonData.title,
+      lessonNum: editLessonData.lessonNum,
+      unit: editLessonData.unit,
+      summary: editLessonData.summary
+    });
+    setEditingLessonId(null);
+  };
+
+  const handleSubmitAssignment = async (e) => {
+    e.preventDefault();
+    if (!studentNum || !studentName || !assignmentText) return;
+    const now = new Date();
+    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    await addDoc(collection(db, "assignments"), {
+      studentNum, studentName, text: assignmentText, timeStr, createdAt: serverTimestamp()
+    });
+    setAssignmentText("");
+    setStudentNum("");
+    setStudentName("");
+    alert("과제 전송이 완료되었습니다.");
+  };
+
+  const filteredLessons = lessons.filter(l => {
+    if (!currentUser && l.isVisible === false) return false;
+    if (selectedUnit !== "all" && l.unit !== selectedUnit) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-24 animate-in fade-in duration-700">
+      {/* 1. 공지사항 */}
+      <section className="space-y-8">
+        <div className="flex justify-between items-end border-b border-[#E5E5E5] pb-6">
+          <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>공지사항</h3>
+          {currentUser && (
+            <button onClick={() => setShowNoticeForm(!showNoticeForm)} className="text-[14px] font-mono opacity-50 hover:opacity-100 uppercase">
+              {showNoticeForm ? "[ close ]" : "[ + add ]"}
+            </button>
+          )}
+        </div>
+
+        {showNoticeForm && currentUser && (
+          <form onSubmit={handleCreateNotice} className={`border-b ${currentTheme.border} pb-8 space-y-4`}>
+            <input 
+              type="text" placeholder="공지 제목" value={newNotice.title} onChange={(e) => setNewNotice({ ...newNotice, title: e.target.value })}
+              className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors`}
+            />
+            <textarea 
+              placeholder="공지 내용..." value={newNotice.body} onChange={(e) => setNewNotice({ ...newNotice, body: e.target.value })}
+              className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none h-32 resize-none focus:border-black transition-colors`}
+            />
+            <button type="submit" className="bg-black text-white px-8 py-3 text-[14px] font-mono uppercase hover:bg-[#FF5000] transition-colors">
+              submit
+            </button>
+          </form>
+        )}
+
+        <div className={`border-t border-b ${currentTheme.border}`}>
+          {notices.length === 0 ? (
+            <div className="py-8 text-[14px] font-mono opacity-40 uppercase tracking-widest text-center">no announcements.</div>
+          ) : (
+            notices.map((n) => (
+              editingNoticeId === n.id ? (
+                <form key={n.id} onSubmit={(e) => handleUpdateNotice(e, n.id)} className={`flex flex-col py-6 border-b last:border-0 ${currentTheme.border} gap-4`}>
+                  <input value={editNoticeData.title} onChange={e => setEditNoticeData({...editNoticeData, title: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-3 text-[16px] outline-none focus:border-black transition-colors`} />
+                  <textarea value={editNoticeData.body} onChange={e => setEditNoticeData({...editNoticeData, body: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-3 text-[15px] h-24 outline-none resize-none focus:border-black transition-colors`} />
+                  <div className="flex justify-end gap-4 font-mono text-[12px] uppercase">
+                    <button type="button" onClick={() => setEditingNoticeId(null)}>[ cancel ]</button>
+                    <button type="submit" className="text-[#FF5000] font-bold">[ save ]</button>
+                  </div>
+                </form>
+              ) : (
+                <div key={n.id} className={`flex flex-col py-6 border-b last:border-0 ${currentTheme.border} group`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-[18px] font-medium">{n.title}</h4>
+                    {currentUser && (
+                      <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity text-[12px] font-mono uppercase">
+                        <button onClick={() => { setEditingNoticeId(n.id); setEditNoticeData({ title: n.title, body: n.body }); }}>[ edit ]</button>
+                        <button onClick={() => deleteDoc(doc(db, "notices", n.id))} className="text-red-500">[ del ]</button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-[15px] opacity-60 leading-relaxed whitespace-pre-line max-w-2xl">
+                    {n.body}
+                  </p>
+                </div>
+              )
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* 2. 외부 학습 도구 */}
+      <section className="space-y-8">
+        <div className="border-b border-[#E5E5E5] pb-6">
+          <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>외부 학습 도구</h3>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+          {QUICK_TOOLS.map((tool) => (
+            <a 
+              key={tool.name} href={tool.url} target="_blank" rel="noreferrer"
+              className={`flex flex-col justify-between p-6 border ${currentTheme.border} h-36 hover:border-black hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all group`}
+            >
+              <div className="flex justify-between items-start">
+                <span className="text-[13px] opacity-40 font-mono">{tool.id}</span>
+                <ExternalLink className="w-5 h-5 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </div>
+              <div>
+                <h4 className="text-[20px] font-medium mb-1">{tool.name}</h4>
+                <p className="text-[14px] opacity-50 font-mono">{tool.desc}</p>
+              </div>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      {/* 3. 단원별 수업 자료실 */}
+      <section className="space-y-8">
+        <div className={`flex flex-col md:flex-row md:items-end justify-between gap-6 border-b pb-6 ${currentTheme.border}`}>
+          <div className="flex items-center gap-4 shrink-0">
+            <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>
+              단원별 수업 자료실
+            </h3>
+            {currentUser && (
+              <button onClick={() => setShowLessonForm(!showLessonForm)} className="text-[14px] font-mono opacity-50 hover:opacity-100 uppercase pb-1">
+                {showLessonForm ? "[ close ]" : "[ + add ]"}
+              </button>
+            )}
+          </div>
+          <div className="flex overflow-x-auto whitespace-nowrap text-[18px] tracking-tight gap-8">
+            {UNITS.map(u => (
+              <button
+                key={u.id}
+                onClick={() => setSelectedUnit(u.id)}
+                className={`transition-colors pb-1 ${selectedUnit === u.id ? `border-b border-black ${currentTheme.activeText}` : currentTheme.navText}`}
+              >
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {showLessonForm && currentUser && (
+          <form onSubmit={handleCreateLesson} className={`border-b ${currentTheme.border} pb-8 mb-8 space-y-4`}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <input type="text" placeholder="자료 제목" value={newLesson.title} onChange={e => setNewLesson({...newLesson, title: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors`} />
+              <input type="text" placeholder="차시 (예: 1차시)" value={newLesson.lessonNum} onChange={e => setNewLesson({...newLesson, lessonNum: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors`} />
+            </div>
+            <select value={newLesson.unit} onChange={e => setNewLesson({...newLesson, unit: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors`}>
+              {UNITS.filter(u => u.id !== "all").map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+            </select>
+            <textarea placeholder="요약 설명..." value={newLesson.summary} onChange={e => setNewLesson({...newLesson, summary: e.target.value})} className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none h-24 resize-none focus:border-black transition-colors`} />
+            <button type="submit" className="bg-black text-white px-8 py-3 text-[14px] font-mono uppercase hover:bg-[#FF5000] transition-colors">
+              create lesson
+            </button>
+          </form>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          {filteredLessons.length === 0 ? (
+            <div className="col-span-full py-20 text-center text-[15px] opacity-40 font-mono uppercase tracking-widest">
+              해당 단원에 등록된 자료가 없습니다.
+            </div>
+          ) : (
+            filteredLessons.map(lesson => (
+              editingLessonId === lesson.id ? (
+                <div 
+                  key={lesson.id} 
+                  className={`flex flex-col border ${currentTheme.border} bg-white p-5 gap-3 h-full shadow-md`}
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input 
+                      type="text" 
+                      placeholder="자료 제목" 
+                      value={editLessonData.title} 
+                      onChange={e => setEditLessonData({...editLessonData, title: e.target.value})} 
+                      className="w-full bg-white border border-[#E5E5E5] p-2.5 text-[14px] outline-none focus:border-black transition-colors"
+                    />
+                    <input 
+                      type="text" 
+                      placeholder="차시 (예: 1차시)" 
+                      value={editLessonData.lessonNum} 
+                      onChange={e => setEditLessonData({...editLessonData, lessonNum: e.target.value})} 
+                      className="w-full bg-white border border-[#E5E5E5] p-2.5 text-[14px] outline-none focus:border-black transition-colors"
+                    />
+                  </div>
+                  <select 
+                    value={editLessonData.unit} 
+                    onChange={e => setEditLessonData({...editLessonData, unit: e.target.value})} 
+                    className="w-full bg-white border border-[#E5E5E5] p-2.5 text-[14px] outline-none focus:border-black transition-colors"
+                  >
+                    {UNITS.filter(u => u.id !== "all").map(u => (
+                      <option key={u.id} value={u.id}>{u.label}</option>
+                    ))}
+                  </select>
+                  <textarea 
+                    placeholder="요약 설명..." 
+                    value={editLessonData.summary} 
+                    onChange={e => setEditLessonData({...editLessonData, summary: e.target.value})} 
+                    className="w-full bg-white border border-[#E5E5E5] p-2.5 text-[14px] outline-none h-24 resize-none focus:border-black transition-colors"
+                  />
+                  <div className="flex justify-end gap-3 mt-auto font-mono text-[12px] uppercase pt-2">
+                    <button 
+                      type="button" 
+                      onClick={() => setEditingLessonId(null)} 
+                      className="opacity-50 hover:opacity-100 transition-opacity"
+                    >
+                      [ cancel ]
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={(e) => handleUpdateLesson(e, lesson.id)} 
+                      className="text-[#FF5000] font-bold"
+                    >
+                      [ save ]
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div 
+                  key={lesson.id} 
+                  className={`flex flex-col border ${currentTheme.border} ${currentTheme.cardBg} hover:border-black hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer group`} 
+                  onClick={() => window.open(`?lesson=${lesson.id}`, '_blank')}
+                >
+                  <div className="p-6 flex-1 flex flex-col justify-between">
+                    <div className="space-y-5">
+                      <div className="flex justify-between items-start">
+                        <span className="inline-block px-2 py-1 text-[11px] font-mono border border-black uppercase tracking-widest bg-black text-white">
+                          {UNITS.find(u => u.id === lesson.unit)?.id || "unit.X"}
+                        </span>
+                        <span className="text-[12px] opacity-40 font-mono uppercase shrink-0 pt-1">{lesson.lessonNum}</span>
+                      </div>
+                      <div>
+                        <h4 className="text-[20px] font-medium text-black mb-3 group-hover:text-[#FF5000] transition-colors leading-tight">{lesson.title}</h4>
+                        <p className="text-[14px] opacity-60 line-clamp-3 leading-relaxed font-light">{lesson.summary}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className={`px-6 py-4 border-t flex justify-between items-center ${currentTheme.border} bg-white/30`}>
+                    <div className="flex items-center gap-2">
+                      <div className="w-[6px] h-[6px] bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5">active</span>
+                    </div>
+                    {currentUser && (
+                      <div className="flex items-center gap-4 font-mono text-[11px] uppercase opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            setEditingLessonId(lesson.id);
+                            setEditLessonData({
+                              title: lesson.title || "",
+                              lessonNum: lesson.lessonNum || "",
+                              unit: lesson.unit || "unit1",
+                              summary: lesson.summary || ""
+                            });
+                          }}
+                          className="opacity-50 hover:opacity-100 hover:text-black transition-all"
+                        >
+                          [ edit ]
+                        </button>
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            deleteDoc(doc(db, "lessons", lesson.id)); 
+                          }} 
+                          className="opacity-50 hover:opacity-100 text-red-500 transition-all"
+                        >
+                          [ del ]
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )
+            ))
+          )}
+        </div>
+      </section>
+
+      {/* 4. 과제 제출 터미널 */}
+      <section className="space-y-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+          <div className="space-y-8">
+            <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText} border-b border-[#E5E5E5] pb-6`}>과제 제출 터미널</h3>
+            <form onSubmit={handleSubmitAssignment} className={`border ${currentTheme.border} p-10 space-y-8 ${currentTheme.cardBg}`}>
+              <div className="grid grid-cols-2 gap-8">
+                <div>
+                  <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">id</label>
+                  <input 
+                    type="text" placeholder="예: 10101" value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required 
+                    className={`w-full bg-transparent border-b ${currentTheme.border} py-3 text-[18px] outline-none focus:border-black transition-colors`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">name</label>
+                  <input 
+                    type="text" placeholder="홍길동" value={studentName} onChange={(e) => setStudentName(e.target.value)} required 
+                    className={`w-full bg-transparent border-b ${currentTheme.border} py-3 text-[18px] outline-none focus:border-black transition-colors`}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">payload</label>
+                <textarea 
+                  placeholder="내용을 입력하세요..." value={assignmentText} onChange={(e) => setAssignmentText(e.target.value)} required 
+                  className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors h-36 resize-none`}
+                />
+              </div>
+              <button type="submit" className="bg-black text-white px-8 py-4 text-[15px] font-mono uppercase tracking-widest w-full hover:bg-[#FF5000] transition-colors">
+                transmit
+              </button>
+            </form>
+          </div>
+
+          <div className="space-y-8">
+            <div className="flex justify-between items-end border-b border-[#E5E5E5] pb-6">
+              <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>
+                rx feed
+              </h3>
+              <span className="text-[14px] font-mono opacity-60 uppercase tracking-widest">[{assignments.length}] items</span>
+            </div>
+            <div className={`border-t ${currentTheme.border} pt-6 max-h-[480px] overflow-y-auto space-y-5 pr-4 custom-scrollbar`}>
+              {assignments.length === 0 ? (
+                <p className="text-[14px] font-mono opacity-40 uppercase tracking-widest">listening...</p>
+              ) : (
+                assignments.map((item) => (
+                  <div key={item.id} className="text-[15px] space-y-2 p-5 border border-[#E5E5E5] bg-[#FAFAFA] group transition-colors hover:border-black">
+                    <div className="flex gap-4 opacity-50 text-[12px] font-mono justify-between items-center">
+                      <span className="font-bold opacity-100 text-black">{item.studentNum} {item.studentName}</span>
+                      <div className="flex items-center gap-3">
+                        <span>{item.timeStr}</span>
+                        {currentUser && (
+                          <button 
+                            onClick={() => deleteDoc(doc(db, "assignments", item.id))} 
+                            className="opacity-0 group-hover:opacity-100 text-red-500 hover:underline transition-all"
+                          >
+                            [ del ]
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <p className="break-all opacity-90 leading-relaxed pt-1">{item.text}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+// 파일 맨 하단에 명시적 기본 내보내기를 추가하여 번들러 해석 누락 방지
+export default TabClass;
