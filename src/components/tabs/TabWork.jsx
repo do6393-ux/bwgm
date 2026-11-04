@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { ExternalLink, Plus, RefreshCw, Search, X } from "lucide-react";
 
@@ -37,6 +38,9 @@ const STATUS_MAP = {
 };
 
 function TabWork({ currentUser, currentTheme }) {
+  // 이 탭은 정보 업무 권한자(관리자 + 허용된 교사)에게만 렌더링되므로 등록·수정·삭제도 모두 가능.
+  // 실제 통제는 firestore.rules 의 hasWorkAccess() 가 한다.
+  const canEdit = !!currentUser;
   const [tasks, setTasks] = useState([]);
   const [selectedCat, setSelectedCat] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
@@ -163,7 +167,7 @@ function TabWork({ currentUser, currentTheme }) {
             </div>
           </div>
 
-          {currentUser && (
+          {canEdit && (
             <button
               onClick={handleOpenAddModal}
               className="flex items-center gap-2 bg-[#0066FF] hover:bg-[#0055DD] text-white px-5 py-2.5 rounded-full font-sans text-[13px] font-medium transition-all shadow-sm active:scale-95 shrink-0"
@@ -268,16 +272,16 @@ function TabWork({ currentUser, currentTheme }) {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleToggleStatus(t.id, t.status);
+                          if (canEdit) handleToggleStatus(t.id, t.status);
                         }}
-                        title="클릭하여 상태 전환 (대기 ➔ 진행 ➔ 완료)"
-                        className={`group/btn flex items-center gap-2 pl-2.5 pr-2 py-1 rounded-full border transition-all active:scale-90 ${statusInfo.badge}`}
+                        title={canEdit ? "클릭하여 상태 전환 (대기 ➔ 진행 ➔ 완료)" : undefined}
+                        className={`group/btn flex items-center gap-2 pl-2.5 pr-2 py-1 rounded-full border transition-all ${canEdit ? "active:scale-90" : "cursor-default"} ${statusInfo.badge}`}
                       >
                         <span className={`w-1.5 h-1.5 rounded-full ${statusInfo.dot} ${statusInfo.glow}`}></span>
                         <span className="text-[12px] font-medium tracking-tight">
                           {statusInfo.label}
                         </span>
-                        <RefreshCw className="w-2.5 h-2.5 opacity-30 group-hover/btn:opacity-90 group-hover/btn:rotate-180 transition-all duration-300 ml-0.5" />
+                        {canEdit && <RefreshCw className="w-2.5 h-2.5 opacity-30 group-hover/btn:opacity-90 group-hover/btn:rotate-180 transition-all duration-300 ml-0.5" />}
                       </button>
                     </div>
 
@@ -293,7 +297,7 @@ function TabWork({ currentUser, currentTheme }) {
                     {t.content && (
                       <div
                         className="text-[13px] text-neutral-600 border-t border-black/[0.05] pt-3 my-2 line-clamp-3 leading-relaxed font-light opacity-80"
-                        dangerouslySetInnerHTML={{ __html: t.content }}
+                        dangerouslySetInnerHTML={{ __html: sanitizeHtml(t.content) }}
                       />
                     )}
                   </div>
@@ -303,7 +307,7 @@ function TabWork({ currentUser, currentTheme }) {
                       OPEN TERMINAL <ExternalLink className="w-3 h-3 ml-0.5" />
                     </span>
 
-                    {currentUser && (
+                    {canEdit && (
                       <div className="flex items-center gap-3 font-mono text-[11px]" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleOpenEditModal(t)}

@@ -46,15 +46,26 @@ function TabClass({ currentUser, currentTheme }) {
     const unsubLessons = onSnapshot(query(collection(db, "lessons"), orderBy("createdAt", "desc")), (snap) => {
       setLessons(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
-    const unsubAssignments = onSnapshot(query(collection(db, "assignments"), orderBy("createdAt", "desc")), (snap) => {
-      setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
     return () => {
       unsubNotices();
       unsubLessons();
-      unsubAssignments();
     };
   }, []);
+
+  // 제출물 피드는 교사만 구독한다 (학생에게는 Firestore 읽기 권한도 없음)
+  const teacherUid = currentUser?.uid;
+  useEffect(() => {
+    if (!teacherUid) return;
+    const unsub = onSnapshot(
+      query(collection(db, "assignments"), orderBy("createdAt", "desc")),
+      (snap) => setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      (err) => console.error("assignments listener:", err)
+    );
+    return () => {
+      unsub();
+      setAssignments([]);
+    };
+  }, [teacherUid]);
 
   const handleCreateNotice = async (e) => {
     e.preventDefault();
@@ -366,7 +377,7 @@ function TabClass({ currentUser, currentTheme }) {
 
       {/* 4. 과제 제출 터미널 */}
       <section className="space-y-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20">
+        <div className={`grid grid-cols-1 gap-20 ${currentUser ? "lg:grid-cols-2" : "max-w-2xl"}`}>
           <div className="space-y-8">
             <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText} border-b border-[#E5E5E5] pb-6`}>과제 제출 터미널</h3>
             <form onSubmit={handleSubmitAssignment} className={`border ${currentTheme.border} p-10 space-y-8 ${currentTheme.cardBg}`}>
@@ -396,9 +407,15 @@ function TabClass({ currentUser, currentTheme }) {
               <button type="submit" className="bg-black text-white px-8 py-4 text-[15px] font-mono uppercase tracking-widest w-full hover:bg-[#FF5000] transition-colors">
                 transmit
               </button>
+              {!currentUser && (
+                <p className="text-[12px] font-mono opacity-50 leading-relaxed">
+                  제출한 과제는 선생님만 확인할 수 있습니다.
+                </p>
+              )}
             </form>
           </div>
 
+          {currentUser && (
           <div className="space-y-8">
             <div className="flex justify-between items-end border-b border-[#E5E5E5] pb-6">
               <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>
@@ -432,6 +449,7 @@ function TabClass({ currentUser, currentTheme }) {
               )}
             </div>
           </div>
+          )}
         </div>
       </section>
     </div>

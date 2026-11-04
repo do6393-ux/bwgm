@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
+import { useWorkAccess } from "@/lib/useWorkAccess";
 
 import Header from "@/components/layout/Header";
 import LoginModal from "@/components/layout/LoginModal";
@@ -41,19 +42,64 @@ export default function App() {
   const activeTaskId = urlParams.get("task");
 
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState("homeroom"); 
+  const [authReady, setAuthReady] = useState(false);
+  // 비로그인 방문자(학생)의 첫 화면은 공개 탭인 "정보 수업"
+  const [activeTab, setActiveTab] = useState("class");
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, setCurrentUser);
+    return onAuthStateChanged(auth, (user) => {
+      setCurrentUser(user);
+      // 로그인하면 교무실(시간표) 탭으로, 로그아웃하면 공개 탭으로 이동
+      setActiveTab(user ? "office" : "class");
+      setAuthReady(true);
+    });
   }, []);
 
-  if (activeLessonId) return <LessonDetailView lessonId={activeLessonId} currentUser={currentUser} />;
-  if (activeTaskId) return <TaskDetailView taskId={activeTaskId} currentUser={currentUser} />;
+  // 정보 업무는 관리자 + 관리자가 허용한 교사(teachers/{이메일}.canWork)만 열람 가능
+  const { canWork, ready: workAccessReady } = useWorkAccess(currentUser);
 
-  const currentTheme = THEMES[activeTab];
-  const isOutline = activeTab === "office";
-  const cutoutColor = activeTab === "class" ? "#FFFFFF" : activeTab === "homeroom" ? "#5C5C5C" : activeTab === "work" ? "#EAEAEA" : "#050505";
+  // 업무 상세 페이지는 교사 전용 (?task=ID 로 직접 접근해도 로그인 필요)
+  if (activeTaskId) {
+    if (!authReady || !workAccessReady) return <div className="min-h-screen bg-[#F5F5F5]" />;
+    if (!currentUser) {
+      return (
+        <div className="min-h-screen bg-[#F5F5F5] text-black flex flex-col items-center justify-center gap-6 font-mono px-6 text-center">
+          <p className="text-[13px] uppercase tracking-widest opacity-60">교사 로그인이 필요한 페이지입니다.</p>
+          <button
+            onClick={() => setIsLoginOpen(true)}
+            className="border border-black bg-black text-white px-8 py-3 text-[13px] uppercase tracking-widest hover:bg-[#0055FF] hover:border-[#0055FF] transition-colors"
+          >
+            teacher login
+          </button>
+          <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+        </div>
+      );
+    }
+    // 정보 업무(보안점검·네트워크 매뉴얼 등)는 관리자와 관리자가 허용한 교사만
+    if (!canWork) {
+      return (
+        <div className="min-h-screen bg-[#F5F5F5] text-black flex items-center justify-center font-mono px-6 text-center">
+          <p className="text-[13px] uppercase tracking-widest opacity-60">관리자가 허용한 교사만 볼 수 있는 페이지입니다.</p>
+        </div>
+      );
+    }
+    return <TaskDetailView taskId={activeTaskId} currentUser={currentUser} />;
+  }
+
+  // 수업 자료는 학생에게 공개
+  if (activeLessonId) return <LessonDetailView lessonId={activeLessonId} currentUser={currentUser} />;
+
+  // 인증 상태가 확정되기 전에는 아무 탭도 그리지 않음 (교사 전용 탭이 잠깐이라도 보이지 않도록)
+  if (!authReady) return <div className="min-h-screen bg-white" />;
+
+  // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
+  // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
+  const canView = activeTab === "class" || (activeTab === "work" ? canWork : !!currentUser);
+  const visibleTab = canView ? activeTab : "class";
+  const currentTheme = THEMES[visibleTab];
+  const isOutline = visibleTab === "office";
+  const cutoutColor = visibleTab === "class" ? "#FFFFFF" : visibleTab === "homeroom" ? "#5C5C5C" : visibleTab === "work" ? "#EAEAEA" : "#050505";
 
   return (
     <div className={`min-h-screen ${currentTheme.bg} ${currentTheme.text} font-sans font-light selection:bg-emerald-500 selection:text-white pb-32 transition-colors duration-500 antialiased tracking-tight`}>
@@ -66,13 +112,13 @@ export default function App() {
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
 
-      <Header activeTab={activeTab} setActiveTab={setActiveTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} />
+      <Header activeTab={visibleTab} setActiveTab={setActiveTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} canWork={canWork} />
 
       <main className="max-w-[1360px] mx-auto px-6 md:px-10 pt-16 w-full">
-        {activeTab === "class" && <TabClass currentUser={currentUser} currentTheme={currentTheme} />}
-        {activeTab === "work" && <TabWork currentUser={currentUser} currentTheme={currentTheme} />}
-        {activeTab === "office" && <TabOffice currentUser={currentUser} />}
-        {activeTab === "homeroom" && <TabHomeroom currentUser={currentUser} currentTheme={currentTheme} />}
+        {visibleTab === "class" && <TabClass currentUser={currentUser} currentTheme={currentTheme} />}
+        {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} currentTheme={currentTheme} />}
+        {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} />}
+        {currentUser && visibleTab === "homeroom" && <TabHomeroom currentUser={currentUser} currentTheme={currentTheme} />}
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />

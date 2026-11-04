@@ -199,10 +199,10 @@ export default function TabOffice({ currentUser }) {
     const officeCode = "E10";
     const schoolCode = "7331057";
 
-    const urls = [
-      `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}&KEY=4095db6a1ff547ecae2ce3dbf074d9e9`,
-      `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}`
-    ];
+    // NEIS 인증키는 소스에 두지 않고 환경변수(VITE_NEIS_KEY)로 주입. 없으면 키 없는 샘플 호출로 대체.
+    const baseUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}`;
+    const neisKey = import.meta.env.VITE_NEIS_KEY;
+    const urls = neisKey ? [`${baseUrl}&KEY=${neisKey}`, baseUrl] : [baseUrl];
 
     let data = null;
     for (const url of urls) {
@@ -317,7 +317,7 @@ export default function TabOffice({ currentUser }) {
               <span className="text-[#E5E5E5]">{isNextWeek ? "다음 주 조회 모드" : "이번 주 조회 모드"}</span>
             </div>
             <h2 className="text-[26px] md:text-[32px] font-normal tracking-tight text-white leading-none">
-              교무실 시간표 & 급식 관제
+              시간표 & 급식
             </h2>
           </div>
 

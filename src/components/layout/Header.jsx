@@ -2,6 +2,8 @@ import React, { useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import SettingsModal from "./SettingsModal";
+import TeacherAdminModal from "./TeacherAdminModal";
+import { isAdmin } from "@/lib/admin";
 
 export default function Header({
   activeTab,
@@ -11,8 +13,11 @@ export default function Header({
   isOutline,
   cutoutColor,
   onOpenLogin,
+  canWork,
 }) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTeacherAdminOpen, setIsTeacherAdminOpen] = useState(false);
+  const isAdminUser = isAdmin(currentUser);
 
   return (
     <>
@@ -99,8 +104,9 @@ export default function Header({
 
             {/* 탭 3: 정보 업무 */}
             <div 
-              className={`flex items-start flex-shrink-0 cursor-pointer group transition-colors gap-[clamp(0.5rem,1vw,0.85rem)] ${!currentUser ? 'opacity-30 cursor-not-allowed' : activeTab === 'work' ? currentTheme.activeText : currentTheme.navText}`}
-              onClick={() => currentUser && setActiveTab("work")}
+              title={currentUser && !canWork ? "관리자가 허용한 교사만 볼 수 있는 메뉴입니다" : undefined}
+              className={`flex items-start flex-shrink-0 cursor-pointer group transition-colors gap-[clamp(0.5rem,1vw,0.85rem)] ${!canWork ? 'opacity-30 cursor-not-allowed' : activeTab === 'work' ? currentTheme.activeText : currentTheme.navText}`}
+              onClick={() => canWork && setActiveTab("work")}
             >
               <div className="relative pt-[clamp(2px,0.25vw,4px)] w-[clamp(48px,6.5vw,90px)] h-[clamp(58px,7.8vw,110px)]">
                 <svg viewBox="0 0 100 100" className="w-full h-full absolute top-0 left-0">
@@ -167,6 +173,11 @@ export default function Header({
                   <button onClick={() => setIsSettingsOpen(true)} className={`transition-colors text-[clamp(10px,0.9vw,13px)] ${currentTheme.navText} hover:underline`}>
                     settings
                   </button>
+                  {isAdminUser && (
+                    <button onClick={() => setIsTeacherAdminOpen(true)} className={`transition-colors text-[clamp(10px,0.9vw,13px)] ${currentTheme.navText} hover:underline mt-0.5`}>
+                      teachers
+                    </button>
+                  )}
                   <button onClick={() => signOut(auth)} className={`transition-colors text-[clamp(10px,0.9vw,13px)] ${currentTheme.navText} hover:underline mt-0.5`}>
                     logout
                   </button>
@@ -211,6 +222,14 @@ export default function Header({
           onClose={() => setIsSettingsOpen(false)} 
           currentUser={currentUser} 
           currentTheme={currentTheme}
+        />
+      )}
+
+      {isAdminUser && (
+        <TeacherAdminModal
+          isOpen={isTeacherAdminOpen}
+          onClose={() => setIsTeacherAdminOpen(false)}
+          currentUser={currentUser}
         />
       )}
     </>

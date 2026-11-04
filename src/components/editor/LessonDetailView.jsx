@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
+import { sanitizeHtml } from "@/lib/sanitize";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { ArrowLeft } from "lucide-react";
 import Quill from "quill";
@@ -203,7 +204,7 @@ export default function LessonDetailView({ lessonId, currentUser }) {
 
             <div 
               className="ql-editor p-0 bg-transparent min-h-0" 
-              dangerouslySetInnerHTML={{ __html: lesson.content || "<p class='opacity-30 font-mono tracking-widest uppercase text-sm'>No content written yet.</p>" }} 
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.content || "<p class='opacity-30 font-mono tracking-widest uppercase text-sm'>No content written yet.</p>") }}
             />
           </div>
         )}

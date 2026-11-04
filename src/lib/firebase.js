@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase/app";
+import { initializeApp, getApps } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
@@ -13,3 +13,11 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// 관리자가 다른 교사 계정을 만들 때 쓰는 보조 인증 인스턴스.
+// 기본 auth 로 createUserWithEmailAndPassword 를 부르면 관리자가 로그아웃되고
+// 새 계정으로 로그인돼 버리기 때문에, 별도 앱 이름으로 분리해서 사용한다.
+export function getSecondaryAuth() {
+  const existing = getApps().find((a) => a.name === "secondary");
+  return getAuth(existing ?? initializeApp(firebaseConfig, "secondary"));
+}
