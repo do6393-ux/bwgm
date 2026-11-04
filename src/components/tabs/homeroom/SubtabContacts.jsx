@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
+import { saveLocal } from "@/lib/syncedStorage";
 import { Phone, UserPlus, ClipboardPaste, X } from "lucide-react";
 
 function parseBulkStudentText(rawText) {
@@ -92,9 +93,9 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, curr
   const persistContacts = async (updatedList) => {
     updatedList.sort((a, b) => a.num - b.num);
     const key = `${userId}_${grade}_${classNum}`;
-    localStorage.setItem(`contacts_${key}`, JSON.stringify(updatedList));
+    const updatedAt = saveLocal(`contacts_${key}`, updatedList);
     try {
-      await setDoc(doc(db, "homeroom_contacts", key), { userId, grade, classNum, list: updatedList, updatedAt: new Date().toISOString() });
+      await setDoc(doc(db, "homeroom_contacts", key), { userId, grade, classNum, list: updatedList, updatedAt });
     } catch (e) { console.error(e); }
     onContactsUpdated();
   };

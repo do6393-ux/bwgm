@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
+import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Copy, Check, Sparkles, AlertCircle, Trash2, Plus, Edit3, Type, ListPlus, Database } from "lucide-react";
 import { DEFAULT_STYLES } from "./defaultPresets";
@@ -88,44 +89,70 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
 
   const [isPresetModalOpen, setIsPresetModalOpen] = useState(false);
   const [presetModalTab, setPresetModalTab] = useState("add"); // add | manage
-  const [presetType, setPresetType] = useState("situation"); // category | situation | action
+  const [presetType, setPresetType] = useState("situation"); // "추가" 탭: category | situation | action
+  const [manageType, setManageType] = useState("situations"); // "목록/삭제" 탭: situations | actions (추가 탭과 값이 달라서 따로 둔다)
   const [presetInputText, setPresetInputText] = useState("");
   const [presetNewCategory, setPresetNewCategory] = useState("");
   const [presetTargetCat, setPresetTargetCat] = useState("");
 
   const [copySuccess, setCopySuccess] = useState(false);
 
-  const loadGlobalPresets = async () => {
-    try {
-      const snap = await getDoc(doc(db, "shared_records_presets", "global_presets"));
-      if (snap.exists() && snap.data().presets) {
-        setBehaviorPresets(snap.data().presets);
-        if (!selectedCategoryKey) setSelectedCategoryKey(Object.keys(snap.data().presets)[0]);
-      }
-    } catch (e) { console.error("Global Preset Load Error:", e); }
-  };
+  const recordsKey = `${userId}_${grade}_${classNum}`;
 
-  const loadAccumulatedRecords = useCallback(async () => {
-    const key = `${userId}_${grade}_${classNum}`;
-    let loaded = null;
-    const local = localStorage.getItem(`records_${key}`);
-    if (local) { try { loaded = JSON.parse(local); } catch {} }
-    if (!loaded) {
-      try {
-        const snap = await getDoc(doc(db, "homeroom_records", key));
-        if (snap.exists() && snap.data().records) loaded = snap.data().records;
-      } catch (e) {}
-    }
-    if (loaded) {
-      setStudentRecords(loaded);
-      setArchiveText(loaded[selectedStudentNum] || "");
-    }
-  }, [userId, grade, classNum, selectedStudentNum]);
-
+  // 공용 프리셋은 처음 한 번만 불러온다.
   useEffect(() => {
-    loadGlobalPresets();
-    loadAccumulatedRecords();
-  }, [loadAccumulatedRecords]);
+    let cancelled = false;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, "shared_records_presets", "global_presets"));
+        if (cancelled || !snap.exists() || !snap.data().presets) return;
+        const presets = snap.data().presets;
+        setBehaviorPresets(presets);
+        setSelectedCategoryKey((prev) => prev || Object.keys(presets)[0]);
+      } catch (e) { console.error("Global Preset Load Error:", e); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // 누적 기록은 Firestore 를 기준으로 불러온다 (다른 기기에서 고친 내용이 반영되도록).
+  // 학생 번호를 바꿀 때마다 다시 불러오지 않고, 학급이 바뀔 때만 불러온다.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const loaded = await loadSynced(`records_${recordsKey}`, doc(db, "homeroom_records", recordsKey), (d) => d.records);
+      if (!cancelled) setStudentRecords(loaded || {});
+    })();
+    return () => { cancelled = true; };
+  }, [recordsKey]);
+
+  // 누적 기록 저장: 이 기기(localStorage)에는 바로, Firestore 에는 입력이 멈춘 뒤 한 번만 쓴다.
+  // (예전에는 타자 한 글자마다 Firestore 에 썼다)
+  const pendingSaveRef = useRef(null); // { key, payload }
+  const saveTimerRef = useRef(null);
+
+  const flushRecordsSave = useCallback(() => {
+    clearTimeout(saveTimerRef.current);
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+    pendingSaveRef.current = null;
+    setDoc(doc(db, "homeroom_records", pending.key), pending.payload).catch((e) => console.error("Records save error:", e));
+  }, []);
+
+  const queueRecordsSave = useCallback((records, immediate = false) => {
+    const updatedAt = saveLocal(`records_${recordsKey}`, records);
+    pendingSaveRef.current = { key: recordsKey, payload: { userId, grade, classNum, records, updatedAt } };
+    clearTimeout(saveTimerRef.current);
+    if (immediate) flushRecordsSave();
+    else saveTimerRef.current = setTimeout(flushRecordsSave, 1000);
+  }, [recordsKey, userId, grade, classNum, flushRecordsSave]);
+
+  // 학급을 바꾸거나 화면을 떠날 때, 탭이 가려질 때 밀린 저장을 바로 마친다.
+  useEffect(() => flushRecordsSave, [recordsKey, flushRecordsSave]);
+  useEffect(() => {
+    const onVisibility = () => { if (document.visibilityState === "hidden") flushRecordsSave(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [flushRecordsSave]);
 
   useEffect(() => {
     if (activeInnerTab === "archive") {
@@ -178,9 +205,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
     setStudentRecords(updated);
     if (activeInnerTab === "archive") setArchiveText(updatedText);
 
-    const key = `${userId}_${grade}_${classNum}`;
-    localStorage.setItem(`records_${key}`, JSON.stringify(updated));
-    try { await setDoc(doc(db, "homeroom_records", key), { userId, grade, classNum, records: updated, updatedAt: new Date().toISOString() }); } catch (e) {}
+    queueRecordsSave(updated, true); // 버튼으로 추가하는 경우는 바로 저장
     
     setAssembledResults([]);
   };
@@ -189,9 +214,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
     setArchiveText(text);
     const updated = { ...studentRecords, [selectedStudentNum]: text };
     setStudentRecords(updated);
-    const key = `${userId}_${grade}_${classNum}`;
-    localStorage.setItem(`records_${key}`, JSON.stringify(updated));
-    try { await setDoc(doc(db, "homeroom_records", key), { userId, grade, classNum, records: updated, updatedAt: new Date().toISOString() }); } catch (e) {}
+    queueRecordsSave(updated); // 입력이 멈춘 뒤 Firestore 에 저장
   };
 
   const handleCopyArchive = async () => {
@@ -200,6 +223,9 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
     setCopySuccess(true);
     setTimeout(() => setCopySuccess(false), 2000);
   };
+
+  // 프리셋을 넣거나 지울 대상 카테고리. 아직 고르지 않았거나(빈 값) 사라진 카테고리면 첫 번째를 기본으로 쓴다.
+  const activeTargetCat = behaviorPresets[presetTargetCat] ? presetTargetCat : (Object.keys(behaviorPresets)[0] || "");
 
   // Custom Preset Handlers
   const handleSavePreset = async () => {
@@ -214,7 +240,8 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
         const newKey = `custom_${Date.now()}`;
         data[newKey] = { category: presetNewCategory.trim(), situations: [presetInputText.trim()], actions: [], outcomes: [] };
       } else {
-        const catKey = presetTargetCat || Object.keys(data)[0];
+        const catKey = activeTargetCat || Object.keys(data)[0];
+        if (!catKey) return alert("먼저 카테고리를 만들어주세요.");
         if (!data[catKey]) data[catKey] = { category: catKey, situations: [], actions: [], outcomes: [] };
         if (presetType === 'situation') data[catKey].situations.push(presetInputText.trim());
         if (presetType === 'action') data[catKey].actions.push(presetInputText.trim());
@@ -384,7 +411,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
                   <button onClick={() => setPresetType("action")} className={`flex-1 py-2 text-[12px] rounded-xl border ${presetType === "action" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-[#666666] text-[#A0A0A0]"}`}>행동 추가</button>
                 </div>
                 {presetType !== "category" ? (
-                  <select value={presetTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-white rounded-xl p-2.5 text-[12px]">
+                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-white rounded-xl p-2.5 text-[12px]">
                     {Object.keys(behaviorPresets).map(k => <option key={k} value={k}>{behaviorPresets[k].category}</option>)}
                   </select>
                 ) : (
@@ -396,17 +423,17 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
             ) : (
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
                 <div className="flex gap-2">
-                  <select value={presetTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
+                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
                     {Object.keys(behaviorPresets).map(k => <option key={k} value={k}>{behaviorPresets[k].category}</option>)}
                   </select>
-                  <select value={presetType} onChange={(e) => setPresetType(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
+                  <select value={manageType} onChange={(e) => setManageType(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
                     <option value="situations">상황 문구</option><option value="actions">행동 문구</option>
                   </select>
                 </div>
-                {behaviorPresets[presetTargetCat]?.[presetType]?.map((txt, i) => (
+                {behaviorPresets[activeTargetCat]?.[manageType]?.map((txt, i) => (
                   <div key={i} className="flex justify-between items-center bg-[#333333] p-2.5 rounded-xl border border-[#666666]">
                     <span className="text-[12px] text-[#E0E0E0] truncate pr-2">{txt}</span>
-                    <button onClick={() => handleDeletePreset(presetTargetCat, presetType, txt)} className="text-rose-400 hover:text-rose-300 text-[11px] shrink-0">삭제</button>
+                    <button onClick={() => handleDeletePreset(activeTargetCat, manageType, txt)} className="text-rose-400 hover:text-rose-300 text-[11px] shrink-0">삭제</button>
                   </div>
                 ))}
               </div>

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { loadSynced, saveLocal } from "@/lib/syncedStorage";
+import { doc, setDoc } from "firebase/firestore";
 import { ArrowUp, ArrowDown, Download, X, FileUp } from "lucide-react";
 import JSZip from "jszip";
 
@@ -14,17 +15,13 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   const [activeSlot, setActiveSlot] = useState(null);
   const [hwpxBlob, setHwpxBlob] = useState(null);
 
+  const loadSeqRef = useRef(0);
   const loadCleaningGrid = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const key = `${userId}_${grade}_${classNum}`;
-    let loaded = null;
-    const local = localStorage.getItem(`cleaning_grid_${key}`);
-    if (local) { try { loaded = JSON.parse(local); } catch {} }
-    if (!loaded) {
-      try {
-        const snap = await getDoc(doc(db, "homeroom_cleaning", key));
-        if (snap.exists() && snap.data().grid) loaded = snap.data().grid;
-      } catch {}
-    }
+    // Firestore 를 기준으로 불러오고, 서버에 못 올라간 더 최근 로컬 사본이 있으면 그걸 쓴다
+    const loaded = await loadSynced(`cleaning_grid_${key}`, doc(db, "homeroom_cleaning", key), (d) => d.grid);
+    if (seq !== loadSeqRef.current) return; // 그 사이 학급이 바뀌었으면 늦게 온 응답은 버린다
     setCleaningData(loaded || Array(6).fill().map(() => Array(5).fill(null)));
   }, [userId, grade, classNum]);
 
@@ -33,8 +30,8 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   const saveCleaningGrid = async (grid) => {
     setCleaningData(grid);
     const key = `${userId}_${grade}_${classNum}`;
-    localStorage.setItem(`cleaning_grid_${key}`, JSON.stringify(grid));
-    try { await setDoc(doc(db, "homeroom_cleaning", key), { userId, grade, classNum, grid, updatedAt: new Date().toISOString() }); } catch (e) {}
+    const updatedAt = saveLocal(`cleaning_grid_${key}`, grid);
+    try { await setDoc(doc(db, "homeroom_cleaning", key), { userId, grade, classNum, grid, updatedAt }); } catch (e) { console.error("Cleaning save error:", e); }
   };
 
   const handleRotateUp = () => {

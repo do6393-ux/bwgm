@@ -85,7 +85,11 @@ export default function TabOffice({ currentUser }) {
   const [teacherSchedule, setTeacherSchedule] = useState(null);
   const [classSchedule, setClassSchedule] = useState(null);
 
-  const [mealDate, setMealDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // 오늘 날짜(기기의 현지 시간 기준). toISOString() 은 UTC 라서 한국 시간 09시 이전에는 전날이 나온다.
+  const [mealDate, setMealDate] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  });
   const [mealList, setMealList] = useState([]);
   const [mealLoading, setMealLoading] = useState(false);
 
@@ -237,7 +241,8 @@ export default function TabOffice({ currentUser }) {
   }, []);
 
   useEffect(() => {
-    fetchMeal(mealDate);
+    // 날짜를 지우는 중간 상태("")에서는 조회하지 않는다
+    if (mealDate) fetchMeal(mealDate);
   }, [mealDate, fetchMeal]);
 
   const handleSaveBaseModal = async () => {
@@ -559,10 +564,20 @@ export default function TabOffice({ currentUser }) {
                 type="date"
                 value={mealDate}
                 onChange={(e) => setMealDate(e.target.value)}
-                className="flex-1 bg-[#111111] border border-[#222222] p-3 text-[14px] font-mono text-white outline-none focus:border-[#FF5000] transition-colors"
+                // 입력칸 어디를 눌러도 달력이 열리게 한다 (기본은 오른쪽 작은 아이콘만 열림)
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {
+                    // 달력을 지원하지 않는 브라우저는 기본 입력 방식을 쓴다
+                  }
+                }}
+                // 어두운 배경에서도 달력 아이콘과 달력 창이 보이도록 다크 모드로 표시
+                style={{ colorScheme: "dark" }}
+                className="flex-1 cursor-pointer bg-[#111111] border border-[#222222] p-3 text-[14px] font-mono text-white outline-none focus:border-[#FF5000] transition-colors"
               />
               <button
-                onClick={() => fetchMeal(mealDate)}
+                onClick={() => mealDate && fetchMeal(mealDate)}
                 className="bg-[#111111] border border-[#222222] hover:border-white text-white px-5 py-3 font-mono text-[12px] font-bold transition-colors"
               >
                 조회

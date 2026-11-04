@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { loadSynced, saveLocal } from "@/lib/syncedStorage";
+import { doc, setDoc } from "firebase/firestore";
 import { Shuffle, Lock, Unlock, Eye, Download, FileUp, UserX, AlertTriangle, X, RotateCcw } from "lucide-react";
 import JSZip from "jszip";
 
@@ -31,24 +32,22 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
   const [isExcludeModalOpen, setIsExcludeModalOpen] = useState(false);
   const [hwpxBlob, setHwpxBlob] = useState(null);
 
+  const loadSeqRef = useRef(0);
   const loadSeatingData = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const key = `${userId}_${grade}_${classNum}`;
-    let loaded = null;
-    const local = localStorage.getItem(`seating_data_${key}`);
-    if (local) { try { loaded = JSON.parse(local); } catch {} }
-    if (!loaded) {
-      try { const snap = await getDoc(doc(db, "homeroom_seating", key)); if (snap.exists()) loaded = snap.data(); } catch (e) {}
-    }
+    // Firestore 를 기준으로 불러오고, 서버에 못 올라간 더 최근 로컬 사본이 있으면 그걸 쓴다
+    const loaded = await loadSynced(`seating_data_${key}`, doc(db, "homeroom_seating", key), (d) => d);
+    if (seq !== loadSeqRef.current) return; // 그 사이 학급이 바뀌었으면 늦게 온 응답은 버린다
 
-    if (loaded) {
-      if (loaded.rows) setRows(loaded.rows);
-      if (loaded.cols) setCols(loaded.cols);
-      const targetRows = loaded.rows || 6; const targetCols = loaded.cols || 5;
-      const newGrid = loaded.grid || Array(targetRows).fill().map(() => Array(targetCols).fill({ student: null, isLocked: false, isDisabled: false }));
-      setSeatGrid(newGrid);
-      if (loaded.avoidPairs) setAvoidPairs(loaded.avoidPairs);
-      if (loaded.excluded) setExcludedStudentNums(new Set(loaded.excluded));
-    }
+    // 저장된 데이터가 없는 학급이면 이전 학급의 자리배치가 남지 않도록 기본값으로 되돌린다
+    // (남아 있으면 다음 저장 때 이전 학급 배치가 이 학급 문서에 덮어써진다)
+    const targetRows = loaded?.rows || 6; const targetCols = loaded?.cols || 5;
+    setRows(targetRows);
+    setCols(targetCols);
+    setSeatGrid(loaded?.grid || Array(targetRows).fill().map(() => Array(targetCols).fill({ student: null, isLocked: false, isDisabled: false })));
+    setAvoidPairs(loaded?.avoidPairs || []);
+    setExcludedStudentNums(new Set(loaded?.excluded || []));
   }, [userId, grade, classNum, setExcludedStudentNums]);
 
   useEffect(() => { loadSeatingData(); }, [loadSeatingData]);
@@ -57,7 +56,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
     const key = `${userId}_${grade}_${classNum}`;
     const payload = { userId, grade, classNum, rows: newRows, cols: newCols, grid: newGrid, avoidPairs: newAvoid, excluded: Array.from(excludedStudentNums), updatedAt: new Date().toISOString() };
     setSeatGrid(newGrid); setAvoidPairs(newAvoid);
-    localStorage.setItem(`seating_data_${key}`, JSON.stringify(payload));
+    saveLocal(`seating_data_${key}`, payload, payload.updatedAt);
     try { await setDoc(doc(db, "homeroom_seating", key), payload); } catch (e) {}
   };
 

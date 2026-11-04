@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
+import { loadSynced } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Users, PhoneCall, Grid, Sparkles, RefreshCw } from "lucide-react";
 
@@ -48,7 +49,9 @@ export default function TabHomeroom({ currentUser }) {
   }, []);
 
   // 🎯 과거 바닐라 JS의 다중 키 탐색 로직(candidateKeys) 완벽 복원
+  const loadSeqRef = useRef(0);
   const loadHomeroomContacts = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     const candidateKeys = [
       `${userId}_${grade}_${classNum}`,
       `${userId}_${grade}-${classNum}`,
@@ -58,32 +61,22 @@ export default function TabHomeroom({ currentUser }) {
 
     let loaded = null;
     
-    // 1. 로컬 스토리지 탐색
+    // 키 후보를 차례로 보면서, 처음으로 데이터가 있는 키를 쓴다.
+    // Firestore 를 기준으로 읽고, 서버에 못 올라간 더 최근 로컬 사본이 있으면 그걸 쓴다.
     for (const key of candidateKeys) {
-      const local = localStorage.getItem(`contacts_${key}`);
-      if (local) {
-        try { 
-          const parsed = JSON.parse(local);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            loaded = parsed;
-            break;
-          }
-        } catch {}
+      const list = await loadSynced(
+        `contacts_${key}`,
+        doc(db, "homeroom_contacts", key),
+        (d) => (d.list?.length > 0 ? d.list : null)
+      );
+      if (Array.isArray(list) && list.length > 0) {
+        loaded = list;
+        break;
       }
     }
     
-    // 2. 파이어베이스 DB 탐색
-    if (!loaded) {
-      for (const key of candidateKeys) {
-        try {
-          const snap = await getDoc(doc(db, "homeroom_contacts", key));
-          if (snap.exists() && snap.data().list?.length > 0) {
-            loaded = snap.data().list;
-            break;
-          }
-        } catch {}
-      }
-    }
+    // 그 사이 학급이 바뀌었으면 늦게 온 응답은 버린다
+    if (seq !== loadSeqRef.current) return;
     
     setContacts(loaded || []);
   }, [userId, grade, classNum]);
