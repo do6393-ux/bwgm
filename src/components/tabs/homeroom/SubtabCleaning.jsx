@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, setDoc } from "firebase/firestore";
-import { Download, X, FileUp, GripVertical, Pencil, Check, Plus } from "lucide-react";
+import { Download, X, FileUp, FileDown, GripVertical, Pencil, Check, Plus } from "lucide-react";
 import JSZip from "jszip";
 import { useDialog } from "@/components/ui/dialogContext";
 import {
@@ -285,6 +285,10 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
               <span><span className="md:hidden">{hwpxBlob ? "HWPX 등록됨" : "HWPX 올리기"}</span><span className="hidden md:inline">{hwpxBlob ? "HWPX 양식 등록됨" : "HWPX 양식 올리기"}</span></span>
               <input type="file" accept=".hwpx" className="hidden" onChange={(e) => e.target.files?.[0] && setHwpxBlob(e.target.files[0])} />
             </label>
+            {/* 기본 양식(public/templates). 받아서 한글에서 고친 뒤 위의 "HWPX 올리기"로 올린다 */}
+            <a href={`${import.meta.env.BASE_URL}templates/cleaning-template.hwpx`} download="청소구역_양식.hwpx" className={toolBtn}>
+              <FileDown className="w-3.5 h-3.5" /><span>양식 받기</span>
+            </a>
             {hwpxBlob && (
               <button onClick={handleDownloadHwpx} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-white text-black hover:bg-neutral-200 transition-colors">
                 <Download className="w-3.5 h-3.5" /><span>HWPX 다운로드</span>

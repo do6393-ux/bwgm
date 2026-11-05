@@ -3,7 +3,7 @@ import { db } from "@/lib/firebase";
 import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { toSeatingDoc, fromSeatingDoc } from "@/lib/gridCodec";
 import { doc, setDoc } from "firebase/firestore";
-import { Shuffle, Lock, Unlock, Eye, Download, FileUp, UserX, X, RotateCcw } from "lucide-react";
+import { Shuffle, Lock, Unlock, Eye, Download, FileUp, FileDown, UserX, X, RotateCcw } from "lucide-react";
 import JSZip from "jszip";
 import { useDialog } from "@/components/ui/dialogContext";
 
@@ -326,6 +326,10 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
               <span>{hwpxBlob ? "HWPX 등록됨" : "HWPX 올리기"}</span>
               <input type="file" accept=".hwpx" className="hidden" onChange={(e) => e.target.files?.[0] && setHwpxBlob(e.target.files[0])} />
             </label>
+            {/* 기본 양식(public/templates). 받아서 한글에서 고친 뒤 위의 "HWPX 올리기"로 올린다 */}
+            <a href={`${import.meta.env.BASE_URL}templates/seating-template.hwpx`} download="자리배치표_양식.hwpx" className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well-2 border border-line hover:bg-surface text-ink transition-colors">
+              <FileDown className="w-3.5 h-3.5" /> <span>양식 받기</span>
+            </a>
             {hwpxBlob && (
               <button onClick={handleDownloadHwpx} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-white text-black hover:bg-neutral-200 transition-colors">
                 <Download className="w-3.5 h-3.5" /> <span>출력</span>
