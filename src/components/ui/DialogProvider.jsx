@@ -119,7 +119,7 @@ function DialogView({ dialog, onClose }) {
 
   return (
     <div
-      className="ui-fade fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      className="ui-fade ui-scrim fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onMouseDown={(e) => {
         // 어두운 바깥을 누르면 취소 (확인창은 안전한 쪽인 "취소"로)
         if (e.target === e.currentTarget) onClose(isConfirm ? false : undefined);

@@ -37,8 +37,11 @@ export function saveLocal(localKey, value, updatedAt = new Date().toISOString())
  * Firestore 문서를 기준으로 값을 불러온다.
  *  - pick(docData): 문서에서 쓸 값을 꺼낸다. 비어 있으면 null/undefined 를 돌려줄 것.
  *  - 반환: 값, 없으면 null. Firestore 읽기에 실패하면(오프라인·권한) 로컬 사본을 돌려준다.
+ *  - options.onLocalNewer(local, localTs): 서버를 정상적으로 읽었는데 서버에 없거나 이 기기 사본이 더 최근일 때 부른다.
+ *    (예전에 서버 저장이 실패해 이 기기에만 남은 데이터를 서버로 올려, 다른 기기에서도 보이게 하는 용도.
+ *     서버 문서를 지우는 일이 없는 데이터에만 쓴다. 호출 결과는 기다리지 않고, 실패해도 무시한다.)
  */
-export async function loadSynced(localKey, docRef, pick) {
+export async function loadSynced(localKey, docRef, pick, options = {}) {
   const local = readLocal(localKey);
   let localTs = null;
   try {
@@ -49,8 +52,10 @@ export async function loadSynced(localKey, docRef, pick) {
 
   let remote = null;
   let remoteTs = null;
+  let readOk = false;
   try {
     const snap = await getDoc(docRef);
+    readOk = true;
     if (snap.exists()) {
       const data = snap.data();
       const value = pick(data);
@@ -68,6 +73,14 @@ export async function loadSynced(localKey, docRef, pick) {
   if (remote != null && !localIsNewer) {
     saveLocal(localKey, remote, remoteTs ?? new Date().toISOString());
     return remote;
+  }
+  // 서버에 없거나 이 기기 사본이 더 최근 → 서버로 올려 다른 기기에서도 보이게 한다 (서버를 읽는 데 성공했을 때만)
+  if (local != null && readOk && options.onLocalNewer) {
+    try {
+      Promise.resolve(options.onLocalNewer(local, localTs)).catch(() => {});
+    } catch {
+      // 올리기에 실패해도 불러오기는 그대로 진행
+    }
   }
   return local;
 }

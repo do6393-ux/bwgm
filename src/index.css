@@ -180,6 +180,29 @@
   }
 }
 
+/* 터치 기기(폰·태블릿)에서는 입력칸 글자를 16px 이상으로.
+   아이폰 Safari 는 16px 보다 작은 입력칸을 누르면 화면을 멋대로 확대해서 레이아웃이 어긋난다.
+   !important 는 Tailwind 의 text-[13px] 같은 클래스보다 우선하기 위한 것 (마우스 기기는 그대로) */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]):not([type="color"]):not([type="button"]):not([type="submit"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 모달 뒷배경: 창이 화면보다 길면(작은 폰·가로 화면) 위아래가 잘려 버튼에 닿지 못하던 문제를 막는다.
+   뒷배경이 스크롤되고, 창은 자리가 남으면 가운데에 (margin auto), 모자라면 맨 위부터 놓인다 */
+@layer components {
+  .ui-scrim {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .ui-scrim > * {
+    margin-block: auto;
+  }
+}
+
 @layer utilities {
   /* 스크롤바를 숨기되 스크롤은 되게 (헤더 탭 줄 등) */
   .no-scrollbar::-webkit-scrollbar { display: none; }

@@ -268,13 +268,13 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
   const archiveBytes = NEIS_RULES.calculateBytes(archiveText);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-line pb-4">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 md:gap-4 border-b border-line pb-3 md:pb-4">
         <div>
-          <span className="text-[11px] font-mono text-purple-400 uppercase tracking-widest block mb-0.5">
+          <span className="text-[11px] font-mono text-purple-400 uppercase tracking-widest hidden md:block mb-0.5">
             // RECORD ASSEMBLY ENGINE
           </span>
-          <h3 className="text-[22px] font-normal tracking-tight text-white">
+          <h3 className="text-[18px] md:text-[22px] font-normal tracking-tight text-white">
             {grade}학년 {classNum}반 행발 / 세특 문장 조립기
           </h3>
         </div>
@@ -286,13 +286,13 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* 명렬표 */}
-        <div className="lg:col-span-3 border border-line bg-surface rounded-card p-4 shadow-sm space-y-2 max-h-[720px] overflow-y-auto">
-          <span className="block text-[11px] font-mono text-ink-muted uppercase tracking-wider px-2 mb-2">STUDENT LIST</span>
+        <div className="lg:col-span-3 border border-line bg-surface rounded-panel lg:rounded-card p-2 lg:p-4 shadow-sm flex lg:block gap-2 lg:gap-0 lg:space-y-2 overflow-x-auto lg:overflow-x-visible max-lg:no-scrollbar lg:max-h-[720px] lg:overflow-y-auto">
+          <span className="hidden lg:block text-[11px] font-mono text-ink-muted uppercase tracking-wider px-2 mb-2">STUDENT LIST</span>
           {studentList.map((s) => {
             const hasRecord = !!studentRecords[s.num]?.trim();
             const isSelected = selectedStudentNum === s.num;
             return (
-              <button key={s.num} onClick={() => { setSelectedStudentNum(s.num); setAssembledResults([]); }} className={`w-full flex items-center justify-between p-2.5 rounded-panel text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-raised text-ink"}`}>
+              <button key={s.num} onClick={() => { setSelectedStudentNum(s.num); setAssembledResults([]); }} className={`shrink-0 lg:w-full flex items-center justify-between gap-2 p-2.5 rounded-panel text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-raised text-ink"}`}>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${isSelected ? "bg-white/20" : "bg-well text-ink-muted"}`}>{s.num}번</span>
                   <span>{s.name}</span>
@@ -388,7 +388,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
       {/* 프리셋 관리 모달 */}
       {isPresetModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-6 max-w-lg w-full shadow-2xl border border-line ui-pop">
             <div className="flex justify-between items-center border-b border-line pb-3 mb-4">
               <h4 className="text-[18px] text-white font-medium">프리셋 DB 관리</h4>

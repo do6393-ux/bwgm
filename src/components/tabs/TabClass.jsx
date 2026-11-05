@@ -213,7 +213,7 @@ function TabClass({ currentUser, currentTheme }) {
                   <div className="flex justify-between items-start mb-2">
                     <h4 className="text-[18px] font-medium">{n.title}</h4>
                     {currentUser && (
-                      <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity text-[12px] font-mono uppercase">
+                      <div className="flex gap-3 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity text-[12px] font-mono uppercase">
                         <button onClick={() => { setEditingNoticeId(n.id); setEditNoticeData({ title: n.title, body: n.body }); }}>[ edit ]</button>
                         <button onClick={() => removeWithConfirm("notices", n.id, `"${n.title}" 공지를 삭제하시겠습니까?`)} className="text-red-500">[ del ]</button>
                       </div>
@@ -405,7 +405,7 @@ function TabClass({ currentUser, currentTheme }) {
                       <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5">{lesson.isVisible === false ? "hidden (비공개)" : "active"}</span>
                     </div>
                     {currentUser && (
-                      <div className="flex items-center gap-4 font-mono text-[11px] uppercase opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
+                      <div className="flex items-center gap-4 font-mono text-[11px] uppercase opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity pt-0.5">
                         {/* 학생에게 공개/비공개 전환 (비로그인 방문자 목록에서 숨겨진다) */}
                         <button
                           onClick={(e) => {
@@ -512,7 +512,7 @@ function TabClass({ currentUser, currentTheme }) {
                         {currentUser && (
                           <button 
                             onClick={() => removeWithConfirm("assignments", item.id, `${item.studentNum} ${item.studentName} 학생의 제출물을 삭제하시겠습니까?`)} 
-                            className="opacity-0 group-hover:opacity-100 text-red-500 hover:underline transition-all"
+                            className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-red-500 hover:underline transition-all"
                           >
                             [ del ]
                           </button>

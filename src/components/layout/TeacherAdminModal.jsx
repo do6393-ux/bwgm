@@ -164,7 +164,7 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
   };
 
   return (
-    <div className="ui-fade fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
+    <div className="ui-fade ui-scrim fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
       <div className="bg-white rounded-panel p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-black/[0.08] ui-pop">
         <div className="flex justify-between items-center border-b border-black/[0.06] pb-4 mb-6">
           <div>

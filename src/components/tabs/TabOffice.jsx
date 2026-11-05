@@ -695,7 +695,7 @@ export default function TabOffice({ currentUser }) {
 
       {/* 모달 레이어 */}
       {modalType && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-page border border-line-strong text-white p-8 max-w-2xl w-full shadow-[8px_8px_0px_0px_rgba(255,80,0,1)] ui-pop">
             
             {(modalType === "teacherBase" || modalType === "classBase") && (

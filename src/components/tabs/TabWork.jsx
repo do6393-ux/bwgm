@@ -370,7 +370,7 @@ function TabWork({ currentUser }) {
       </section>
 
       {isModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-card p-8 max-w-xl w-full shadow-2xl border border-black/[0.08] ui-pop">
             <div className="flex justify-between items-start border-b border-black/[0.06] pb-4 mb-6">
               <div>

@@ -149,24 +149,24 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, load
   };
 
   return (
-    <div className="space-y-6 text-ink-strong">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-line pb-4">
+    <div className="space-y-4 md:space-y-6 text-ink-strong">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 md:gap-4 border-b border-line pb-3 md:pb-4">
         <div>
-          <span className="text-[11px] font-mono text-rose-400 uppercase tracking-widest block mb-0.5">
+          <span className="text-[11px] font-mono text-rose-400 uppercase tracking-widest hidden md:block mb-0.5">
             // TELEPHONY DIRECTORY
           </span>
-          <h3 className="text-[22px] font-normal tracking-tight text-white">{grade}학년 {classNum}반 비상연락망</h3>
+          <h3 className="text-[18px] md:text-[22px] font-normal tracking-tight text-white">{grade}학년 {classNum}반 비상연락망</h3>
         </div>
 
         {currentUser && (
           <div className="flex items-center gap-2">
-            <button onClick={handleDeleteAll} className="px-4 py-2 rounded-full text-[12px] font-medium bg-well border border-line hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 text-ink transition-colors">
+            <button onClick={handleDeleteAll} className="px-3 md:px-4 py-2 whitespace-nowrap rounded-full text-[12px] font-medium bg-well border border-line hover:bg-rose-500/20 hover:text-rose-400 hover:border-rose-400 text-ink transition-colors">
               전체 초기화
             </button>
-            <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors">
-              <ClipboardPaste className="w-3.5 h-3.5" /><span>명렬표 붙여넣기</span>
+            <button onClick={() => setIsBulkModalOpen(true)} className="flex items-center gap-1.5 px-3 md:px-4 py-2 whitespace-nowrap rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors">
+              <ClipboardPaste className="w-3.5 h-3.5" /><span><span className="hidden md:inline">명렬표 </span>붙여넣기</span>
             </button>
-            <button onClick={handleOpenAddModal} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-white text-black hover:bg-neutral-200 transition-colors">
+            <button onClick={handleOpenAddModal} className="flex items-center gap-1.5 px-3 md:px-4 py-2 whitespace-nowrap rounded-full text-[12px] font-bold bg-white text-black hover:bg-neutral-200 transition-colors">
               <UserPlus className="w-3.5 h-3.5" /><span>개별 추가</span>
             </button>
           </div>
@@ -199,7 +199,7 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, load
       </div>
 
       {selectedContact && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-6 max-w-sm w-full shadow-2xl border border-line ui-pop">
             <div className="flex justify-between items-center border-b border-line pb-3 mb-4">
               <div className="flex items-center gap-2">
@@ -235,7 +235,7 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, load
       )}
 
       {editingContact && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveContact} className="bg-surface rounded-card p-6 max-w-md w-full shadow-2xl border border-line space-y-4 ui-pop">
             <h4 className="text-[20px] font-normal tracking-tight text-white border-b border-line pb-3">
               {editingContact === "new" ? "학생 연락처 추가" : "학생 연락처 수정"}
@@ -271,7 +271,7 @@ export default function SubtabContacts({ userId, grade, classNum, contacts, load
       )}
 
       {isBulkModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-6 max-w-xl w-full shadow-2xl border border-line space-y-4 ui-pop">
             <div>
               <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-widest block mb-0.5">// BULK STREAM INGESTION</span>

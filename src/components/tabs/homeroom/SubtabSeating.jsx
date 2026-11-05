@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { loadSynced, saveLocal } from "@/lib/syncedStorage";
+import { toSeatingDoc, fromSeatingDoc } from "@/lib/gridCodec";
 import { doc, setDoc } from "firebase/firestore";
 import { Shuffle, Lock, Unlock, Eye, Download, FileUp, UserX, X, RotateCcw } from "lucide-react";
 import JSZip from "jszip";
@@ -52,7 +53,11 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
     const seq = ++loadSeqRef.current;
     const key = `${userId}_${grade}_${classNum}`;
     // Firestore 를 기준으로 불러오고, 서버에 못 올라간 더 최근 로컬 사본이 있으면 그걸 쓴다
-    const loaded = await loadSynced(`seating_data_${key}`, doc(db, "homeroom_seating", key), (d) => d);
+    const ref = doc(db, "homeroom_seating", key);
+    const loaded = await loadSynced(`seating_data_${key}`, ref, fromSeatingDoc, {
+      // 예전에 서버 저장이 실패해 이 기기에만 남아 있던 자리는, 열어 보는 순간 서버로 올린다 (다른 기기에서도 보이게)
+      onLocalNewer: (local) => setDoc(ref, toSeatingDoc({ userId, grade, classNum, ...local })),
+    });
     if (seq !== loadSeqRef.current) return; // 그 사이 학급이 바뀌었으면 늦게 온 응답은 버린다
 
     // 저장된 데이터가 없는 학급이면 이전 학급의 자리배치가 남지 않도록 기본값으로 되돌린다
@@ -73,7 +78,13 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
     const payload = { userId, grade, classNum, rows: newRows, cols: newCols, grid: newGrid, avoidPairs: newAvoid, excluded: Array.from(newExcluded), updatedAt: new Date().toISOString() };
     setSeatGrid(newGrid); setAvoidPairs(newAvoid);
     saveLocal(`seating_data_${key}`, payload, payload.updatedAt);
-    try { await setDoc(doc(db, "homeroom_seating", key), payload); } catch (e) { console.error("Seating save error:", e); }
+    // 서버(Firestore)는 2차원 배열을 못 받으므로 toSeatingDoc 으로 풀어서 올린다. 실패하면 조용히 넘기지 않고 알린다.
+    try {
+      await setDoc(doc(db, "homeroom_seating", key), toSeatingDoc(payload));
+    } catch (e) {
+      console.error("Seating save error:", e);
+      toast("서버에 저장하지 못했습니다. 이 기기에는 저장됐어요. 연결을 확인한 뒤 다시 시도해 주세요.", "error");
+    }
   };
 
   const changeRows = (delta) => {
@@ -269,17 +280,17 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
   const renderRowIndices = isTeacherView ? Array.from({ length: rows }, (_, i) => i) : Array.from({ length: rows }, (_, i) => rows - 1 - i);
 
   return (
-    <div className="space-y-6 text-ink-strong">
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-line pb-4">
+    <div className="space-y-4 md:space-y-6 text-ink-strong">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-2 md:gap-4 border-b border-line pb-3 md:pb-4">
         <div>
-          <span className="text-[11px] font-mono text-indigo-400 uppercase tracking-widest block mb-0.5">
+          <span className="text-[11px] font-mono text-indigo-400 uppercase tracking-widest hidden md:block mb-0.5">
             // SEATING ALGORITHM MATRIX
           </span>
-          <h3 className="text-[22px] font-normal tracking-tight text-white">{grade}학년 {classNum}반 자리배치</h3>
+          <h3 className="text-[18px] md:text-[22px] font-normal tracking-tight text-white">{grade}학년 {classNum}반 자리배치</h3>
         </div>
 
         {currentUser && (
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex md:flex-wrap items-center gap-2 overflow-x-auto md:overflow-visible no-scrollbar w-[calc(100%+2rem)] -mx-4 px-4 md:w-auto md:mx-0 md:px-0 [&>*]:shrink-0">
             
             <div className="flex items-center bg-surface border border-line rounded-full mr-2 divide-x divide-line">
               <div className="flex items-center px-1.5">
@@ -307,7 +318,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
             <button onClick={() => setIsTeacherView(!isTeacherView)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] bg-well-2 border border-line hover:bg-surface text-ink">
               <Eye className="w-3.5 h-3.5" /> <span>{isTeacherView ? "교사 시점" : "학생 시점"}</span>
             </button>
-            <button onClick={handleShuffle} disabled={isBusy} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={handleShuffle} disabled={isBusy} className="order-first md:order-none flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               <Shuffle className="w-3.5 h-3.5" /> <span>자리 셔플</span>
             </button>
             <label className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well-2 border border-line hover:bg-surface text-ink transition-colors cursor-pointer">
@@ -333,13 +344,13 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
         </div>
       )}
 
-      <div className="border border-line bg-surface rounded-card p-6 shadow-xl overflow-x-auto custom-scrollbar">
-        <div aria-busy={seatLoading} className="grid gap-3.5 mx-auto min-w-[700px] max-w-5xl" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+      <div className="border border-line bg-surface rounded-card p-3 md:p-6 shadow-xl overflow-x-auto custom-scrollbar">
+        <div aria-busy={seatLoading} className="grid gap-1.5 md:gap-3.5 mx-auto min-w-[var(--seat-min)] md:min-w-[700px] max-w-5xl" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, "--seat-min": `${cols * 44}px` }}>
           {seatLoading ? Array.from({ length: rows * cols }, (_, i) => (
             <div
               key={i}
               aria-hidden="true"
-              className="ui-skeleton rounded-panel min-h-[96px]"
+              className="ui-skeleton rounded-panel min-h-[56px] md:min-h-[96px]"
               style={{ animationDelay: `-${((i % cols) + Math.floor(i / cols)) * 90}ms` }}
             />
           )) : renderRowIndices.map((r) =>
@@ -354,18 +365,18 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
               else cellStyle = "bg-well border-dashed border-line text-ink-faint hover:border-ink-muted";
 
               return (
-                <div key={`${r}-${c}`} onClick={() => handleSeatClick(r, c)} className={`relative flex flex-col items-center justify-center p-4 rounded-panel border transition-all min-h-[96px] ${cellStyle} ${currentUser ? "cursor-pointer active:scale-95 select-none" : ""}`}>
+                <div key={`${r}-${c}`} onClick={() => handleSeatClick(r, c)} className={`relative flex flex-col items-center justify-center p-1 md:p-4 rounded-panel border transition-all min-h-[56px] md:min-h-[96px] ${cellStyle} ${currentUser ? "cursor-pointer active:scale-95 select-none" : ""}`}>
                   {currentUser && cell.student && (
-                    <button disabled={isBusy} onClick={(e) => { e.stopPropagation(); const next = seatGrid.map(row => [...row]); next[r][c].isLocked = !next[r][c].isLocked; saveSeatingData(next); }} className="absolute top-2 right-2">
-                      {cell.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-ink-ghost hover:text-ink" />}
+                    <button disabled={isBusy} onClick={(e) => { e.stopPropagation(); const next = seatGrid.map(row => [...row]); next[r][c].isLocked = !next[r][c].isLocked; saveSeatingData(next); }} className="absolute top-0.5 right-0.5 md:top-2 md:right-2">
+                      {cell.isLocked ? <Lock className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-amber-400" /> : <Unlock className="w-2.5 h-2.5 md:w-3.5 md:h-3.5 text-ink-ghost hover:text-ink" />}
                     </button>
                   )}
                   {cell.isDisabled ? (
-                    <span className="font-mono text-[12px] font-bold text-ink-ghost">제외 자리</span>
+                    <span className="font-mono text-[10px] md:text-[12px] font-bold text-ink-ghost">제외 자리</span>
                   ) : cell.student ? (
-                    <><span className="text-[11px] font-mono font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full mb-1">{cell.student.num}번</span><span className="text-[15px] font-medium text-white truncate">{cell.student.name}</span></>
+                    <><span className="text-[9px] md:text-[11px] font-mono font-bold text-indigo-300 bg-indigo-500/20 px-1.5 md:px-2 py-0.5 rounded-full mb-0.5 md:mb-1">{cell.student.num}번</span><span className="text-[12px] md:text-[15px] font-medium text-white truncate max-w-full">{cell.student.name}</span></>
                   ) : (
-                    <span className="font-mono text-[12px]">빈 자리</span>
+                    <span className="font-mono text-[10px] md:text-[12px]">빈 자리</span>
                   )}
                 </div>
               );
@@ -385,7 +396,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
 
       {/* 기피 조합 모달 */}
       {isAvoidModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-6 max-w-md w-full shadow-2xl border border-line ui-pop">
             <div className="flex justify-between items-center border-b border-line pb-3 mb-4">
               <h4 className="text-[18px] font-medium text-white">기피 조합 일괄 입력</h4>
@@ -408,7 +419,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, conta
       
       {/* 배치 제외 학생 모달 */}
       {isExcludeModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-6 max-w-md w-full shadow-2xl border border-line ui-pop">
             <div className="flex justify-between items-start border-b border-line pb-3 mb-4">
               <div>

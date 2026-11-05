@@ -15,7 +15,7 @@ const SUBTABS = [
   { id: "contacts", label: "비상연락망", icon: PhoneCall, color: "text-rose-400" },
   { id: "seating", label: "자리배치", icon: Grid, color: "text-indigo-400" },
   { id: "cleaning", label: "청소구역", icon: Sparkles, color: "text-emerald-400" },
-  { id: "records", label: "행발세특 조립기", icon: RefreshCw, color: "text-purple-400" },
+  { id: "records", label: "행발세특 조립기", shortLabel: "행발세특", icon: RefreshCw, color: "text-purple-400" }, // shortLabel: 폰에서 쓰는 짧은 이름
 ];
 
 export default function TabHomeroom({ currentUser }) {
@@ -91,29 +91,29 @@ export default function TabHomeroom({ currentUser }) {
   const contactsLoading = contactsLoadedKey !== `${userId}_${grade}_${classNum}`;
 
   return (
-    <div className="space-y-12 ui-enter pb-24 text-ink-strong">
-      <section className="border border-line bg-surface rounded-card p-8 shadow-xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-line pb-6 mb-6">
+    <div className="space-y-4 md:space-y-12 ui-enter pb-24 text-ink-strong">
+      <section className="md:border border-line md:bg-surface md:rounded-card md:p-8 md:shadow-xl">
+        <div className="flex flex-row justify-between items-center gap-3 md:gap-6 md:border-b border-line md:pb-6 mb-3 md:mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-muted">
+            <div className="hidden md:flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-muted">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34D399] animate-pulse"></span>
               <span className="font-semibold text-ink">HOMEROOM CONTROL MATRIX</span>
             </div>
-            <h2 className="text-[32px] font-normal tracking-tight text-white leading-tight">
+            <h2 className="text-[20px] md:text-[32px] font-normal tracking-tight text-white leading-tight">
               {grade}학년 {classNum}반 담임
             </h2>
           </div>
 
           <button
             onClick={() => setIsClassModalOpen(true)}
-            className="flex items-center gap-2.5 bg-well border border-line hover:border-emerald-400 text-ink px-5 py-2.5 rounded-full font-mono text-[13px] font-bold shadow-sm transition-all hover:-translate-y-0.5 active:scale-95"
+            className="flex items-center gap-2.5 bg-well border border-line hover:border-emerald-400 text-ink px-3 md:px-5 py-1.5 md:py-2.5 shrink-0 rounded-full font-mono text-[12px] md:text-[13px] font-bold shadow-sm transition-all hover:-translate-y-0.5 active:scale-95"
           >
             <Users className="w-4 h-4 text-emerald-400" />
-            <span>{grade}학년 {classNum}반 설정 ↗</span>
+            <span><span className="md:hidden">학급 설정</span><span className="hidden md:inline">{grade}학년 {classNum}반 설정 ↗</span></span>
           </button>
         </div>
 
-        <div className="flex flex-wrap gap-2.5">
+        <div className="grid grid-cols-4 md:flex md:flex-wrap gap-1.5 md:gap-2.5">
           {SUBTABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubtab === tab.id;
@@ -121,14 +121,14 @@ export default function TabHomeroom({ currentUser }) {
               <button
                 key={tab.id}
                 onClick={() => setActiveSubtab(tab.id)}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-medium transition-all ${
+                className={`flex items-center justify-center gap-2 px-1 md:px-5 py-2 md:py-2.5 rounded-full text-[12px] md:text-[13px] font-medium transition-all ${
                   isActive
                     ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] font-bold"
                     : "bg-well hover:bg-raised text-ink-muted border border-line"
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? tab.color : "text-ink-faint"}`} />
-                <span>{tab.label}</span>
+                <Icon className={`hidden md:block w-3.5 h-3.5 ${isActive ? tab.color : "text-ink-faint"}`} />
+                <span>{tab.shortLabel ? (<><span className="md:hidden">{tab.shortLabel}</span><span className="hidden md:inline">{tab.label}</span></>) : tab.label}</span>
               </button>
             );
           })}
@@ -143,7 +143,7 @@ export default function TabHomeroom({ currentUser }) {
       </section>
 
       {isClassModalOpen && (
-        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-surface rounded-card p-8 max-w-md w-full shadow-2xl border border-line ui-pop">
             <div className="flex justify-between items-start border-b border-line pb-4 mb-6">
               <div>

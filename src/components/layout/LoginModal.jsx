@@ -23,7 +23,7 @@ export default function LoginModal({ isOpen, onClose }) {
   };
 
   return (
-    <div className="ui-fade fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div className="ui-fade ui-scrim fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
       <div className="bg-white text-black p-12 max-w-md w-full shadow-2xl ui-pop">
         <h3 className="text-[28px] font-normal mb-10 text-center tracking-tighter">교사 인증</h3>
         <form onSubmit={handleLogin} className="space-y-8">
