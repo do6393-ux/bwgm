@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { ArrowLeft } from "lucide-react";
+import DetailPlaceholder from "./DetailPlaceholder";
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
 
@@ -17,6 +18,7 @@ const UNITS = [
 
 export default function LessonDetailView({ lessonId, currentUser }) {
   const [lesson, setLesson] = useState(null);
+  const [loadError, setLoadError] = useState(null); // null | "missing"(없거나 삭제된 자료) | "error"(읽기 실패)
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
@@ -46,7 +48,12 @@ export default function LessonDetailView({ lessonId, currentUser }) {
           unit: data.unit || "unit1",
           summary: data.summary || ""
         });
+      } else {
+        setLoadError("missing");
       }
+    }, (err) => {
+      console.error("lesson listener:", err);
+      setLoadError("error");
     });
     return () => unsub();
   }, [lessonId]);
@@ -110,7 +117,7 @@ export default function LessonDetailView({ lessonId, currentUser }) {
     setIsEditing(false);
   };
 
-  if (!lesson) return <div className="p-20 text-center font-mono opacity-50 uppercase tracking-widest">Loading context...</div>;
+  if (!lesson) return <DetailPlaceholder error={loadError} />;
 
   // 비공개로 전환된 자료는 로그인하지 않은 방문자(학생)에게 보여주지 않는다.
   // ⚠️ 화면에서만 가리는 것이다. Firestore 규칙상 lessons 는 공개 읽기라서
@@ -120,7 +127,7 @@ export default function LessonDetailView({ lessonId, currentUser }) {
   }
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans font-light selection:bg-[#FF5000] selection:text-white pb-32">
+    <div className="min-h-screen bg-white text-black font-sans font-light selection:bg-accent selection:text-white pb-32">
       <style dangerouslySetInnerHTML={{__html: `
         .ql-toolbar.ql-snow {
           border: 1px solid rgba(0,0,0,0.1) !important;
@@ -147,8 +154,8 @@ export default function LessonDetailView({ lessonId, currentUser }) {
         .ql-editor img { max-width: 100%; border-radius: 4px; }
       `}} />
 
-      <header className="w-full border-b border-[#E5E5E5] px-8 py-6 flex justify-between items-center">
-        <button onClick={() => window.close()} className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest hover:text-[#FF5000] transition-colors">
+      <header className="w-full border-b border-line px-8 py-6 flex justify-between items-center">
+        <button onClick={() => window.close()} className="flex items-center gap-2 font-mono text-[13px] uppercase tracking-widest hover:text-accent transition-colors">
           <ArrowLeft className="w-4 h-4" /> close window
         </button>
         {currentUser && (
@@ -156,18 +163,18 @@ export default function LessonDetailView({ lessonId, currentUser }) {
             {isEditing ? (
               <>
                 <button onClick={handleCancel} className="opacity-50 hover:opacity-100">[ cancel ]</button>
-                <button onClick={handleSave} className="text-[#FF5000] font-bold">[ save all ]</button>
+                <button onClick={handleSave} className="text-accent font-bold">[ save all ]</button>
               </>
             ) : (
-              <button onClick={() => setIsEditing(true)} className="hover:text-[#FF5000]">[ edit mode ]</button>
+              <button onClick={() => setIsEditing(true)} className="hover:text-accent">[ edit mode ]</button>
             )}
           </div>
         )}
       </header>
 
-      <main className="max-w-[1000px] mx-auto px-6 pt-16 w-full">
+      <main className="max-w-[1000px] mx-auto px-6 pt-16 w-full ui-enter">
         {isEditing ? (
-          <div className="space-y-6 animate-in fade-in duration-300">
+          <div className="space-y-6 ui-enter">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <input 
@@ -175,20 +182,20 @@ export default function LessonDetailView({ lessonId, currentUser }) {
                   placeholder="자료 제목" 
                   value={editForm.title} 
                   onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} 
-                  className="w-full bg-white border border-[#E5E5E5] p-4 text-[16px] outline-none focus:border-black transition-colors"
+                  className="w-full bg-white border border-line p-4 text-[16px] outline-none focus:border-black transition-colors"
                 />
                 <input 
                   type="text" 
                   placeholder="차시 (예: 1차시)" 
                   value={editForm.lessonNum} 
                   onChange={(e) => setEditForm({ ...editForm, lessonNum: e.target.value })} 
-                  className="w-full bg-white border border-[#E5E5E5] p-4 text-[16px] outline-none focus:border-black transition-colors"
+                  className="w-full bg-white border border-line p-4 text-[16px] outline-none focus:border-black transition-colors"
                 />
               </div>
               <select 
                 value={editForm.unit} 
                 onChange={(e) => setEditForm({ ...editForm, unit: e.target.value })} 
-                className="w-full bg-white border border-[#E5E5E5] p-4 text-[16px] outline-none focus:border-black transition-colors"
+                className="w-full bg-white border border-line p-4 text-[16px] outline-none focus:border-black transition-colors"
               >
                 {UNITS.filter(u => u.id !== "all").map(u => (
                   <option key={u.id} value={u.id}>{u.label}</option>
@@ -198,7 +205,7 @@ export default function LessonDetailView({ lessonId, currentUser }) {
                 placeholder="요약 설명..." 
                 value={editForm.summary} 
                 onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })} 
-                className="w-full bg-white border border-[#E5E5E5] p-4 text-[16px] outline-none h-28 resize-none focus:border-black transition-colors"
+                className="w-full bg-white border border-line p-4 text-[16px] outline-none h-28 resize-none focus:border-black transition-colors"
               />
             </div>
 

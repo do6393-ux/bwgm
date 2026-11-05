@@ -3,6 +3,7 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import DatePicker from "@/components/ui/DatePicker";
+import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
 
 const EVENT_KEYWORDS = ["자치", "동아", "봉사", "진로"];
 const DAYS = ["월", "화", "수", "목", "금"];
@@ -92,6 +93,7 @@ export default function TabOffice({ currentUser }) {
 
   const [teacherBase, setTeacherBase] = useState(() => Array(7).fill().map(() => Array(5).fill("")));
   const [classBase, setClassBase] = useState(() => Array(7).fill().map(() => Array(5).fill("")));
+  const [baseReady, setBaseReady] = useState(false);
 
   // 오늘 날짜(기기의 현지 시간 기준). toISOString() 은 UTC 라서 한국 시간 09시 이전에는 전날이 나온다.
   const [mealDate, setMealDate] = useState(() => {
@@ -152,6 +154,7 @@ export default function TabOffice({ currentUser }) {
       if (cancelled) return;
       setTeacherBase(tBase);
       setClassBase(cBase);
+      setBaseReady(true);
     })();
     return () => { cancelled = true; };
   }, [userId, teacherName, grade, classNum, baseReloadKey]);
@@ -204,14 +207,14 @@ export default function TabOffice({ currentUser }) {
 
   // "데이터 연동 상태" 표시: 항상 "정상"이 아니라 실제로 받은 결과를 보여준다
   const scheduleStatus = isSyncingSchedule
-    ? { label: "동기화 중...", className: "text-[#FF5000]" }
+    ? { label: "동기화 중...", className: "text-accent" }
     : teacherSchedule && classSchedule
-    ? { label: "정상 수신 (컴시간)", className: "text-[#00E599]" }
+    ? { label: "정상 수신 (컴시간)", className: "text-ok" }
     : scheduleResult.failed
-    ? { label: "수신 실패 (연결·권한 확인)", className: "text-[#FF4D4D]" }
+    ? { label: "수신 실패 (연결·권한 확인)", className: "text-danger" }
     : teacherSchedule || classSchedule
-    ? { label: `일부만 수신 (${teacherSchedule ? "학급" : "교사"} 시간표 없음)`, className: "text-[#FFB000]" }
-    : { label: "수신된 시간표 없음 (동기화 대기)", className: "text-[#FFB000]" };
+    ? { label: `일부만 수신 (${teacherSchedule ? "학급" : "교사"} 시간표 없음)`, className: "text-warn" }
+    : { label: "수신된 시간표 없음 (동기화 대기)", className: "text-warn" };
 
   const teacherChangeCount = useMemo(() => {
     let count = 0;
@@ -331,6 +334,15 @@ export default function TabOffice({ currentUser }) {
   };
 
   const renderCell = (periodIdx, dayIdx, currentScheduleMap, baseMatrix, isClass = false) => {
+    if (isSyncingSchedule) {
+      return (
+        <td key={dayIdx} className="px-1 py-1 md:p-3 border border-line">
+          <div className="flex items-center justify-center min-h-[30px] md:min-h-[38px]">
+            <Skeleton className="h-3 w-3/4 max-w-[72px]" style={{ animationDelay: `-${(periodIdx + dayIdx) * 110}ms` }} />
+          </div>
+        </td>
+      );
+    }
     const cellKey = `${periodIdx + 1}_${dayIdx}`;
     const item = currentScheduleMap ? currentScheduleMap[cellKey] : null;
 
@@ -347,34 +359,105 @@ export default function TabOffice({ currentUser }) {
     return (
       <td
         key={dayIdx}
-        className={`p-3 text-center border border-[#222222] font-mono text-[13px] tracking-tight transition-colors ${
+        className={`px-1 py-1 md:p-3 text-center break-keep border border-line font-mono text-[12px] md:text-[13px] tracking-tight transition-colors ${
           isMint
-            ? "bg-[#00E599]/10 text-[#00E599] font-bold border-[#00E599]/30"
+            ? "bg-ok/10 text-ok font-bold border-ok/30"
             : isChanged
-            ? "bg-[#FF5000]/10 text-[#FF5000] font-bold border-[#FF5000]/40 shadow-[inset_0_0_8px_rgba(255,80,0,0.15)]"
+            ? "bg-accent/10 text-accent font-bold border-accent/40 shadow-[inset_0_0_8px_rgba(255,80,0,0.15)]"
             : text
-            ? "text-[#E5E5E5]"
-            : "text-[#333333]"
+            ? "text-ink"
+            : "text-ink-ghost"
         }`}
       >
-        <div className="flex flex-col items-center justify-center min-h-[38px]">
+        <div className="flex flex-col items-center justify-center min-h-[30px] md:min-h-[38px]">
           <span>{text || "—"}</span>
-          {isChanged && <span className="text-[10px] font-bold text-[#FF5000] mt-0.5">변동</span>}
-          {isMint && <span className="text-[10px] font-bold text-[#00E599] mt-0.5">창체</span>}
+          {isChanged && <span className="text-[10px] font-bold text-accent mt-0.5">변동</span>}
+          {isMint && <span className="text-[10px] font-bold text-ok mt-0.5">창체</span>}
         </div>
       </td>
     );
   };
 
+  // 오늘 요일(월~금 = 0~4). 이번 주를 볼 때만 표시한다
+  const todayCol = isNextWeek ? -1 : new Date().getDay() - 1;
+
+  // 시간표 표. 모바일에서는 칸을 줄이고 "월요일" 대신 "월", "1교시" 대신 "1" 로 보여 한 화면에 들어오게 한다
+  const renderTable = (schedule, base, isClass) => (
+    <div className="overflow-x-auto border border-line bg-page">
+      <table aria-busy={isSyncingSchedule} className="w-full border-collapse">
+        <thead>
+          <tr className="border-b border-line bg-surface">
+            <th className="p-2 md:p-3 font-mono text-[10px] md:text-[11px] text-ink-faint md:tracking-widest text-center w-9 md:w-20 border-r border-line">
+              교시
+            </th>
+            {DAYS.map((d, i) => (
+              <th
+                key={d}
+                aria-current={i === todayCol ? "date" : undefined}
+                className={`p-2 md:p-3 font-mono text-[12px] md:tracking-widest text-center border-r last:border-r-0 border-line ${
+                  i === todayCol ? "text-accent shadow-[inset_0_2px_0_0_rgb(var(--c-accent))]" : "text-ink-muted"
+                }`}
+              >
+                {d}
+                <span className="hidden md:inline">요일</span>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: 7 }, (_, r) => (
+            <tr key={r} className="border-b border-line last:border-b-0 hover:bg-white/[0.02] transition-colors">
+              <td className="p-2 md:p-3 font-mono text-[11px] md:text-[12px] text-ink-faint text-center border-r border-line bg-well">
+                {r + 1}
+                <span className="hidden md:inline">교시</span>
+              </td>
+              {Array.from({ length: 5 }, (_, c) => renderCell(r, c, schedule, base, isClass))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+
+  // 범례 + 기본 시간표 버튼. 넓은 화면에서는 제목 옆에, 모바일에서는 표 아래에 둬서 표가 먼저 보이게 한다
+  const teacherTools = (
+    <>
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 bg-accent block"></span>
+        <span className="text-ink-muted">시간표 변동</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 bg-ok block"></span>
+        <span className="text-ink-muted">창체 (자치/동아/봉사/진로)</span>
+      </div>
+      {currentUser && !baseReady && <Skeleton className="h-7 w-36" />}
+      {currentUser && baseReady && (
+        <button
+          onClick={() => {
+            setModalInputMatrix(teacherBase);
+            setModalType("teacherBase");
+          }}
+          className={`border px-3 py-1.5 transition-colors ${
+            isBaseMatrixEmpty(teacherBase)
+              ? "border-accent text-accent hover:bg-accent hover:text-white"
+              : "border-line text-ink-muted hover:border-white hover:text-white"
+          }`}
+        >
+          {isBaseMatrixEmpty(teacherBase) ? "[ ! 기본 시간표 등록 요망 ]" : "[ 기본 시간표 수정 ]"}
+        </button>
+      )}
+    </>
+  );
+
   return (
-    <div className="space-y-16 animate-in fade-in duration-500 pb-20">
-      <section className="border border-[#222222] bg-[#111111] p-5 md:p-8">
-        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-[#222222] pb-6 md:mb-6 mb-2">
-          <div>
-            <div className="flex items-center gap-3 mb-2 font-mono text-[11px] uppercase tracking-widest text-[#666666]">
-              <span>[ 교무 시스템 // 실시간 시간표 연동 ]</span>
-              <span className="w-1.5 h-1.5 bg-[#FF5000] rounded-full animate-ping"></span>
-              <span className="text-[#E5E5E5]">{isNextWeek ? "다음 주 조회 모드" : "이번 주 조회 모드"}</span>
+    <div className="space-y-8 md:space-y-16 ui-enter pb-20">
+      <section className="md:border border-line md:bg-surface md:p-8">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 md:gap-6 md:border-b border-line md:pb-6 md:mb-6">
+          <div className="hidden md:block">
+            <div className="flex items-center gap-3 mb-2 font-mono text-[11px] uppercase tracking-widest text-ink-faint">
+              <span className="hidden md:inline">[ 교무 시스템 // 실시간 시간표 연동 ]</span>
+              <span className="w-1.5 h-1.5 bg-accent rounded-full animate-ping"></span>
+              <span className="text-ink">{isNextWeek ? "다음 주 조회 모드" : "이번 주 조회 모드"}</span>
             </div>
             <h2 className="text-[26px] md:text-[32px] font-normal tracking-tight text-white leading-none">
               시간표 & 급식
@@ -382,16 +465,16 @@ export default function TabOffice({ currentUser }) {
           </div>
 
           <div className="flex flex-wrap items-center gap-3 md:gap-4 font-mono text-[11px] md:text-[12px]">
-            <div className="flex border border-[#222222] bg-[#050505]">
+            <div className="flex border border-line bg-page">
               <button
                 onClick={() => setIsNextWeek(false)}
-                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${!isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
+                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${!isNextWeek ? "bg-accent text-white" : "text-ink-muted hover:text-white"}`}
               >
                 이번 주 시간표
               </button>
               <button
                 onClick={() => setIsNextWeek(true)}
-                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${isNextWeek ? "bg-[#FF5000] text-white" : "text-[#888888] hover:text-white"}`}
+                className={`px-4 md:px-5 py-2 md:py-2.5 transition-colors font-bold ${isNextWeek ? "bg-accent text-white" : "text-ink-muted hover:text-white"}`}
               >
                 다음 주 시간표
               </button>
@@ -401,13 +484,17 @@ export default function TabOffice({ currentUser }) {
               href="http://comci.net:4082/st"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:flex items-center gap-2 border border-[#222222] px-4 py-2.5 hover:border-[#FF5000] hover:text-[#FF5000] transition-colors"
+              className="hidden sm:flex items-center gap-2 border border-line px-4 py-2.5 hover:border-accent hover:text-accent transition-colors"
             >
               <span>컴시간 바로가기</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>
+
+        <p className={`md:hidden mt-3 font-mono text-[11px] ${scheduleStatus.className}`} role="status">
+          ● {scheduleStatus.label}
+        </p>
 
         <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-[11px]">
           <div
@@ -416,135 +503,90 @@ export default function TabOffice({ currentUser }) {
               setTempTeacherCode(teacherCode);
               setModalType("switchTeacher");
             }}
-            className="p-4 border border-[#222222] bg-[#050505] cursor-pointer hover:border-[#FF5000] transition-colors group"
+            className="p-4 border border-line bg-page cursor-pointer hover:border-accent transition-colors group"
           >
-            <span className="block text-[#666666] mb-1">조회 교사 (클릭하여 변경)</span>
-            <span className="text-[#E5E5E5] group-hover:text-[#FF5000] font-bold text-[14px]">
+            <span className="block text-ink-faint mb-1">조회 교사 (클릭하여 변경)</span>
+            <span className="text-ink group-hover:text-accent font-bold text-[14px]">
               {teacherName ? `${teacherName} 선생님 ↗` : "교사 이름 설정 ↗"}
             </span>
           </div>
 
           <div
             onClick={() => setModalType("switchClass")}
-            className="p-4 border border-[#222222] bg-[#050505] cursor-pointer hover:border-[#FF5000] transition-colors group"
+            className="p-4 border border-line bg-page cursor-pointer hover:border-accent transition-colors group"
           >
-            <span className="block text-[#666666] mb-1">조회 학급 (클릭하여 변경)</span>
-            <span className="text-[#E5E5E5] group-hover:text-[#FF5000] font-bold text-[14px]">
+            <span className="block text-ink-faint mb-1">조회 학급 (클릭하여 변경)</span>
+            <span className="text-ink group-hover:text-accent font-bold text-[14px]">
               {grade}학년 {classNum}반 ↗
             </span>
           </div>
 
-          <div className="p-4 border border-[#222222] bg-[#050505] flex items-center justify-between">
+          <div className="p-4 border border-line bg-page flex items-center justify-between">
             <div>
-              <span className="block text-[#666666] mb-1">데이터 연동 상태</span>
+              <span className="block text-ink-faint mb-1">데이터 연동 상태</span>
               <span className={`${scheduleStatus.className} font-bold`}>
                 {scheduleStatus.label}
               </span>
             </div>
-            <RefreshCw className={`w-4 h-4 text-[#333333] ${isSyncingSchedule ? "animate-spin text-[#FF5000]" : ""}`} />
+            <RefreshCw className={`w-4 h-4 text-ink-ghost ${isSyncingSchedule ? "animate-spin text-accent" : ""}`} />
           </div>
 
-          <div className="p-4 border border-[#222222] bg-[#050505] flex items-center justify-between">
+          <div className="p-4 border border-line bg-page flex items-center justify-between">
             <div>
-              <span className="block text-[#666666] mb-1">
+              <span className="block text-ink-faint mb-1">
                 시간표 변동 감지 [{isNextWeek ? "다음 주" : "이번 주"}]
               </span>
-              {teacherChangeCount > 0 || classChangeCount > 0 ? (
-                <span className="text-[#FF5000] font-bold">
+              {isSyncingSchedule ? (
+                <span className="text-ink-faint font-bold">확인 중...</span>
+              ) : teacherChangeCount > 0 || classChangeCount > 0 ? (
+                <span className="text-accent font-bold">
                   교사 {teacherChangeCount}건 · 학급 {classChangeCount}건 변동
                 </span>
               ) : (
-                <span className="text-[#00E599] font-bold">변동 없음 (기본 일치)</span>
+                <span className="text-ok font-bold">변동 없음 (기본 일치)</span>
               )}
             </div>
-            <div className={`w-2.5 h-2.5 rounded-full ${teacherChangeCount > 0 || classChangeCount > 0 ? "bg-[#FF5000] animate-pulse" : "bg-[#00E599]"}`}></div>
+            <div className={`w-2.5 h-2.5 rounded-full ${isSyncingSchedule ? "bg-ink-ghost" : teacherChangeCount > 0 || classChangeCount > 0 ? "bg-accent animate-pulse" : "bg-ok"}`}></div>
           </div>
         </div>
       </section>
 
-      <section className="space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-[#222222] pb-4 gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[11px] font-mono uppercase tracking-widest text-[#FF5000]">
+      <section className="space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-line pb-3 md:pb-4 gap-4">
+          <div className="flex md:block items-center justify-between w-full sm:w-auto gap-3">
+            <div className="hidden md:flex items-center gap-2 mb-1">
+              <span className="text-[11px] font-mono uppercase tracking-widest text-accent">
                 // 01. 교사별 시간표
               </span>
-              <span className="text-[11px] font-mono px-2 py-0.5 border border-[#FF5000] text-[#FF5000]">
-                {isNextWeek ? "다음 주" : "이번 주"} 변동 {teacherChangeCount}건
+              <span className="text-[11px] font-mono px-2 py-0.5 border border-accent text-accent">
+                {isNextWeek ? "다음 주" : "이번 주"} 변동 {isSyncingSchedule ? "–" : teacherChangeCount}건
               </span>
             </div>
-            <h3 className="text-[24px] font-normal tracking-tight text-white">
-              {teacherName} 선생님 시간표
+            <h3 className="text-[18px] md:text-[24px] font-normal tracking-tight text-white">
+              {teacherName ? `${teacherName} 선생님 시간표` : "교사 시간표"}
             </h3>
+            <span className="md:hidden shrink-0 text-[11px] font-mono px-2 py-0.5 border border-accent text-accent">
+              변동 {isSyncingSchedule ? "–" : teacherChangeCount}건
+            </span>
           </div>
 
-          <div className="flex items-center gap-6 font-mono text-[11px]">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-[#FF5000] block"></span>
-              <span className="text-[#888888]">시간표 변동</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-[#00E599] block"></span>
-              <span className="text-[#888888]">창체 (자치/동아/봉사/진로)</span>
-            </div>
-            {currentUser && (
-              <button
-                onClick={() => {
-                  setModalInputMatrix(teacherBase);
-                  setModalType("teacherBase");
-                }}
-                className={`border px-3 py-1.5 transition-colors ${
-                  isBaseMatrixEmpty(teacherBase) 
-                    ? "border-[#FF5000] text-[#FF5000] hover:bg-[#FF5000] hover:text-white" 
-                    : "border-[#222222] text-[#888888] hover:border-white hover:text-white"
-                }`}
-              >
-                {isBaseMatrixEmpty(teacherBase) ? "[ ! 기본 시간표 등록 요망 ]" : "[ 기본 시간표 수정 ]"}
-              </button>
-            )}
-          </div>
+          <div className="hidden sm:flex items-center gap-6 font-mono text-[11px]">{teacherTools}</div>
         </div>
 
-        <div className="overflow-x-auto border border-[#222222] bg-[#050505]">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b border-[#222222] bg-[#111111]">
-                <th className="p-3 font-mono text-[11px] text-[#666666] tracking-widest text-center w-20 border-r border-[#222222]">
-                  교시
-                </th>
-                {DAYS.map(d => (
-                  <th key={d} className="p-3 font-mono text-[12px] text-[#888888] tracking-widest text-center border-r last:border-r-0 border-[#222222]">
-                    {d}요일
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {Array.from({ length: 7 }, (_, r) => (
-                <tr key={r} className="border-b border-[#222222] last:border-b-0 hover:bg-white/[0.02] transition-colors">
-                  <td className="p-3 font-mono text-[12px] text-[#666666] text-center border-r border-[#222222] bg-[#0B0B0B]">
-                    {r + 1}교시
-                  </td>
-                  {Array.from({ length: 5 }, (_, c) =>
-                    renderCell(r, c, teacherSchedule, teacherBase, false)
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {renderTable(teacherSchedule, teacherBase, false)}
+        <div className="sm:hidden flex flex-wrap items-center gap-x-5 gap-y-2 font-mono text-[11px]">{teacherTools}</div>
       </section>
 
       <section className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         <div className="lg:col-span-7 space-y-6">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-[#222222] pb-4 gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end border-b border-line pb-4 gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[11px] font-mono uppercase tracking-widest text-[#0055FF]">
+                <span className="text-[11px] font-mono uppercase tracking-widest text-info">
                   // 02. 학급별 시간표
                 </span>
-                <span className="text-[11px] font-mono px-2 py-0.5 border border-[#0055FF] text-[#0055FF]">
-                  {isNextWeek ? "다음 주" : "이번 주"} 변동 {classChangeCount}건
+                <span className="text-[11px] font-mono px-2 py-0.5 border border-info text-info">
+                  {isNextWeek ? "다음 주" : "이번 주"} 변동 {isSyncingSchedule ? "–" : classChangeCount}건
                 </span>
               </div>
               <h3 className="text-[24px] font-normal tracking-tight text-white">
@@ -552,7 +594,8 @@ export default function TabOffice({ currentUser }) {
               </h3>
             </div>
 
-            {currentUser && (
+            {currentUser && !baseReady && <Skeleton className="h-7 w-32" />}
+            {currentUser && baseReady && (
               <button
                 onClick={() => {
                   setModalInputMatrix(classBase);
@@ -560,8 +603,8 @@ export default function TabOffice({ currentUser }) {
                 }}
                 className={`font-mono text-[11px] border px-3 py-1.5 transition-colors ${
                   isBaseMatrixEmpty(classBase) 
-                    ? "border-[#0055FF] text-[#0055FF] hover:bg-[#0055FF] hover:text-white" 
-                    : "border-[#222222] text-[#888888] hover:border-white hover:text-white"
+                    ? "border-info text-info hover:bg-info hover:text-white" 
+                    : "border-line text-ink-muted hover:border-white hover:text-white"
                 }`}
               >
                 {isBaseMatrixEmpty(classBase) ? "[ ! 기본 시간표 등록 요망 ]" : "[ 기본 시간표 수정 ]"}
@@ -569,77 +612,55 @@ export default function TabOffice({ currentUser }) {
             )}
           </div>
 
-          <div className="overflow-x-auto border border-[#222222] bg-[#050505]">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-[#222222] bg-[#111111]">
-                  <th className="p-3 font-mono text-[11px] text-[#666666] tracking-widest text-center w-20 border-r border-[#222222]">
-                    교시
-                  </th>
-                  {DAYS.map(d => (
-                    <th key={d} className="p-3 font-mono text-[12px] text-[#888888] tracking-widest text-center border-r last:border-r-0 border-[#222222]">
-                      {d}요일
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 7 }, (_, r) => (
-                  <tr key={r} className="border-b border-[#222222] last:border-b-0 hover:bg-white/[0.02] transition-colors">
-                    <td className="p-3 font-mono text-[12px] text-[#666666] text-center border-r border-[#222222] bg-[#0B0B0B]">
-                      {r + 1}교시
-                    </td>
-                    {Array.from({ length: 5 }, (_, c) =>
-                      renderCell(r, c, classSchedule, classBase, true)
-                    )}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {renderTable(classSchedule, classBase, true)}
         </div>
 
         <div className="lg:col-span-5 space-y-6">
-          <div className="flex justify-between items-end border-b border-[#222222] pb-4">
+          <div className="flex justify-between items-end border-b border-line pb-4">
             <div>
-              <span className="text-[11px] font-mono uppercase tracking-widest text-[#00E599] mb-1 block">
+              <span className="text-[11px] font-mono uppercase tracking-widest text-ok mb-1 block">
                 // 03. 오늘의 중식 식단
               </span>
               <h3 className="text-[24px] font-normal tracking-tight text-white">
                 오늘의 급식
               </h3>
             </div>
-            <span className="text-[11px] font-mono text-[#666666]">
+            <span className="text-[11px] font-mono text-ink-faint">
               나이스(NEIS) 연동
             </span>
           </div>
 
-          <div className="border border-[#222222] bg-[#050505] p-6 space-y-6">
+          <div className="border border-line bg-page p-6 space-y-6">
             <div className="flex items-center gap-3">
               {/* 눌러서 작은 달력에서 날짜를 고르면 바로 그 날짜로 조회된다 */}
               <DatePicker value={mealDate} onChange={setMealDate} className="flex-1" />
               <button
                 onClick={() => mealDate && setMealReloadKey((k) => k + 1)}
-                className="bg-[#111111] border border-[#222222] hover:border-white text-white px-5 py-3 font-mono text-[12px] font-bold transition-colors"
+                className="bg-surface border border-line hover:border-white text-white px-5 py-3 font-mono text-[12px] font-bold transition-colors"
               >
                 조회
               </button>
             </div>
 
-            <div className="border border-dashed border-[#222222] bg-[#0A0A0A] p-6 font-mono relative">
-              <div className="flex justify-between items-center text-[11px] text-[#666666] pb-3 border-b border-[#1A1A1A] mb-4">
+            <div className="border border-dashed border-line bg-well p-6 font-mono relative">
+              <div className="flex justify-between items-center text-[11px] text-ink-faint pb-3 border-b border-raised mb-4">
                 <span>급식 정보 수신</span>
-                <span className={mealLoading ? "text-[#FF5000]" : mealStatus === "error" ? "text-[#FF4D4D]" : mealStatus === "empty" ? "text-[#888888]" : "text-[#00E599]"}>
+                <span className={mealLoading ? "text-accent" : mealStatus === "error" ? "text-danger" : mealStatus === "empty" ? "text-ink-muted" : "text-ok"}>
                   {mealLoading ? "조회 중..." : mealStatus === "error" ? "조회 실패" : mealStatus === "empty" ? "급식 없음" : "정상 조회"}
                 </span>
               </div>
 
               {mealLoading ? (
-                <div className="py-12 text-center text-[#666666] text-[12px] animate-pulse">
-                  급식 정보를 불러오는 중입니다...
-                </div>
+                <SkeletonGroup label="급식 정보를 불러오는 중" className="space-y-2.5">
+                  {[62, 78, 50, 68, 56].map((w, idx) => (
+                    <div key={idx} className="flex justify-between items-baseline border-b border-surface pb-2 last:border-b-0">
+                      <Skeleton className="h-4" style={{ width: `${w}%`, animationDelay: `-${idx * 140}ms` }} />
+                      <Skeleton className="h-3 w-4" style={{ animationDelay: `-${idx * 140}ms` }} />
+                    </div>
+                  ))}
+                </SkeletonGroup>
               ) : mealList.length === 0 ? (
-                <div className="py-12 text-center text-[#555555] text-[12px] leading-relaxed">
+                <div className="py-12 text-center text-ink-faint text-[12px] leading-relaxed">
                   {mealStatus === "error" ? (
                     <>
                       급식 정보를 불러오지 못했습니다.<br />
@@ -655,15 +676,15 @@ export default function TabOffice({ currentUser }) {
               ) : (
                 <ul className="space-y-2.5">
                   {mealList.map((dish, idx) => (
-                    <li key={idx} className="flex justify-between items-baseline text-[14px] text-[#E5E5E5] border-b border-[#141414] pb-2 last:border-b-0">
+                    <li key={idx} className="flex justify-between items-baseline text-[14px] text-ink border-b border-surface pb-2 last:border-b-0">
                       <span className="font-light">{dish}</span>
-                      <span className="text-[11px] text-[#555555]">0{idx + 1}</span>
+                      <span className="text-[11px] text-ink-faint">0{idx + 1}</span>
                     </li>
                   ))}
                 </ul>
               )}
 
-              <div className="mt-6 pt-3 border-t border-[#1A1A1A] flex justify-between text-[10px] text-[#444444]">
+              <div className="mt-6 pt-3 border-t border-raised flex justify-between text-[10px] text-ink-faint">
                 <span>부원여자중학교 정보교실</span>
                 <span>NEIS DIET FEED</span>
               </div>
@@ -674,43 +695,43 @@ export default function TabOffice({ currentUser }) {
 
       {/* 모달 레이어 */}
       {modalType && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#050505] border border-[#333333] text-white p-8 max-w-2xl w-full shadow-[8px_8px_0px_0px_rgba(255,80,0,1)] animate-in fade-in zoom-in-95 duration-200">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-page border border-line-strong text-white p-8 max-w-2xl w-full shadow-[8px_8px_0px_0px_rgba(255,80,0,1)] ui-pop">
             
             {(modalType === "teacherBase" || modalType === "classBase") && (
               <div className="space-y-6">
-                <div className="flex justify-between items-start border-b border-[#222222] pb-4">
+                <div className="flex justify-between items-start border-b border-line pb-4">
                   <div>
-                    <span className="text-[11px] font-mono text-[#FF5000] uppercase tracking-widest block mb-1">
+                    <span className="text-[11px] font-mono text-accent uppercase tracking-widest block mb-1">
                       // 기본 시간표 설정
                     </span>
                     <h3 className="text-[20px] font-normal tracking-tight">
                       {modalType === "teacherBase" ? `${teacherName} 선생님 기본 시간표` : `${grade}학년 ${classNum}반 기본 시간표`}
                     </h3>
                   </div>
-                  <span className="text-[11px] font-mono text-[#666666]">[ 7교시 x 5일 ]</span>
+                  <span className="text-[11px] font-mono text-ink-faint">[ 7교시 x 5일 ]</span>
                 </div>
 
-                <p className="text-[12px] font-mono text-[#888888]">
+                <p className="text-[12px] font-mono text-ink-muted">
                   등록해 둔 시간표를 기준으로 컴시간 실시간 시간표와의 차이점(보강, 시간표 교체)을 자동 감지합니다.
                 </p>
 
-                <div className="overflow-x-auto border border-[#222222] max-h-[420px]">
+                <div className="overflow-x-auto border border-line max-h-[420px]">
                   <table className="w-full border-collapse">
                     <thead>
-                      <tr className="bg-[#111111] border-b border-[#222222]">
-                        <th className="p-2 font-mono text-[11px] text-[#666666] w-14 text-center">교시</th>
+                      <tr className="bg-surface border-b border-line">
+                        <th className="p-2 font-mono text-[11px] text-ink-faint w-14 text-center">교시</th>
                         {DAYS.map(d => (
-                          <th key={d} className="p-2 font-mono text-[11px] text-[#888888] text-center border-l border-[#222222]">{d}</th>
+                          <th key={d} className="p-2 font-mono text-[11px] text-ink-muted text-center border-l border-line">{d}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {Array.from({ length: 7 }, (_, r) => (
-                        <tr key={r} className="border-b border-[#222222] last:border-b-0">
-                          <td className="p-2 font-mono text-[11px] text-center text-[#666666] bg-[#0B0B0B]">{r + 1}교시</td>
+                        <tr key={r} className="border-b border-line last:border-b-0">
+                          <td className="p-2 font-mono text-[11px] text-center text-ink-faint bg-well">{r + 1}교시</td>
                           {Array.from({ length: 5 }, (_, c) => (
-                            <td key={c} className="p-1 border-l border-[#222222]">
+                            <td key={c} className="p-1 border-l border-line">
                               <input
                                 type="text"
                                 value={modalInputMatrix[r]?.[c] || ""}
@@ -720,7 +741,7 @@ export default function TabOffice({ currentUser }) {
                                   setModalInputMatrix(updated);
                                 }}
                                 placeholder="과목명"
-                                className="w-full bg-[#111111] border border-[#222222] p-1.5 text-center text-[12px] font-mono text-white outline-none focus:border-[#FF5000]"
+                                className="w-full bg-surface border border-line p-1.5 text-center text-[12px] font-mono text-white outline-none focus:border-accent"
                               />
                             </td>
                           ))}
@@ -730,11 +751,11 @@ export default function TabOffice({ currentUser }) {
                   </table>
                 </div>
 
-                <div className="flex justify-end gap-4 font-mono text-[12px] pt-4 border-t border-[#222222]">
-                  <button onClick={() => setModalType(null)} className="px-4 py-2 text-[#666666] hover:text-white transition-colors">
+                <div className="flex justify-end gap-4 font-mono text-[12px] pt-4 border-t border-line">
+                  <button onClick={() => setModalType(null)} className="px-4 py-2 text-ink-faint hover:text-white transition-colors">
                     취소
                   </button>
-                  <button onClick={handleSaveBaseModal} className="bg-[#FF5000] text-white px-6 py-2 font-bold hover:bg-[#FF3000] transition-colors">
+                  <button onClick={handleSaveBaseModal} className="bg-accent text-white px-6 py-2 font-bold hover:bg-accent-strong transition-colors">
                     저장하기
                   </button>
                 </div>
@@ -743,37 +764,37 @@ export default function TabOffice({ currentUser }) {
 
             {modalType === "switchTeacher" && (
               <div className="space-y-6">
-                <div className="border-b border-[#222222] pb-4">
-                  <span className="text-[11px] font-mono text-[#FF5000] uppercase tracking-widest block mb-1">
+                <div className="border-b border-line pb-4">
+                  <span className="text-[11px] font-mono text-accent uppercase tracking-widest block mb-1">
                     // 교사 선택
                   </span>
                   <h3 className="text-[20px] font-normal tracking-tight">조회할 교사 성함 변경</h3>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-[#666666] mb-2">교사 성함 입력</label>
+                  <label className="block text-[11px] font-mono text-ink-faint mb-2">교사 성함 입력</label>
                   <input
                     type="text"
                     value={tempTeacherName}
                     onChange={(e) => setTempTeacherName(e.target.value)}
                     placeholder="예: 홍길동"
-                    className="w-full bg-[#111111] border border-[#222222] p-3 text-[16px] font-mono text-white outline-none focus:border-[#FF5000]"
+                    className="w-full bg-surface border border-line p-3 text-[16px] font-mono text-white outline-none focus:border-accent"
                   />
-                  <label className="block text-[11px] font-mono text-[#666666] mt-4 mb-2">컴시간 교사 번호 (선택)</label>
+                  <label className="block text-[11px] font-mono text-ink-faint mt-4 mb-2">컴시간 교사 번호 (선택)</label>
                   <input
                     type="text"
                     value={tempTeacherCode}
                     onChange={(e) => setTempTeacherCode(e.target.value)}
                     placeholder="예: 32"
-                    className="w-full bg-[#111111] border border-[#222222] p-3 text-[16px] font-mono text-white outline-none focus:border-[#FF5000]"
+                    className="w-full bg-surface border border-line p-3 text-[16px] font-mono text-white outline-none focus:border-accent"
                   />
-                  <p className="text-[11px] text-[#555555] mt-2 leading-relaxed">
+                  <p className="text-[11px] text-ink-faint mt-2 leading-relaxed">
                     시간표 동기화 데이터가 교사 번호로 저장되어 있을 때만 입력하세요. 모르면 비워 두어도 됩니다.
                   </p>
                 </div>
 
-                <div className="flex justify-end gap-4 font-mono text-[12px] pt-4 border-t border-[#222222]">
-                  <button onClick={() => setModalType(null)} className="px-4 py-2 text-[#666666] hover:text-white transition-colors">
+                <div className="flex justify-end gap-4 font-mono text-[12px] pt-4 border-t border-line">
+                  <button onClick={() => setModalType(null)} className="px-4 py-2 text-ink-faint hover:text-white transition-colors">
                     취소
                   </button>
                   <button
@@ -785,7 +806,7 @@ export default function TabOffice({ currentUser }) {
                       localStorage.setItem("office_teacher_code", tempTeacherCode.trim());
                       setModalType(null);
                     }}
-                    className="bg-[#FF5000] text-white px-6 py-2 font-bold hover:bg-[#FF3000] transition-colors"
+                    className="bg-accent text-white px-6 py-2 font-bold hover:bg-accent-strong transition-colors"
                   >
                     확인
                   </button>
@@ -795,8 +816,8 @@ export default function TabOffice({ currentUser }) {
 
             {modalType === "switchClass" && (
               <div className="space-y-6">
-                <div className="border-b border-[#222222] pb-4">
-                  <span className="text-[11px] font-mono text-[#0055FF] uppercase tracking-widest block mb-1">
+                <div className="border-b border-line pb-4">
+                  <span className="text-[11px] font-mono text-info uppercase tracking-widest block mb-1">
                     // 학급 선택
                   </span>
                   <h3 className="text-[20px] font-normal tracking-tight">조회할 학급을 선택하세요</h3>
@@ -820,8 +841,8 @@ export default function TabOffice({ currentUser }) {
                           }}
                           className={`p-3 font-mono text-[13px] border transition-all ${
                             isSelected
-                              ? "bg-[#0055FF] border-[#0055FF] text-white font-bold shadow-[2px_2px_0px_0px_#fff]"
-                              : "border-[#222222] bg-[#111111] text-[#888888] hover:border-white hover:text-white"
+                              ? "bg-info border-info text-white font-bold shadow-[2px_2px_0px_0px_#fff]"
+                              : "border-line bg-surface text-ink-muted hover:border-white hover:text-white"
                           }`}
                         >
                           {g}학년 {c}반
@@ -831,8 +852,8 @@ export default function TabOffice({ currentUser }) {
                   )}
                 </div>
 
-                <div className="flex justify-end pt-4 border-t border-[#222222]">
-                  <button onClick={() => setModalType(null)} className="font-mono text-[12px] text-[#666666] hover:text-white">
+                <div className="flex justify-end pt-4 border-t border-line">
+                  <button onClick={() => setModalType(null)} className="font-mono text-[12px] text-ink-faint hover:text-white">
                     닫기
                   </button>
                 </div>

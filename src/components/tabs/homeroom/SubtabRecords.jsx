@@ -4,6 +4,7 @@ import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Copy, Check, Sparkles, Trash2, Plus, Type, Database } from "lucide-react";
 import { DEFAULT_STYLES } from "./defaultPresets";
+import { useDialog } from "@/components/ui/dialogContext";
 
 const FORBIDDEN_WORDS = [
   "대회", "수상", "금상", "은상", "동상", "대상", "장려상", 
@@ -75,6 +76,7 @@ const KoreanGrammar = {
 };
 
 export default function SubtabRecords({ userId, grade, classNum, contacts }) {
+  const { confirm, toast } = useDialog();
   const [activeInnerTab, setActiveInnerTab] = useState("engine"); // engine | archive
   const [selectedStudentNum, setSelectedStudentNum] = useState(1);
   const [studentRecords, setStudentRecords] = useState({});
@@ -157,7 +159,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
 
   const handleAssemble = () => {
-    if (!selectedAction) return alert("구체적 행동/변화를 반드시 선택해주세요.");
+    if (!selectedAction) return toast("구체적 행동/변화를 먼저 선택해 주세요.", "info");
     const student = contacts.find(c => c.num === selectedStudentNum) || { name: "" };
     
     const sitWithJosa = KoreanGrammar.attachSituationJosa(selectedSituation);
@@ -221,19 +223,19 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
   // Custom Preset Handlers
   const handleSavePreset = async () => {
-    if (!presetInputText.trim()) return alert("추가할 내용을 입력해주세요.");
+    if (!presetInputText.trim()) return toast("추가할 내용을 입력해 주세요.", "info");
     try {
       const docRef = doc(db, "shared_records_presets", "global_presets");
       const snap = await getDoc(docRef);
       let data = snap.exists() && snap.data().presets ? snap.data().presets : {};
 
       if (presetType === 'category') {
-        if (!presetNewCategory.trim()) return alert("새 카테고리 이름을 입력하세요.");
+        if (!presetNewCategory.trim()) return toast("새 카테고리 이름을 입력해 주세요.", "info");
         const newKey = `custom_${Date.now()}`;
         data[newKey] = { category: presetNewCategory.trim(), situations: [presetInputText.trim()], actions: [], outcomes: [] };
       } else {
         const catKey = activeTargetCat || Object.keys(data)[0];
-        if (!catKey) return alert("먼저 카테고리를 만들어주세요.");
+        if (!catKey) return toast("먼저 카테고리를 만들어 주세요.", "info");
         if (!data[catKey]) data[catKey] = { category: catKey, situations: [], actions: [], outcomes: [] };
         if (presetType === 'situation') data[catKey].situations.push(presetInputText.trim());
         if (presetType === 'action') data[catKey].actions.push(presetInputText.trim());
@@ -243,12 +245,12 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
       setBehaviorPresets(data);
       setIsPresetModalOpen(false);
       setPresetInputText(""); setPresetNewCategory("");
-      alert("✅ 공용 데이터베이스에 추가되었습니다.");
-    } catch (e) { console.error("Preset save error:", e); alert("저장 오류"); }
+      toast("공용 문구에 추가했습니다.", "success");
+    } catch (e) { console.error("Preset save error:", e); toast("저장하지 못했습니다. 연결을 확인해 주세요.", "error"); }
   };
 
   const handleDeletePreset = async (catKey, type, text) => {
-    if (!confirm("이 문구를 정말 삭제하시겠습니까?")) return;
+    if (!(await confirm("이 문구를 삭제하시겠습니까?\n모든 교사가 함께 쓰는 공용 문구입니다.", { danger: true, confirmText: "삭제" }))) return;
     try {
       const docRef = doc(db, "shared_records_presets", "global_presets");
       const snap = await getDoc(docRef);
@@ -256,7 +258,8 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
       data[catKey][type] = data[catKey][type].filter(t => t !== text);
       await setDoc(docRef, { presets: data, updatedAt: new Date().toISOString() });
       setBehaviorPresets(data);
-    } catch (e) { console.error("Preset delete error:", e); }
+      toast("삭제했습니다.", "success");
+    } catch (e) { console.error("Preset delete error:", e); toast("삭제하지 못했습니다. 연결을 확인해 주세요.", "error"); }
   };
 
   const studentList = contacts.length > 0 ? contacts : Array.from({ length: 30 }, (_, i) => ({ num: i + 1, name: `${i + 1}번 학생` }));
@@ -266,7 +269,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#666666] pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-line pb-4">
         <div>
           <span className="text-[11px] font-mono text-purple-400 uppercase tracking-widest block mb-0.5">
             // RECORD ASSEMBLY ENGINE
@@ -275,23 +278,23 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
             {grade}학년 {classNum}반 행발 / 세특 문장 조립기
           </h3>
         </div>
-        <div className="flex gap-2 p-1 bg-[#333333] rounded-xl border border-[#666666]">
-          <button onClick={() => { setActiveInnerTab("engine"); setAssembledResults([]); }} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "engine" ? "bg-white text-purple-600 shadow-sm" : "text-[#A0A0A0] hover:text-white"}`}>조립 엔진</button>
-          <button onClick={() => setActiveInnerTab("archive")} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "archive" ? "bg-white text-purple-600 shadow-sm" : "text-[#A0A0A0] hover:text-white"}`}>누적 보관함</button>
+        <div className="flex gap-2 p-1 bg-well rounded-field border border-line">
+          <button onClick={() => { setActiveInnerTab("engine"); setAssembledResults([]); }} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "engine" ? "bg-white text-purple-600 shadow-sm" : "text-ink-muted hover:text-white"}`}>조립 엔진</button>
+          <button onClick={() => setActiveInnerTab("archive")} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "archive" ? "bg-white text-purple-600 shadow-sm" : "text-ink-muted hover:text-white"}`}>누적 보관함</button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* 명렬표 */}
-        <div className="lg:col-span-3 border border-[#666666] bg-[#444444] rounded-3xl p-4 shadow-sm space-y-2 max-h-[720px] overflow-y-auto">
-          <span className="block text-[11px] font-mono text-[#A0A0A0] uppercase tracking-wider px-2 mb-2">STUDENT LIST</span>
+        <div className="lg:col-span-3 border border-line bg-surface rounded-card p-4 shadow-sm space-y-2 max-h-[720px] overflow-y-auto">
+          <span className="block text-[11px] font-mono text-ink-muted uppercase tracking-wider px-2 mb-2">STUDENT LIST</span>
           {studentList.map((s) => {
             const hasRecord = !!studentRecords[s.num]?.trim();
             const isSelected = selectedStudentNum === s.num;
             return (
-              <button key={s.num} onClick={() => { setSelectedStudentNum(s.num); setAssembledResults([]); }} className={`w-full flex items-center justify-between p-2.5 rounded-2xl text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-[#555555] text-[#E0E0E0]"}`}>
+              <button key={s.num} onClick={() => { setSelectedStudentNum(s.num); setAssembledResults([]); }} className={`w-full flex items-center justify-between p-2.5 rounded-panel text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-raised text-ink"}`}>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${isSelected ? "bg-white/20" : "bg-[#333333] text-[#A0A0A0]"}`}>{s.num}번</span>
+                  <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${isSelected ? "bg-white/20" : "bg-well text-ink-muted"}`}>{s.num}번</span>
                   <span>{s.name}</span>
                 </div>
                 {hasRecord && <Check className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-emerald-400"}`} />}
@@ -306,49 +309,49 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
             // 조립 엔진 뷰
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* 셀렉터 영역 */}
-              <div className="border border-[#666666] bg-[#444444] rounded-3xl p-6 shadow-sm space-y-4">
-                <div className="flex justify-between items-center border-b border-[#666666] pb-3">
+              <div className="border border-line bg-surface rounded-card p-6 shadow-sm space-y-4">
+                <div className="flex justify-between items-center border-b border-line pb-3">
                   <h4 className="text-[17px] font-medium text-white flex items-center gap-2"><Sparkles className="w-4 h-4 text-purple-400"/> 문장 0초 조립기</h4>
-                  <button onClick={() => { setPresetTargetCat(selectedCategoryKey); setIsPresetModalOpen(true); }} className="text-[12px] text-[#A0A0A0] hover:text-white flex items-center gap-1"><Database className="w-3.5 h-3.5"/> 프리셋 관리</button>
+                  <button onClick={() => { setPresetTargetCat(selectedCategoryKey); setIsPresetModalOpen(true); }} className="text-[12px] text-ink-muted hover:text-white flex items-center gap-1"><Database className="w-3.5 h-3.5"/> 프리셋 관리</button>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-mono text-[#A0A0A0] mb-1">CATEGORY</label>
-                  <select value={selectedCategoryKey} onChange={(e) => { setSelectedCategoryKey(e.target.value); setSelectedSituation(""); setSelectedAction(""); }} className="w-full bg-[#333333] border border-[#666666] text-[#E0E0E0] rounded-xl p-2.5 text-[13px] outline-none focus:border-purple-400">
+                  <label className="block text-[11px] font-mono text-ink-muted mb-1">CATEGORY</label>
+                  <select value={selectedCategoryKey} onChange={(e) => { setSelectedCategoryKey(e.target.value); setSelectedSituation(""); setSelectedAction(""); }} className="w-full bg-well border border-line text-ink rounded-field p-2.5 text-[13px] outline-none focus:border-purple-400">
                     {Object.keys(behaviorPresets || {}).map((key) => <option key={key} value={key}>{behaviorPresets[key].category}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-mono text-[#A0A0A0] mb-1">1. 관찰 상황 (SITUATION)</label>
-                  <select value={selectedSituation} onChange={(e) => setSelectedSituation(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-[#E0E0E0] rounded-xl p-2.5 text-[13px] outline-none focus:border-purple-400">
+                  <label className="block text-[11px] font-mono text-ink-muted mb-1">1. 관찰 상황 (SITUATION)</label>
+                  <select value={selectedSituation} onChange={(e) => setSelectedSituation(e.target.value)} className="w-full bg-well border border-line text-ink rounded-field p-2.5 text-[13px] outline-none focus:border-purple-400">
                     <option value="">(상황 생략)</option>
                     {currentCategory?.situations?.map((sit, i) => <option key={i} value={sit}>{sit}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-mono text-[#A0A0A0] mb-1">2. 구체적 행동 (ACTION)</label>
-                  <select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-[#E0E0E0] rounded-xl p-2.5 text-[13px] outline-none focus:border-purple-400">
+                  <label className="block text-[11px] font-mono text-ink-muted mb-1">2. 구체적 행동 (ACTION)</label>
+                  <select value={selectedAction} onChange={(e) => setSelectedAction(e.target.value)} className="w-full bg-well border border-line text-ink rounded-field p-2.5 text-[13px] outline-none focus:border-purple-400">
                     <option value="">-- 행동 선택 --</option>
                     {currentCategory?.actions?.map((act, i) => <option key={i} value={act}>{act}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[11px] font-mono text-[#A0A0A0] mb-1">3. 맺음말 (ENDING)</label>
-                  <select value={selectedStyleId} onChange={(e) => setSelectedStyleId(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-[#E0E0E0] rounded-xl p-2.5 text-[13px] outline-none focus:border-purple-400">
+                  <label className="block text-[11px] font-mono text-ink-muted mb-1">3. 맺음말 (ENDING)</label>
+                  <select value={selectedStyleId} onChange={(e) => setSelectedStyleId(e.target.value)} className="w-full bg-well border border-line text-ink rounded-field p-2.5 text-[13px] outline-none focus:border-purple-400">
                     {DEFAULT_STYLES.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
                   </select>
                 </div>
-                <button onClick={handleAssemble} className="w-full py-3 rounded-xl bg-purple-500 hover:bg-purple-400 text-white font-bold text-[13px] transition-all flex justify-center gap-1.5 mt-2"><Type className="w-4 h-4" /> 문장 생성하기</button>
+                <button onClick={handleAssemble} className="w-full py-3 rounded-field bg-purple-500 hover:bg-purple-400 text-white font-bold text-[13px] transition-all flex justify-center gap-1.5 mt-2"><Type className="w-4 h-4" /> 문장 생성하기</button>
               </div>
 
               {/* 생성 결과 영역 */}
-              <div className="border border-[#666666] bg-[#333333] rounded-3xl p-6 shadow-sm">
-                <span className="text-[11px] font-mono text-[#A0A0A0] uppercase tracking-wider block mb-3">ASSEMBLY RESULT</span>
+              <div className="border border-line bg-well rounded-card p-6 shadow-sm">
+                <span className="text-[11px] font-mono text-ink-muted uppercase tracking-wider block mb-3">ASSEMBLY RESULT</span>
                 {assembledResults.length === 0 ? (
-                  <div className="py-20 text-center text-[#888888] text-[12px] border border-dashed border-[#666666] rounded-2xl">좌측 조립기에서 문장을 생성하세요.</div>
+                  <div className="py-20 text-center text-ink-faint text-[12px] border border-dashed border-line rounded-panel">좌측 조립기에서 문장을 생성하세요.</div>
                 ) : (
                   assembledResults.map(res => (
-                    <div key={res.id} className="p-4 bg-[#444444] border border-[#666666] rounded-2xl relative">
+                    <div key={res.id} className="p-4 bg-surface border border-line rounded-panel relative">
                       <div className="flex justify-between items-center mb-3">
                         <span className="text-[11px] font-bold text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-full">{res.style}</span>
                         <span className={`text-[11px] font-mono ${res.isValid ? 'text-emerald-400' : 'text-rose-400'}`}>{res.bytes} / 1500 Byte</span>
@@ -356,8 +359,8 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
                       <p className="text-[14px] text-white leading-relaxed mb-4 break-keep">
                         <span className="font-bold text-purple-300">[{res.studentName}]</span> {res.sentence}
                       </p>
-                      <div className="flex justify-end pt-3 border-t border-[#666666]">
-                        <button onClick={() => handleAddToArchive(res.sentence)} className="bg-purple-500 hover:bg-purple-400 text-white font-bold px-4 py-2 rounded-xl text-[12px] flex items-center gap-1.5 transition-colors"><Plus className="w-3.5 h-3.5" /> 누적 기록에 추가</button>
+                      <div className="flex justify-end pt-3 border-t border-line">
+                        <button onClick={() => handleAddToArchive(res.sentence)} className="bg-purple-500 hover:bg-purple-400 text-white font-bold px-4 py-2 rounded-field text-[12px] flex items-center gap-1.5 transition-colors"><Plus className="w-3.5 h-3.5" /> 누적 기록에 추가</button>
                       </div>
                     </div>
                   ))
@@ -366,16 +369,16 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
             </div>
           ) : (
             // 누적 보관함 뷰
-            <div className="border border-[#666666] bg-[#444444] rounded-3xl p-6 shadow-sm flex flex-col h-[720px]">
-              <div className="flex justify-between items-center border-b border-[#666666] pb-4 mb-4">
+            <div className="border border-line bg-surface rounded-card p-6 shadow-sm flex flex-col h-[720px]">
+              <div className="flex justify-between items-center border-b border-line pb-4 mb-4">
                 <h4 className="text-[18px] font-medium text-white"><span className="text-purple-400 font-bold">[{currentStudentName}]</span> 누적 기록 보관함</h4>
-                <div className="text-[12px] font-mono bg-[#333333] px-3 py-1.5 rounded-full border border-[#666666]">
-                  <span className={archiveBytes > 1500 ? "text-rose-400" : "text-emerald-400"}>{archiveBytes}</span><span className="text-[#A0A0A0]"> / 1500 Byte</span>
+                <div className="text-[12px] font-mono bg-well px-3 py-1.5 rounded-full border border-line">
+                  <span className={archiveBytes > 1500 ? "text-rose-400" : "text-emerald-400"}>{archiveBytes}</span><span className="text-ink-muted"> / 1500 Byte</span>
                 </div>
               </div>
-              <textarea value={archiveText} onChange={(e) => handleSaveArchiveDirectly(e.target.value)} className="flex-1 w-full bg-[#333333] border border-[#666666] rounded-2xl p-5 text-[14px] text-[#E0E0E0] outline-none focus:border-purple-400 resize-none" placeholder="누적된 기록이 없습니다..." />
-              <div className="flex justify-between items-center pt-4 border-t border-[#666666] mt-4">
-                <button onClick={() => { if(confirm("초기화하시겠습니까?")) handleSaveArchiveDirectly(""); }} className="text-[#888888] hover:text-rose-400 text-[12px] flex gap-1"><Trash2 className="w-3.5 h-3.5"/> 지우기</button>
+              <textarea value={archiveText} onChange={(e) => handleSaveArchiveDirectly(e.target.value)} className="flex-1 w-full bg-well border border-line rounded-panel p-5 text-[14px] text-ink outline-none focus:border-purple-400 resize-none" placeholder="누적된 기록이 없습니다..." />
+              <div className="flex justify-between items-center pt-4 border-t border-line mt-4">
+                <button onClick={async () => { if (await confirm("이 학생의 누적 기록을 모두 지우시겠습니까?", { danger: true, confirmText: "지우기" })) handleSaveArchiveDirectly(""); }} className="text-ink-faint hover:text-rose-400 text-[12px] flex gap-1"><Trash2 className="w-3.5 h-3.5"/> 지우기</button>
                 <button onClick={handleCopyArchive} className={`flex items-center gap-1.5 px-6 py-2.5 rounded-full text-[13px] font-bold ${copySuccess ? "bg-emerald-500 text-black" : "bg-white text-black hover:bg-neutral-200"}`}>{copySuccess ? <Check className="w-4 h-4"/> : <Copy className="w-4 h-4"/>} 복사하기</button>
               </div>
             </div>
@@ -385,52 +388,52 @@ export default function SubtabRecords({ userId, grade, classNum, contacts }) {
 
       {/* 프리셋 관리 모달 */}
       {isPresetModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#444444] rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-[#666666]">
-            <div className="flex justify-between items-center border-b border-[#666666] pb-3 mb-4">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-card p-6 max-w-lg w-full shadow-2xl border border-line ui-pop">
+            <div className="flex justify-between items-center border-b border-line pb-3 mb-4">
               <h4 className="text-[18px] text-white font-medium">프리셋 DB 관리</h4>
               <div className="flex gap-2">
-                <button onClick={() => setPresetModalTab("add")} className={`text-[12px] px-3 py-1.5 rounded-lg font-bold ${presetModalTab === "add" ? "bg-purple-500 text-white" : "bg-[#333333] text-[#A0A0A0]"}`}>추가</button>
-                <button onClick={() => setPresetModalTab("manage")} className={`text-[12px] px-3 py-1.5 rounded-lg font-bold ${presetModalTab === "manage" ? "bg-purple-500 text-white" : "bg-[#333333] text-[#A0A0A0]"}`}>목록/삭제</button>
+                <button onClick={() => setPresetModalTab("add")} className={`text-[12px] px-3 py-1.5 rounded-lg font-bold ${presetModalTab === "add" ? "bg-purple-500 text-white" : "bg-well text-ink-muted"}`}>추가</button>
+                <button onClick={() => setPresetModalTab("manage")} className={`text-[12px] px-3 py-1.5 rounded-lg font-bold ${presetModalTab === "manage" ? "bg-purple-500 text-white" : "bg-well text-ink-muted"}`}>목록/삭제</button>
               </div>
             </div>
             
             {presetModalTab === "add" ? (
               <div className="space-y-4">
                 <div className="flex gap-2">
-                  <button onClick={() => setPresetType("category")} className={`flex-1 py-2 text-[12px] rounded-xl border ${presetType === "category" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-[#666666] text-[#A0A0A0]"}`}>카테고리 생성</button>
-                  <button onClick={() => setPresetType("situation")} className={`flex-1 py-2 text-[12px] rounded-xl border ${presetType === "situation" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-[#666666] text-[#A0A0A0]"}`}>상황 추가</button>
-                  <button onClick={() => setPresetType("action")} className={`flex-1 py-2 text-[12px] rounded-xl border ${presetType === "action" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-[#666666] text-[#A0A0A0]"}`}>행동 추가</button>
+                  <button onClick={() => setPresetType("category")} className={`flex-1 py-2 text-[12px] rounded-field border ${presetType === "category" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-line text-ink-muted"}`}>카테고리 생성</button>
+                  <button onClick={() => setPresetType("situation")} className={`flex-1 py-2 text-[12px] rounded-field border ${presetType === "situation" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-line text-ink-muted"}`}>상황 추가</button>
+                  <button onClick={() => setPresetType("action")} className={`flex-1 py-2 text-[12px] rounded-field border ${presetType === "action" ? "bg-purple-500/20 border-purple-400 text-purple-300" : "border-line text-ink-muted"}`}>행동 추가</button>
                 </div>
                 {presetType !== "category" ? (
-                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-white rounded-xl p-2.5 text-[12px]">
+                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-full bg-well border border-line text-white rounded-field p-2.5 text-[12px]">
                     {Object.keys(behaviorPresets).map(k => <option key={k} value={k}>{behaviorPresets[k].category}</option>)}
                   </select>
                 ) : (
-                  <input type="text" placeholder="새 카테고리 이름" value={presetNewCategory} onChange={(e) => setPresetNewCategory(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-white rounded-xl p-2.5 text-[12px] outline-none" />
+                  <input type="text" placeholder="새 카테고리 이름" value={presetNewCategory} onChange={(e) => setPresetNewCategory(e.target.value)} className="w-full bg-well border border-line text-white rounded-field p-2.5 text-[12px] outline-none" />
                 )}
-                <input type="text" placeholder="추가할 문구 입력" value={presetInputText} onChange={(e) => setPresetInputText(e.target.value)} className="w-full bg-[#333333] border border-[#666666] text-white rounded-xl p-2.5 text-[12px] outline-none" />
-                <button onClick={handleSavePreset} className="w-full py-2.5 bg-white text-black font-bold rounded-xl text-[13px]">저장하기</button>
+                <input type="text" placeholder="추가할 문구 입력" value={presetInputText} onChange={(e) => setPresetInputText(e.target.value)} className="w-full bg-well border border-line text-white rounded-field p-2.5 text-[12px] outline-none" />
+                <button onClick={handleSavePreset} className="w-full py-2.5 bg-white text-black font-bold rounded-field text-[13px]">저장하기</button>
               </div>
             ) : (
               <div className="space-y-3 max-h-[300px] overflow-y-auto">
                 <div className="flex gap-2">
-                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
+                  <select value={activeTargetCat} onChange={(e) => setPresetTargetCat(e.target.value)} className="w-1/2 bg-well border border-line text-white rounded-field p-2 text-[12px]">
                     {Object.keys(behaviorPresets).map(k => <option key={k} value={k}>{behaviorPresets[k].category}</option>)}
                   </select>
-                  <select value={manageType} onChange={(e) => setManageType(e.target.value)} className="w-1/2 bg-[#333333] border border-[#666666] text-white rounded-xl p-2 text-[12px]">
+                  <select value={manageType} onChange={(e) => setManageType(e.target.value)} className="w-1/2 bg-well border border-line text-white rounded-field p-2 text-[12px]">
                     <option value="situations">상황 문구</option><option value="actions">행동 문구</option>
                   </select>
                 </div>
                 {behaviorPresets[activeTargetCat]?.[manageType]?.map((txt, i) => (
-                  <div key={i} className="flex justify-between items-center bg-[#333333] p-2.5 rounded-xl border border-[#666666]">
-                    <span className="text-[12px] text-[#E0E0E0] truncate pr-2">{txt}</span>
+                  <div key={i} className="flex justify-between items-center bg-well p-2.5 rounded-field border border-line">
+                    <span className="text-[12px] text-ink truncate pr-2">{txt}</span>
                     <button onClick={() => handleDeletePreset(activeTargetCat, manageType, txt)} className="text-rose-400 hover:text-rose-300 text-[11px] shrink-0">삭제</button>
                   </div>
                 ))}
               </div>
             )}
-            <div className="flex justify-end pt-4 mt-4 border-t border-[#666666]"><button onClick={() => setIsPresetModalOpen(false)} className="text-[12px] text-[#A0A0A0]">닫기</button></div>
+            <div className="flex justify-end pt-4 mt-4 border-t border-line"><button onClick={() => setIsPresetModalOpen(false)} className="text-[12px] text-ink-muted">닫기</button></div>
           </div>
         </div>
       )}

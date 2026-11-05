@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, updateProfile, signOut, sendPasswordResetEmail } from "firebase/auth";
 import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { auth, db, getSecondaryAuth } from "@/lib/firebase";
+import { useDialog } from "@/components/ui/dialogContext";
 
 // 헷갈리는 문자(0/O, 1/l/I)를 뺀 임시 비밀번호 생성
 function generatePassword(length = 10) {
@@ -30,6 +31,7 @@ function explainError(err) {
 }
 
 export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
+  const { confirm } = useDialog();
   const [teachers, setTeachers] = useState([]);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
@@ -82,8 +84,9 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
         if (name.trim()) await updateProfile(cred.user, { displayName: name.trim() });
       } catch (err) {
         if (err.code !== "auth/email-already-in-use") throw err;
-        const ok = confirm(
-          `${addr} 는 이미 가입된 계정입니다.\n\n이 계정을 만든 사람이 해당 교사 본인이 확실할 때만 권한을 부여하세요.\n계속할까요?`
+        const ok = await confirm(
+          `${addr} 는 이미 가입된 계정입니다.\n\n이 계정을 만든 사람이 해당 교사 본인이 확실할 때만 권한을 부여하세요.\n계속할까요?`,
+          { title: "이미 가입된 계정", confirmText: "권한 부여" }
         );
         if (!ok) return;
       } finally {
@@ -116,7 +119,8 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
   };
 
   const handleRemove = async (t) => {
-    if (!confirm(`${t.email || t.id} 선생님의 접근 권한을 삭제하시겠습니까?\n(계정 자체는 남지만 데이터에는 접근할 수 없게 됩니다.)`)) return;
+    const ok = await confirm(`${t.email || t.id} 선생님의 접근 권한을 삭제하시겠습니까?\n(계정 자체는 남지만 데이터에는 접근할 수 없게 됩니다.)`, { danger: true, confirmText: "삭제" });
+    if (!ok) return;
     setError("");
     setNotice("");
     try {
@@ -160,8 +164,8 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
-      <div className="bg-white rounded-2xl p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-black/[0.08] animate-in fade-in zoom-in-95 duration-200">
+    <div className="ui-fade fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
+      <div className="bg-white rounded-panel p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-black/[0.08] ui-pop">
         <div className="flex justify-between items-center border-b border-black/[0.06] pb-4 mb-6">
           <div>
             <h3 className="text-[20px] font-bold tracking-tight">Teacher Accounts</h3>
@@ -181,7 +185,7 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="teacher@ice.go.kr"
               required
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+              className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -192,7 +196,7 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="홍길동"
-                className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+                className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
               />
             </div>
             <div>
@@ -202,13 +206,13 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
                   type="text"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="min-w-0 flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+                  className="min-w-0 flex-1 bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setPassword(generatePassword())}
                   title="새로 생성"
-                  className="px-3 rounded-xl border border-neutral-200 text-neutral-500 hover:text-black hover:border-black transition-colors"
+                  className="px-3 rounded-field border border-neutral-200 text-neutral-500 hover:text-black hover:border-black transition-colors"
                 >
                   ↻
                 </button>
@@ -225,14 +229,14 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
         </form>
 
         {error && (
-          <p className="mt-4 text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-xl p-3 whitespace-pre-line break-words">{error}</p>
+          <p className="mt-4 text-[13px] text-red-600 bg-red-50 border border-red-200 rounded-field p-3 whitespace-pre-line break-words">{error}</p>
         )}
         {notice && !error && (
-          <p className="mt-4 text-[13px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-xl p-3">{notice}</p>
+          <p className="mt-4 text-[13px] text-neutral-600 bg-neutral-50 border border-neutral-200 rounded-field p-3">{notice}</p>
         )}
 
         {created && (
-          <div className="mt-4 text-[13px] bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2">
+          <div className="mt-4 text-[13px] bg-emerald-50 border border-emerald-200 rounded-field p-4 space-y-2">
             <p className="font-bold text-emerald-800">추가되었습니다. 아래 정보를 해당 선생님께 전달하세요.</p>
             <p className="font-mono break-all">
               ID: {created.email}
@@ -258,9 +262,9 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
         <div className="mt-8">
           <h4 className="text-[11px] text-neutral-500 mb-2 uppercase tracking-widest font-mono">등록된 교사 ({teachers.length})</h4>
           {teachers.length === 0 ? (
-            <p className="text-[13px] text-neutral-400 font-mono py-4 text-center border border-dashed border-neutral-200 rounded-xl">아직 추가된 교사가 없습니다.</p>
+            <p className="text-[13px] text-neutral-400 font-mono py-4 text-center border border-dashed border-neutral-200 rounded-field">아직 추가된 교사가 없습니다.</p>
           ) : (
-            <ul className="divide-y divide-black/[0.06] border border-black/[0.08] rounded-xl">
+            <ul className="divide-y divide-black/[0.06] border border-black/[0.08] rounded-field">
               {teachers.map((t) => (
                 <li key={t.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 p-3">
                   <div className="min-w-0">

@@ -4,6 +4,7 @@ import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, setDoc } from "firebase/firestore";
 import { ArrowUp, ArrowDown, Download, X, FileUp } from "lucide-react";
 import JSZip from "jszip";
+import { useDialog } from "@/components/ui/dialogContext";
 
 const CLEANING_AREAS = [
   "교실 쓸기 - 창", "교실 쓸기 - 중앙", "교실 쓸기 - 복도",
@@ -11,6 +12,7 @@ const CLEANING_AREAS = [
 ];
 
 export default function SubtabCleaning({ userId, grade, classNum, contacts, currentUser }) {
+  const { toast } = useDialog();
   const [cleaningData, setCleaningData] = useState(() => Array(6).fill().map(() => Array(5).fill(null)));
   const [activeSlot, setActiveSlot] = useState(null);
   const [hwpxBlob, setHwpxBlob] = useState(null);
@@ -55,7 +57,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   };
 
   const handleDownloadHwpx = async () => {
-    if (!hwpxBlob) return alert("등록된 HWPX 양식 파일이 없습니다.");
+    if (!hwpxBlob) return toast("등록된 HWPX 양식 파일이 없습니다. 먼저 양식을 올려 주세요.", "info");
     try {
       const zip = await JSZip.loadAsync(hwpxBlob);
       let sectionXml = await zip.file("Contents/section0.xml")?.async("string");
@@ -72,14 +74,17 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
       a.href = URL.createObjectURL(outBlob);
       a.download = `${grade}학년_${classNum}반_청소구역.hwpx`;
       a.click();
-    } catch { alert("HWPX 생성 오류."); }
+    } catch (err) {
+      console.error("HWPX export:", err);
+      toast("HWPX 파일을 만들지 못했습니다. 양식 파일을 확인해 주세요.", "error");
+    }
   };
 
   const studentPool = contacts.length > 0 ? contacts : Array.from({ length: 36 }, (_, i) => ({ num: i + 1, name: `${i + 1}번 학생` }));
 
   return (
-    <div className="space-y-6 text-[#F5F5F5]">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-[#666666] pb-4">
+    <div className="space-y-6 text-ink-strong">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-line pb-4">
         <div>
           <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-widest block mb-0.5">
             // CLEANING ROTATION PROTOCOL
@@ -89,13 +94,13 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
 
         {currentUser && (
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={handleRotateUp} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#333333] border border-[#666666] hover:bg-[#555555] text-[#E0E0E0] transition-colors">
+            <button onClick={handleRotateUp} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors">
               <ArrowUp className="w-3.5 h-3.5" /><span>위로 회전</span>
             </button>
-            <button onClick={handleRotateDown} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#333333] border border-[#666666] hover:bg-[#555555] text-[#E0E0E0] transition-colors">
+            <button onClick={handleRotateDown} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors">
               <ArrowDown className="w-3.5 h-3.5" /><span>아래로 회전</span>
             </button>
-            <label className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#333333] border border-[#666666] hover:bg-[#555555] text-[#E0E0E0] transition-colors cursor-pointer">
+            <label className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors cursor-pointer">
               <FileUp className="w-3.5 h-3.5" />
               <span>{hwpxBlob ? "HWPX 양식 등록됨" : "HWPX 양식 올리기"}</span>
               <input type="file" accept=".hwpx" className="hidden" onChange={(e) => e.target.files?.[0] && setHwpxBlob(e.target.files[0])} />
@@ -109,30 +114,30 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
         )}
       </div>
 
-      <div className="overflow-x-auto border border-[#666666] rounded-2xl bg-[#444444] shadow-sm">
+      <div className="overflow-x-auto border border-line rounded-panel bg-surface shadow-sm">
         <table className="w-full border-collapse">
           <thead>
-            <tr className="bg-[#333333] border-b border-[#666666]">
-              <th className="p-3 text-[12px] font-mono text-[#A0A0A0] w-36 border-r border-[#666666] text-center">구역</th>
-              {Array.from({ length: 5 }, (_, i) => (<th key={i} className="p-3 text-[12px] font-mono text-[#E0E0E0] border-r last:border-r-0 border-[#666666] text-center">0{i + 1}조</th>))}
+            <tr className="bg-well border-b border-line">
+              <th className="p-3 text-[12px] font-mono text-ink-muted w-36 border-r border-line text-center">구역</th>
+              {Array.from({ length: 5 }, (_, i) => (<th key={i} className="p-3 text-[12px] font-mono text-ink border-r last:border-r-0 border-line text-center">0{i + 1}조</th>))}
             </tr>
           </thead>
           <tbody>
             {Array.from({ length: 6 }, (_, r) => (
-              <tr key={r} className="border-b border-[#666666] last:border-b-0 hover:bg-[#555555] transition-colors">
-                <td className="p-3 text-[13px] font-bold text-white bg-[#3A3A3A] border-r border-[#666666] text-center">{CLEANING_AREAS[r]}</td>
+              <tr key={r} className="border-b border-line last:border-b-0 hover:bg-raised transition-colors">
+                <td className="p-3 text-[13px] font-bold text-white bg-well-2 border-r border-line text-center">{CLEANING_AREAS[r]}</td>
                 {Array.from({ length: 5 }, (_, c) => {
                   const student = cleaningData[r]?.[c];
                   return (
-                    <td key={c} className="p-2 border-r last:border-r-0 border-[#666666] text-center align-middle">
+                    <td key={c} className="p-2 border-r last:border-r-0 border-line text-center align-middle">
                       {student ? (
-                        <div onClick={() => currentUser && setActiveSlot({ row: r, col: c })} className="flex items-center justify-between px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium text-[12px] cursor-pointer hover:bg-emerald-500/20 transition-colors group">
+                        <div onClick={() => currentUser && setActiveSlot({ row: r, col: c })} className="flex items-center justify-between px-3 py-1.5 rounded-field bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium text-[12px] cursor-pointer hover:bg-emerald-500/20 transition-colors group">
                           <span className="font-mono text-[10px] text-black bg-emerald-400 px-1.5 py-0.5 rounded mr-1 font-bold">{student.num}번</span>
                           <span className="truncate">{student.name}</span>
-                          {currentUser && (<button onClick={(e) => { e.stopPropagation(); const next = cleaningData.map((row) => [...row]); next[r][c] = null; saveCleaningGrid(next); }} className="text-[#A0A0A0] hover:text-white ml-1"><X className="w-3 h-3" /></button>)}
+                          {currentUser && (<button onClick={(e) => { e.stopPropagation(); const next = cleaningData.map((row) => [...row]); next[r][c] = null; saveCleaningGrid(next); }} className="text-ink-muted hover:text-white ml-1"><X className="w-3 h-3" /></button>)}
                         </div>
                       ) : (
-                        currentUser && (<button onClick={() => setActiveSlot({ row: r, col: c })} className="w-full py-2 rounded-xl border border-dashed border-[#666666] hover:border-emerald-400 text-[#888888] hover:text-emerald-400 text-[11px] font-mono transition-colors">+ 배정</button>)
+                        currentUser && (<button onClick={() => setActiveSlot({ row: r, col: c })} className="w-full py-2 rounded-field border border-dashed border-line hover:border-emerald-400 text-ink-faint hover:text-emerald-400 text-[11px] font-mono transition-colors">+ 배정</button>)
                       )}
                     </td>
                   );
@@ -144,18 +149,18 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
       </div>
 
       {activeSlot && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#444444] rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-[#666666] animate-in fade-in zoom-in-95 duration-200 space-y-4">
-            <div className="flex justify-between items-center border-b border-[#666666] pb-3">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-card p-6 max-w-lg w-full shadow-2xl border border-line ui-pop space-y-4">
+            <div className="flex justify-between items-center border-b border-line pb-3">
               <h4 className="text-[18px] font-medium text-white">{CLEANING_AREAS[activeSlot.row]} (0{activeSlot.col + 1}조) 학생 배정</h4>
-              <button onClick={() => setActiveSlot(null)} className="text-[#A0A0A0] hover:text-white"><X className="w-4 h-4" /></button>
+              <button onClick={() => setActiveSlot(null)} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
             </div>
-            <button onClick={() => handleAssignStudent(null)} className="w-full py-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold text-[12px] transition-colors">이 자리 배정 해제 (비우기)</button>
+            <button onClick={() => handleAssignStudent(null)} className="w-full py-2.5 rounded-field border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-bold text-[12px] transition-colors">이 자리 배정 해제 (비우기)</button>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[300px] overflow-y-auto pr-1">
               {studentPool.map((s) => (
-                <button key={s.num} onClick={() => handleAssignStudent(s)} className="p-2 rounded-xl border border-[#666666] hover:border-emerald-400 hover:bg-emerald-500/10 text-center transition-colors">
-                  <span className="block text-[10px] font-mono text-[#A0A0A0]">{s.num}번</span>
-                  <span className="text-[12px] font-medium text-[#E0E0E0] truncate block">{s.name}</span>
+                <button key={s.num} onClick={() => handleAssignStudent(s)} className="p-2 rounded-field border border-line hover:border-emerald-400 hover:bg-emerald-500/10 text-center transition-colors">
+                  <span className="block text-[10px] font-mono text-ink-muted">{s.num}번</span>
+                  <span className="text-[12px] font-medium text-ink truncate block">{s.name}</span>
                 </button>
               ))}
             </div>

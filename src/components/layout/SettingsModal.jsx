@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { updateProfile } from "firebase/auth";
+import { useDialog, toastAfterReload } from "@/components/ui/dialogContext";
 
 // 모달이 열릴 때마다 폼을 새로 만들어서, 열 때 저장된 값으로 입력칸이 채워지게 한다.
 export default function SettingsModal({ isOpen, onClose, currentUser }) {
@@ -8,6 +9,7 @@ export default function SettingsModal({ isOpen, onClose, currentUser }) {
 }
 
 function SettingsForm({ onClose, currentUser }) {
+  const { toast } = useDialog();
   const [name, setName] = useState(currentUser?.displayName || "");
   const [grade, setGrade] = useState(() => Number(localStorage.getItem("homeroom_grade")) || 1);
   const [classNum, setClassNum] = useState(() => Number(localStorage.getItem("homeroom_class")) || 7);
@@ -31,19 +33,20 @@ function SettingsForm({ onClose, currentUser }) {
       localStorage.setItem("office_grade", grade);
       localStorage.setItem("office_class", classNum);
       
-      alert("✅ 설정이 저장되었습니다. 변경사항 적용을 위해 새로고침합니다.");
+      // 변경 사항을 화면에 적용하려고 새로고침한다. 안내는 새로고침된 첫 화면에서 보여 준다.
+      toastAfterReload("설정을 저장했습니다.");
       window.location.reload();
     } catch (error) {
       console.error("Settings save error:", error);
-      alert("설정 저장 중 오류가 발생했습니다.");
+      toast("설정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
     } finally {
       setIsSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
-      <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-black/[0.08] animate-in fade-in zoom-in-95 duration-200">
+    <div className="ui-fade fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 text-black">
+      <div className="bg-white rounded-panel p-8 max-w-sm w-full shadow-2xl border border-black/[0.08] ui-pop">
         <div className="flex justify-between items-center border-b border-black/[0.06] pb-4 mb-6">
           <h3 className="text-[20px] font-bold tracking-tight">System Settings</h3>
           <button onClick={onClose} className="text-neutral-400 hover:text-black transition-colors font-bold text-xl leading-none">
@@ -58,7 +61,7 @@ function SettingsForm({ onClose, currentUser }) {
               type="text" 
               value={name} 
               onChange={(e) => setName(e.target.value)} 
-              className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+              className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
             />
           </div>
 
@@ -68,7 +71,7 @@ function SettingsForm({ onClose, currentUser }) {
               <select 
                 value={grade} 
                 onChange={(e) => setGrade(Number(e.target.value))}
-                className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+                className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
               >
                 {[1, 2, 3, 4, 5, 6].map(g => (
                   <option key={g} value={g}>{g}학년</option>
@@ -80,7 +83,7 @@ function SettingsForm({ onClose, currentUser }) {
               <select 
                 value={classNum} 
                 onChange={(e) => setClassNum(Number(e.target.value))}
-                className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-black transition-colors"
+                className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-black transition-colors"
               >
                 {Array.from({ length: 15 }, (_, i) => i + 1).map(c => (
                   <option key={c} value={c}>{c}반</option>

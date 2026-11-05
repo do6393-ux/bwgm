@@ -2,75 +2,229 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  탭별 색 테마.
+  <html data-theme="class|homeroom|work|office"> 로 전환되고(App.jsx), 이름은 모든 탭이 같다.
+  값은 "R G B" 형태라서 bg-accent/10 같은 투명도 표기도 그대로 쓸 수 있다.
+  새 색이 필요하면 tailwind.config.js 에 이름을 추가하고 네 블록에 모두 값을 넣는다.
+*/
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
+  /* 정보 수업: 밝은 흰 바탕 + 오렌지 포인트 (기본값) */
+  :root,
+  :root[data-theme="class"] {
+    --c-page: 255 255 255;
+    --c-well: 250 250 250;
+    --c-well-2: 250 250 250;
+    --c-surface: 245 245 245;
+    --c-raised: 235 235 235;
+    --c-paper: 250 250 250;
+    --c-line: 229 229 229;
+    --c-line-strong: 204 204 204;
+    --c-line-hover: 0 0 0;
+    --c-ink: 0 0 0;
+    --c-ink-strong: 0 0 0;
+    --c-ink-muted: 160 160 160;
+    --c-ink-faint: 160 160 160;
+    --c-ink-ghost: 200 200 200;
+    --c-nav: 160 160 160;
+    --c-nav-active: 0 0 0;
+    --c-accent: 255 80 0;
+    --c-accent-ink: 255 255 255;
+    --c-accent-strong: 255 48 0;
+    --c-ok: 0 168 107;
+    --c-ok-strong: 0 150 94;
+    --c-warn: 255 176 0;
+    --c-danger: 255 77 77;
+    --c-danger-soft: 255 107 107;
+    --c-info: 0 85 255;
+    --c-info-soft: 107 168 255;
+    --r-dialog: 0;
+    --r-control: 0;
+    /* 움직임: .ui-enter(화면·카드 등장)의 속도·거리. 탭마다 분위기에 맞게 다르다 */
+    --m-dur: 420ms;
+    --m-shift: 10px;
+    --m-ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --m-stagger: 45ms;
   }
 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
+  /* 내 학급: 차분한 회색 + 에메랄드 포인트 */
+  :root[data-theme="homeroom"] {
+    --c-page: 92 92 92;
+    --c-well: 51 51 51;
+    --c-well-2: 58 58 58;
+    --c-surface: 68 68 68;
+    --c-raised: 85 85 85;
+    --c-paper: 250 250 250;
+    --c-line: 102 102 102;
+    --c-line-strong: 112 112 112;
+    --c-line-hover: 160 160 160;
+    --c-ink: 224 224 224;
+    --c-ink-strong: 245 245 245;
+    --c-ink-muted: 160 160 160;
+    --c-ink-faint: 136 136 136;
+    --c-ink-ghost: 102 102 102;
+    --c-nav: 160 160 160;
+    --c-nav-active: 52 211 153;
+    --c-accent: 52 211 153;
+    --c-accent-ink: 5 46 34;
+    --c-accent-strong: 16 185 129;
+    --c-ok: 52 211 153;
+    --c-ok-strong: 16 185 129;
+    --c-warn: 251 191 36;
+    --c-danger: 251 113 133;
+    --c-danger-soft: 251 113 133;
+    --c-info: 129 140 248;
+    --c-info-soft: 129 140 248;
+    --r-dialog: 1.5rem;
+    --r-control: 9999px;
+    /* 움직임: .ui-enter(화면·카드 등장)의 속도·거리. 탭마다 분위기에 맞게 다르다 */
+    --m-dur: 520ms;
+    --m-shift: 14px;
+    --m-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --m-stagger: 55ms;
+  }
 
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
+  /* 정보 업무: 밝은 회색 + 블루 포인트 */
+  :root[data-theme="work"] {
+    --c-page: 234 234 234;
+    --c-well: 244 244 246;
+    --c-well-2: 244 244 246;
+    --c-surface: 223 223 223;
+    --c-raised: 208 208 208;
+    --c-paper: 250 250 250;
+    --c-line: 208 208 208;
+    --c-line-strong: 176 176 176;
+    --c-line-hover: 26 26 26;
+    --c-ink: 26 26 26;
+    --c-ink-strong: 0 0 0;
+    --c-ink-muted: 136 136 136;
+    --c-ink-faint: 136 136 136;
+    --c-ink-ghost: 190 190 190;
+    --c-nav: 136 136 136;
+    --c-nav-active: 0 0 0;
+    --c-accent: 0 102 255;
+    --c-accent-ink: 255 255 255;
+    --c-accent-strong: 0 85 221;
+    --c-ok: 0 168 107;
+    --c-ok-strong: 0 150 94;
+    --c-warn: 217 119 6;
+    --c-danger: 220 38 38;
+    --c-danger-soft: 220 38 38;
+    --c-info: 0 102 255;
+    --c-info-soft: 0 102 255;
+    --r-dialog: 1.5rem;
+    --r-control: 9999px;
+    /* 움직임: .ui-enter(화면·카드 등장)의 속도·거리. 탭마다 분위기에 맞게 다르다 */
+    --m-dur: 340ms;
+    --m-shift: 8px;
+    --m-ease: cubic-bezier(0.25, 1, 0.5, 1);
+    --m-stagger: 40ms;
+  }
 
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+  /* 교무실: 검정 바탕 + 오렌지 포인트 */
+  :root[data-theme="office"] {
+    --c-page: 5 5 5;
+    --c-well: 10 10 10;
+    --c-well-2: 10 10 10;
+    --c-surface: 17 17 17;
+    --c-raised: 26 26 26;
+    --c-paper: 17 17 17;
+    --c-line: 34 34 34;
+    --c-line-strong: 51 51 51;
+    --c-line-hover: 68 68 68;
+    --c-ink: 229 229 229;
+    --c-ink-strong: 255 255 255;
+    --c-ink-muted: 136 136 136;
+    --c-ink-faint: 102 102 102;
+    --c-ink-ghost: 51 51 51;
+    --c-nav: 102 102 102;
+    --c-nav-active: 255 255 255;
+    --c-accent: 255 80 0;
+    --c-accent-ink: 255 255 255;
+    --c-accent-strong: 255 48 0;
+    --c-ok: 0 229 153;
+    --c-ok-strong: 0 229 153;
+    --c-warn: 255 176 0;
+    --c-danger: 255 77 77;
+    --c-danger-soft: 255 107 107;
+    --c-info: 0 85 255;
+    --c-info-soft: 107 168 255;
+    --r-dialog: 0;
+    --r-control: 0;
+    /* 움직임: .ui-enter(화면·카드 등장)의 속도·거리. 탭마다 분위기에 맞게 다르다 */
+    --m-dur: 180ms;
+    --m-shift: 4px;
+    --m-ease: cubic-bezier(0.4, 0, 0.2, 1);
+    --m-stagger: 20ms;
   }
 }
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: rgb(var(--c-line));
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: rgb(var(--c-page));
+    color: rgb(var(--c-ink));
+    transition: background-color 500ms;
+  }
+
+  /* 키보드로 이동할 때만 보이는 포커스 표시 (탭마다 포인트 색). 입력칸처럼 직접 스타일을 준 곳은 그대로 둔다 */
+  :where(button, a, summary, [role="button"], [tabindex]):focus-visible {
+    outline: 2px solid rgb(var(--c-accent));
+    outline-offset: 2px;
+  }
+}
+
+@layer utilities {
+  /* 스크롤바를 숨기되 스크롤은 되게 (헤더 탭 줄 등) */
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* 등장 효과.
+     .ui-enter  : 탭·카드가 아래에서 살짝 올라오며 나타남 (속도·거리는 위 --m-* 변수, 목록은 style={{"--i": 번호}} 로 순서대로)
+     .ui-fade   : 모달 뒷배경
+     .ui-pop    : 모달·알림창·토스트
+     .ui-skeleton : 불러오는 중 자리 표시 (ui/Skeleton.jsx) */
+  @keyframes ui-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes ui-pop {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  .ui-fade { animation: ui-fade 160ms ease-out both; }
+  .ui-pop { animation: ui-pop 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+  /* fill-mode 가 backwards 인 이유: 끝난 뒤에도 opacity/transform 을 붙들고 있으면 그 안의 fixed 모달이 갇힌다 */
+  @keyframes ui-enter {
+    from { opacity: 0; transform: translateY(var(--m-shift, 8px)); }
+    to { opacity: 1; transform: none; }
+  }
+  .ui-enter {
+    animation: ui-enter var(--m-dur, 300ms) var(--m-ease, ease-out) calc(var(--i, 0) * var(--m-stagger, 40ms)) backwards;
+  }
+
+  @keyframes ui-shimmer {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+  }
+  .ui-skeleton {
+    background-color: rgb(var(--c-ink) / 0.08);
+    background-image: linear-gradient(100deg, transparent 30%, rgb(var(--c-ink) / 0.09) 50%, transparent 70%);
+    background-size: 250% 100%;
+    animation: ui-shimmer 1.4s linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .ui-fade,
+    .ui-pop,
+    .ui-enter,
+    .ui-skeleton { animation: none; }
   }
 }

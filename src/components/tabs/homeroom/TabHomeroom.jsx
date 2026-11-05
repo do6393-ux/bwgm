@@ -27,6 +27,8 @@ export default function TabHomeroom({ currentUser }) {
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
 
   const [contacts, setContacts] = useState([]);
+  // 어느 학급의 연락처까지 불러왔는지. 지금 학급과 다르면 아직 불러오는 중이다 (학급을 바꿀 때도 같은 방식)
+  const [contactsLoadedKey, setContactsLoadedKey] = useState(null);
   const [excludedStudentNums, setExcludedStudentNums] = useState(new Set());
 
   // 프리셋 초기화
@@ -79,29 +81,32 @@ export default function TabHomeroom({ currentUser }) {
     if (seq !== loadSeqRef.current) return;
     
     setContacts(loaded || []);
+    setContactsLoadedKey(`${userId}_${grade}_${classNum}`);
   }, [userId, grade, classNum]);
 
   useEffect(() => {
     loadHomeroomContacts();
   }, [loadHomeroomContacts]);
 
+  const contactsLoading = contactsLoadedKey !== `${userId}_${grade}_${classNum}`;
+
   return (
-    <div className="space-y-12 animate-in fade-in duration-500 pb-24 text-[#F5F5F5]">
-      <section className="border border-[#666666] bg-[#444444] rounded-3xl p-8 shadow-xl">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-[#666666] pb-6 mb-6">
+    <div className="space-y-12 ui-enter pb-24 text-ink-strong">
+      <section className="border border-line bg-surface rounded-card p-8 shadow-xl">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 border-b border-line pb-6 mb-6">
           <div>
-            <div className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-[#A0A0A0]">
+            <div className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-ink-muted">
               <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34D399] animate-pulse"></span>
-              <span className="font-semibold text-[#E0E0E0]">HOMEROOM CONTROL MATRIX</span>
+              <span className="font-semibold text-ink">HOMEROOM CONTROL MATRIX</span>
             </div>
             <h2 className="text-[32px] font-normal tracking-tight text-white leading-tight">
-              {grade}학년 {classNum}반 담임 교무 관제
+              {grade}학년 {classNum}반 담임
             </h2>
           </div>
 
           <button
             onClick={() => setIsClassModalOpen(true)}
-            className="flex items-center gap-2.5 bg-[#333333] border border-[#666666] hover:border-emerald-400 text-[#E0E0E0] px-5 py-2.5 rounded-full font-mono text-[13px] font-bold shadow-sm transition-all hover:-translate-y-0.5 active:scale-95"
+            className="flex items-center gap-2.5 bg-well border border-line hover:border-emerald-400 text-ink px-5 py-2.5 rounded-full font-mono text-[13px] font-bold shadow-sm transition-all hover:-translate-y-0.5 active:scale-95"
           >
             <Users className="w-4 h-4 text-emerald-400" />
             <span>{grade}학년 {classNum}반 설정 ↗</span>
@@ -119,10 +124,10 @@ export default function TabHomeroom({ currentUser }) {
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-[13px] font-medium transition-all ${
                   isActive
                     ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] font-bold"
-                    : "bg-[#333333] hover:bg-[#555555] text-[#A0A0A0] border border-[#666666]"
+                    : "bg-well hover:bg-raised text-ink-muted border border-line"
                 }`}
               >
-                <Icon className={`w-3.5 h-3.5 ${isActive ? tab.color : "text-[#888888]"}`} />
+                <Icon className={`w-3.5 h-3.5 ${isActive ? tab.color : "text-ink-faint"}`} />
                 <span>{tab.label}</span>
               </button>
             );
@@ -130,17 +135,17 @@ export default function TabHomeroom({ currentUser }) {
         </div>
       </section>
 
-      <section className="transition-all duration-300">
-        {activeSubtab === "contacts" && <SubtabContacts userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} onContactsUpdated={loadHomeroomContacts} />}
-        {activeSubtab === "seating" && <SubtabSeating userId={userId} grade={grade} classNum={classNum} contacts={contacts} excludedStudentNums={excludedStudentNums} setExcludedStudentNums={setExcludedStudentNums} currentUser={currentUser} />}
+      <section key={activeSubtab} className="ui-enter">
+        {activeSubtab === "contacts" && <SubtabContacts userId={userId} grade={grade} classNum={classNum} contacts={contacts} loading={contactsLoading} currentUser={currentUser} onContactsUpdated={loadHomeroomContacts} />}
+        {activeSubtab === "seating" && <SubtabSeating userId={userId} grade={grade} classNum={classNum} contacts={contacts} excludedStudentNums={excludedStudentNums} setExcludedStudentNums={setExcludedStudentNums} contactsLoading={contactsLoading} currentUser={currentUser} />}
         {activeSubtab === "cleaning" && <SubtabCleaning userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
         {activeSubtab === "records" && <SubtabRecords userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
       </section>
 
       {isClassModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#444444] rounded-3xl p-8 max-w-md w-full shadow-2xl border border-[#666666] animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex justify-between items-start border-b border-[#666666] pb-4 mb-6">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-card p-8 max-w-md w-full shadow-2xl border border-line ui-pop">
+            <div className="flex justify-between items-start border-b border-line pb-4 mb-6">
               <div>
                 <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-wider block mb-1">// HOMEROOM TARGET ROUTE</span>
                 <h3 className="text-[22px] font-normal tracking-tight text-white">담당 학급을 선택하세요</h3>
@@ -154,7 +159,7 @@ export default function TabHomeroom({ currentUser }) {
                     <button
                       key={`${g}-${c}`}
                       onClick={() => { setGrade(g); setClassNum(c); localStorage.setItem("homeroom_grade", g); localStorage.setItem("homeroom_class", c); setIsClassModalOpen(false); }}
-                      className={`p-3 rounded-xl font-mono text-[13px] border transition-all ${isSelected ? "bg-white border-white text-black font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)]" : "border-[#666666] bg-[#333333] text-[#A0A0A0] hover:bg-[#555555]"}`}
+                      className={`p-3 rounded-field font-mono text-[13px] border transition-all ${isSelected ? "bg-white border-white text-black font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)]" : "border-line bg-well text-ink-muted hover:bg-raised"}`}
                     >
                       {g}-{c}
                     </button>
@@ -162,8 +167,8 @@ export default function TabHomeroom({ currentUser }) {
                 })
               )}
             </div>
-            <div className="flex justify-end pt-5 border-t border-[#666666] mt-6">
-              <button onClick={() => setIsClassModalOpen(false)} className="px-5 py-2 text-[13px] text-[#A0A0A0] hover:text-white font-medium">닫기</button>
+            <div className="flex justify-end pt-5 border-t border-line mt-6">
+              <button onClick={() => setIsClassModalOpen(false)} className="px-5 py-2 text-[13px] text-ink-muted hover:text-white font-medium">닫기</button>
             </div>
           </div>
         </div>

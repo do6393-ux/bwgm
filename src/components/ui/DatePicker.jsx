@@ -92,24 +92,24 @@ export default function DatePicker({ value, onChange, className = "" }) {
         onClick={toggleOpen}
         aria-haspopup="dialog"
         aria-expanded={isOpen}
-        className="w-full flex items-center justify-between gap-3 bg-[#111111] border border-[#222222] p-3 text-[14px] font-mono text-white outline-none hover:border-[#444444] focus:border-[#FF5000] transition-colors"
+        className="w-full flex items-center justify-between gap-3 bg-surface border border-line p-3 text-[14px] font-mono text-white outline-none hover:border-line-hover focus:border-accent transition-colors"
       >
         <span>{label}</span>
-        <Calendar className="w-4 h-4 text-[#888888]" />
+        <Calendar className="w-4 h-4 text-ink-muted" />
       </button>
 
       {isOpen && (
         <div
           role="dialog"
           aria-label="날짜 선택"
-          className="absolute left-0 top-full mt-1 z-30 w-[260px] bg-[#0A0A0A] border border-[#333333] p-3 shadow-2xl font-mono"
+          className="absolute left-0 top-full mt-1 z-30 w-[260px] bg-well border border-line-strong p-3 shadow-2xl font-mono"
         >
           <div className="flex items-center justify-between mb-2">
             <button
               type="button"
               onClick={() => moveMonth(-1)}
               aria-label="이전 달"
-              className="p-1.5 text-[#A0A0A0] hover:text-white"
+              className="p-1.5 text-ink-muted hover:text-white"
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
@@ -120,7 +120,7 @@ export default function DatePicker({ value, onChange, className = "" }) {
               type="button"
               onClick={() => moveMonth(1)}
               aria-label="다음 달"
-              className="p-1.5 text-[#A0A0A0] hover:text-white"
+              className="p-1.5 text-ink-muted hover:text-white"
             >
               <ChevronRight className="w-4 h-4" />
             </button>
@@ -128,7 +128,7 @@ export default function DatePicker({ value, onChange, className = "" }) {
 
           <div className="grid grid-cols-7 text-center text-[11px] mb-1">
             {WEEKDAYS.map((w, i) => (
-              <span key={w} className={i === 0 ? "text-[#FF6B6B]" : i === 6 ? "text-[#6BA8FF]" : "text-[#666666]"}>
+              <span key={w} className={i === 0 ? "text-danger-soft" : i === 6 ? "text-info-soft" : "text-ink-faint"}>
                 {w}
               </span>
             ))}
@@ -141,12 +141,12 @@ export default function DatePicker({ value, onChange, className = "" }) {
               const isToday = today.year === view.year && today.month === view.month && today.day === day;
               const weekday = (firstWeekday + day - 1) % 7;
               const tone = isSelected
-                ? "bg-[#FF5000] text-black font-bold"
+                ? "bg-accent text-black font-bold"
                 : weekday === 0
-                  ? "text-[#FF6B6B] hover:bg-[#1A1A1A]"
+                  ? "text-danger-soft hover:bg-raised"
                   : weekday === 6
-                    ? "text-[#6BA8FF] hover:bg-[#1A1A1A]"
-                    : "text-[#E0E0E0] hover:bg-[#1A1A1A]";
+                    ? "text-info-soft hover:bg-raised"
+                    : "text-ink hover:bg-raised";
               return (
                 <button
                   key={day}
@@ -154,7 +154,7 @@ export default function DatePicker({ value, onChange, className = "" }) {
                   onClick={() => pick(view.year, view.month, day)}
                   aria-label={`${view.year}년 ${view.month + 1}월 ${day}일`}
                   aria-pressed={isSelected}
-                  className={`mx-auto w-8 h-8 text-[12px] rounded-sm transition-colors ${tone} ${isToday && !isSelected ? "ring-1 ring-[#00E599]" : ""}`}
+                  className={`mx-auto w-8 h-8 text-[12px] rounded-sm transition-colors ${tone} ${isToday && !isSelected ? "ring-1 ring-ok" : ""}`}
                 >
                   {day}
                 </button>
@@ -162,15 +162,15 @@ export default function DatePicker({ value, onChange, className = "" }) {
             })}
           </div>
 
-          <div className="flex justify-between items-center mt-3 pt-2 border-t border-[#1A1A1A] text-[11px]">
+          <div className="flex justify-between items-center mt-3 pt-2 border-t border-raised text-[11px]">
             <button
               type="button"
               onClick={() => pick(today.year, today.month, today.day)}
-              className="text-[#00E599] hover:text-white"
+              className="text-ok hover:text-white"
             >
               오늘
             </button>
-            <button type="button" onClick={() => setIsOpen(false)} className="text-[#888888] hover:text-white">
+            <button type="button" onClick={() => setIsOpen(false)} className="text-ink-muted hover:text-white">
               닫기
             </button>
           </div>

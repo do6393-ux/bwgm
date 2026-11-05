@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useWorkAccess } from "@/lib/useWorkAccess";
@@ -12,29 +12,22 @@ import TabHomeroom from "@/components/tabs/homeroom/TabHomeroom";
 import LessonDetailView from "@/components/editor/LessonDetailView";
 import TaskDetailView from "@/components/editor/TaskDetailView";
 
-const THEMES = {
-  class: {
-    bg: "bg-white", text: "text-black", border: "border-[#E5E5E5]",
-    navText: "text-[#A0A0A0] hover:text-black", activeText: "text-black",
-    cardBg: "bg-[#F5F5F5]", accent: "text-black"
-  },
-  homeroom: {
-    // 🎯 기존 #525252에서 아주 살짝만 밝힌 #5C5C5C 적용 (다크 감성 유지)
-    bg: "bg-[#5C5C5C]", text: "text-[#F5F5F5]", border: "border-[#707070]",
-    navText: "text-[#A0A0A0] hover:text-emerald-400", activeText: "text-emerald-400",
-    cardBg: "bg-[#4E4E4E]", accent: "text-[#E0E0E0]"
-  },
-  work: {
-    bg: "bg-[#EAEAEA]", text: "text-[#1A1A1A]", border: "border-[#D0D0D0]",
-    navText: "text-[#888888] hover:text-black", activeText: "text-black",
-    cardBg: "bg-[#DFDFDF]", accent: "text-[#0055FF]"
-  },
-  office: {
-    bg: "bg-[#050505]", text: "text-[#E5E5E5]", border: "border-[#222222]",
-    navText: "text-[#666666] hover:text-white", activeText: "text-white",
-    cardBg: "bg-[#111111]", accent: "text-[#FF5000]"
-  }
+// 탭별 색은 src/index.css 의 [data-theme] 블록에 있고, 여기서는 그 색 이름(page, ink, line …)만 쓴다.
+const THEME_CLASSES = {
+  bg: "bg-page",
+  border: "border-line",
+  navText: "text-nav hover:text-nav-active",
+  activeText: "text-nav-active",
+  cardBg: "bg-surface",
 };
+const THEMES = {
+  class: { ...THEME_CLASSES, text: "text-ink" },
+  homeroom: { ...THEME_CLASSES, text: "text-ink-strong" },
+  work: { ...THEME_CLASSES, text: "text-ink" },
+  office: { ...THEME_CLASSES, text: "text-ink" },
+};
+// 모바일 브라우저 주소창 색(meta theme-color) — 각 탭의 page 색과 같게 둔다
+const THEME_COLORS = { class: "#FFFFFF", homeroom: "#5C5C5C", work: "#EAEAEA", office: "#050505" };
 
 export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
@@ -58,6 +51,25 @@ export default function App() {
 
   // 정보 업무는 관리자 + 관리자가 허용한 교사(teachers/{이메일}.canWork)만 열람 가능
   const { canWork, ready: workAccessReady } = useWorkAccess(currentUser);
+
+  // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
+  // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
+  const canView = activeTab === "class" || (activeTab === "work" ? canWork : !!currentUser);
+  const visibleTab = canView ? activeTab : "class";
+
+  // 지금 화면의 색 테마를 <html data-theme> 으로 알린다 (알림창·모달·페이지 배경까지 같은 색을 쓰도록).
+  // 업무 상세는 work, 수업 자료 상세는 class 테마.
+  const themeKey = activeTaskId ? "work" : activeLessonId ? "class" : authReady ? visibleTab : "class";
+  useLayoutEffect(() => {
+    document.documentElement.dataset.theme = themeKey;
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = THEME_COLORS[themeKey];
+  }, [themeKey]);
 
   // 업무 상세 페이지는 교사 전용 (?task=ID 로 직접 접근해도 로그인 필요)
   if (activeTaskId) {
@@ -93,28 +105,16 @@ export default function App() {
   // 인증 상태가 확정되기 전에는 아무 탭도 그리지 않음 (교사 전용 탭이 잠깐이라도 보이지 않도록)
   if (!authReady) return <div className="min-h-screen bg-white" />;
 
-  // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
-  // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
-  const canView = activeTab === "class" || (activeTab === "work" ? canWork : !!currentUser);
-  const visibleTab = canView ? activeTab : "class";
   const currentTheme = THEMES[visibleTab];
   const isOutline = visibleTab === "office";
-  const cutoutColor = visibleTab === "class" ? "#FFFFFF" : visibleTab === "homeroom" ? "#5C5C5C" : visibleTab === "work" ? "#EAEAEA" : "#050505";
+  const cutoutColor = "rgb(var(--c-page))"; // 로고 구멍은 탭 배경색과 같아야 한다
 
   return (
-    <div className={`min-h-screen ${currentTheme.bg} ${currentTheme.text} font-sans font-light selection:bg-emerald-500 selection:text-white pb-32 transition-colors duration-500 antialiased tracking-tight`}>
-      <style dangerouslySetInnerHTML={{__html: `
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-        .font-sans { font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif !important; }
-        .font-mono { font-family: 'Space Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace !important; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-      `}} />
+    <div className={`min-h-screen ${currentTheme.bg} ${currentTheme.text} font-sans font-light selection:bg-accent selection:text-white pb-32 transition-colors duration-500 antialiased tracking-tight`}>
 
       <Header activeTab={visibleTab} setActiveTab={setActiveTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} canWork={canWork} />
 
-      <main className="max-w-[1360px] mx-auto px-6 md:px-10 pt-16 w-full">
+      <main className="max-w-[1360px] mx-auto px-4 md:px-10 pt-6 md:pt-16 w-full">
         {visibleTab === "class" && <TabClass currentUser={currentUser} currentTheme={currentTheme} />}
         {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} />}
         {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} />}

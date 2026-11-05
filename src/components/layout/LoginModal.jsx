@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useDialog } from "@/components/ui/dialogContext";
 
 export default function LoginModal({ isOpen, onClose }) {
+  const { toast } = useDialog();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -16,13 +18,13 @@ export default function LoginModal({ isOpen, onClose }) {
       setPassword("");
       onClose();
     } catch {
-      alert("로그인에 실패했습니다.");
+      toast("로그인하지 못했습니다. 이메일과 비밀번호를 확인해 주세요.", "error");
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
-      <div className="bg-white text-black p-12 max-w-md w-full shadow-2xl">
+    <div className="ui-fade fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+      <div className="bg-white text-black p-12 max-w-md w-full shadow-2xl ui-pop">
         <h3 className="text-[28px] font-normal mb-10 text-center tracking-tighter">교사 인증</h3>
         <form onSubmit={handleLogin} className="space-y-8">
           <input 
@@ -31,7 +33,7 @@ export default function LoginModal({ isOpen, onClose }) {
             value={email} 
             onChange={(e) => setEmail(e.target.value)} 
             required 
-            className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[16px] outline-none focus:border-black transition-colors"
+            className="w-full bg-transparent border-b border-line py-3 text-[16px] outline-none focus:border-black transition-colors"
           />
           <input 
             type="password" 
@@ -39,7 +41,7 @@ export default function LoginModal({ isOpen, onClose }) {
             value={password} 
             onChange={(e) => setPassword(e.target.value)} 
             required 
-            className="w-full bg-transparent border-b border-[#E5E5E5] py-3 text-[16px] outline-none focus:border-black transition-colors"
+            className="w-full bg-transparent border-b border-line py-3 text-[16px] outline-none focus:border-black transition-colors"
           />
           <div className="flex gap-4 pt-6 font-mono">
             <button 
@@ -51,7 +53,7 @@ export default function LoginModal({ isOpen, onClose }) {
             </button>
             <button 
               type="submit" 
-              className="flex-1 border border-black bg-black text-white text-[13px] uppercase tracking-widest py-3.5 hover:bg-[#FF5000] hover:border-[#FF5000] transition-colors"
+              className="flex-1 border border-black bg-black text-white text-[13px] uppercase tracking-widest py-3.5 hover:bg-accent hover:border-accent transition-colors"
             >
               login
             </button>

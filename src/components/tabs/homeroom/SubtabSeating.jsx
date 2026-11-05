@@ -4,6 +4,7 @@ import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, setDoc } from "firebase/firestore";
 import { Shuffle, Lock, Unlock, Eye, Download, FileUp, UserX, X, RotateCcw } from "lucide-react";
 import JSZip from "jszip";
+import { useDialog } from "@/components/ui/dialogContext";
 
 // 처음 열었거나 저장된 자리배치가 없는 학급의 기본 크기 (앞뒤 6줄 × 양옆 6칸)
 const DEFAULT_ROWS = 6;
@@ -21,7 +22,8 @@ const triggerConfetti = () => {
   }
 };
 
-export default function SubtabSeating({ userId, grade, classNum, contacts, excludedStudentNums, setExcludedStudentNums, currentUser }) {
+export default function SubtabSeating({ userId, grade, classNum, contacts, contactsLoading = false, excludedStudentNums, setExcludedStudentNums, currentUser }) {
+  const { confirm, toast } = useDialog();
   const [rows, setRows] = useState(DEFAULT_ROWS);
   const [cols, setCols] = useState(DEFAULT_COLS);
   // 🎯 교사 시점(Teacher View)을 기본값으로 설정
@@ -39,6 +41,11 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
   // 셔플 애니메이션이 도는 약 1.5초 동안은 다른 편집을 막는다.
   // (그 사이 저장한 제외 학생·잠금 등이 마지막 셔플 저장에 낡은 값으로 덮어써지는 것을 방지)
   const [isShuffling, setIsShuffling] = useState(false);
+  // 저장된 배치·학생 명단을 불러오는 중에도 같은 방식으로 편집을 막는다.
+  // 어느 학급까지 불러왔는지를 기억해 두고, 지금 학급과 다르면 불러오는 중으로 본다.
+  const [seatLoadedKey, setSeatLoadedKey] = useState(null);
+  const seatLoading = seatLoadedKey !== `${userId}_${grade}_${classNum}`;
+  const isBusy = isShuffling || seatLoading || contactsLoading;
 
   const loadSeqRef = useRef(0);
   const loadSeatingData = useCallback(async () => {
@@ -56,6 +63,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
     setSeatGrid(loaded?.grid || Array(targetRows).fill().map(() => Array(targetCols).fill({ student: null, isLocked: false, isDisabled: false })));
     setAvoidPairs(loaded?.avoidPairs || []);
     setExcludedStudentNums(new Set(loaded?.excluded || []));
+    setSeatLoadedKey(key);
   }, [userId, grade, classNum, setExcludedStudentNums]);
 
   useEffect(() => { loadSeatingData(); }, [loadSeatingData]);
@@ -70,7 +78,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
 
   const changeRows = (delta) => {
     const target = rows + delta;
-    if (isShuffling || target < 4 || target > 8) return;
+    if (isBusy || target < 4 || target > 8) return;
     setRows(target);
     const newGrid = Array(target).fill().map((_, r) => Array(cols).fill(null).map((_, c) => seatGrid[r]?.[c] || { student: null, isLocked: false, isDisabled: false }));
     saveSeatingData(newGrid, avoidPairs, target, cols);
@@ -78,7 +86,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
 
   const changeCols = (delta) => {
     const target = cols + delta;
-    if (isShuffling || target < 3 || target > 8) return;
+    if (isBusy || target < 3 || target > 8) return;
     setCols(target);
     const newGrid = Array(rows).fill().map((_, r) => Array(target).fill(null).map((_, c) => seatGrid[r]?.[c] || { student: null, isLocked: false, isDisabled: false }));
     saveSeatingData(newGrid, avoidPairs, rows, target);
@@ -109,8 +117,8 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
     setIsExcludeModalOpen(false);
   };
 
-  const handleReset = () => {
-    if (!confirm("현재 배치된 자리를 모두 비우시겠습니까?\n(제외된 자리는 유지됩니다.)")) return;
+  const handleReset = async () => {
+    if (!(await confirm("현재 배치된 자리를 모두 비우시겠습니까?\n(제외된 자리는 유지됩니다.)", { danger: true, confirmText: "비우기" }))) return;
     const newGrid = seatGrid.map(row => row.map(cell => ({ ...cell, student: null, isLocked: false })));
     setSeatGrid(newGrid);
     saveSeatingData(newGrid);
@@ -145,7 +153,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
 
     const availableSlots = (rows * cols) - disabledCount - Object.keys(lockedMap).length;
     if (unseated.length > availableSlots) {
-      return alert(`배치할 학생(${unseated.length}명)이 남은 자리(${availableSlots}석)보다 많습니다.\n행/열을 추가하거나 제외 자리를 해제하세요.`);
+      return toast(`배치할 학생(${unseated.length}명)이 남은 자리(${availableSlots}석)보다 많습니다.\n행/열을 추가하거나 제외 자리를 해제하세요.`, "error");
     }
 
     setIsShuffling(true);
@@ -187,11 +195,11 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
     // 🎯 자리 뽑기가 완료되면 폭죽 애니메이션 실행
     triggerConfetti();
 
-    if (attempts >= 300 && avoidPairs.length > 0) alert("⚠️ 인원 제약으로 기피 조합이 완전히 분리되지 못했습니다.");
+    if (attempts >= 300 && avoidPairs.length > 0) toast("인원 제약으로 기피 조합이 완전히 분리되지 못했습니다.", "info");
   };
 
   const handleSeatClick = (r, c) => {
-    if (!currentUser || isShuffling) return;
+    if (!currentUser || isBusy) return;
     const targetCell = seatGrid[r][c];
     if (!selectedSeat && !targetCell.student) {
       const next = seatGrid.map(row => [...row]);
@@ -208,7 +216,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
     const next = seatGrid.map(row => [...row]);
     const origin = next[selectedSeat.r][selectedSeat.c]; 
     const target = next[r][c];
-    if (target.isDisabled) { alert("배치 제외 처리된 자리로는 이동할 수 없습니다."); setSelectedSeat(null); return; }
+    if (target.isDisabled) { toast("배치 제외 처리된 자리로는 이동할 수 없습니다.", "info"); setSelectedSeat(null); return; }
 
     next[selectedSeat.r][selectedSeat.c] = { ...origin, student: target.student };
     next[r][c] = { ...target, student: origin.student };
@@ -223,7 +231,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
   };
 
   const handleDownloadHwpx = async () => {
-    if (!hwpxBlob) return alert("등록된 HWPX 양식이 없습니다.");
+    if (!hwpxBlob) return toast("등록된 HWPX 양식이 없습니다. 먼저 양식을 올려 주세요.", "info");
     try {
       const zip = await JSZip.loadAsync(hwpxBlob);
       let sectionXml = await zip.file("Contents/section0.xml")?.async("string");
@@ -254,15 +262,15 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
       a.click();
     } catch (error) { 
       console.error(error);
-      alert("HWPX 생성 오류가 발생했습니다."); 
+      toast("HWPX 파일을 만들지 못했습니다. 양식 파일을 확인해 주세요.", "error");
     }
   };
 
   const renderRowIndices = isTeacherView ? Array.from({ length: rows }, (_, i) => i) : Array.from({ length: rows }, (_, i) => rows - 1 - i);
 
   return (
-    <div className="space-y-6 text-[#F5F5F5]">
-      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-[#707070] pb-4">
+    <div className="space-y-6 text-ink-strong">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 border-b border-line pb-4">
         <div>
           <span className="text-[11px] font-mono text-indigo-400 uppercase tracking-widest block mb-0.5">
             // SEATING ALGORITHM MATRIX
@@ -273,36 +281,36 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
         {currentUser && (
           <div className="flex flex-wrap items-center gap-2">
             
-            <div className="flex items-center bg-[#4E4E4E] border border-[#707070] rounded-full mr-2 divide-x divide-[#707070]">
+            <div className="flex items-center bg-surface border border-line rounded-full mr-2 divide-x divide-line">
               <div className="flex items-center px-1.5">
-                <span className="text-[11px] font-medium text-[#A0A0A0] ml-2 mr-1">앞뒤</span>
-                <button onClick={() => changeRows(-1)} className="px-2 py-1.5 text-[#A0A0A0] hover:text-white" title="줄(행) 감소">-</button>
+                <span className="text-[11px] font-medium text-ink-muted ml-2 mr-1">앞뒤</span>
+                <button onClick={() => changeRows(-1)} className="px-2 py-1.5 text-ink-muted hover:text-white" title="줄(행) 감소">-</button>
                 <span className="text-[12px] font-mono font-bold px-1 w-3 text-center">{rows}</span>
-                <button onClick={() => changeRows(1)} className="px-2 py-1.5 text-[#A0A0A0] hover:text-white" title="줄(행) 추가">+</button>
+                <button onClick={() => changeRows(1)} className="px-2 py-1.5 text-ink-muted hover:text-white" title="줄(행) 추가">+</button>
               </div>
               <div className="flex items-center px-1.5">
-                <span className="text-[11px] font-medium text-[#A0A0A0] ml-2 mr-1">양옆</span>
-                <button onClick={() => changeCols(-1)} className="px-2 py-1.5 text-[#A0A0A0] hover:text-white" title="칸(열) 감소">-</button>
+                <span className="text-[11px] font-medium text-ink-muted ml-2 mr-1">양옆</span>
+                <button onClick={() => changeCols(-1)} className="px-2 py-1.5 text-ink-muted hover:text-white" title="칸(열) 감소">-</button>
                 <span className="text-[12px] font-mono font-bold px-1 w-3 text-center">{cols}</span>
-                <button onClick={() => changeCols(1)} className="px-2 py-1.5 text-[#A0A0A0] hover:text-white" title="칸(열) 추가">+</button>
+                <button onClick={() => changeCols(1)} className="px-2 py-1.5 text-ink-muted hover:text-white" title="칸(열) 추가">+</button>
               </div>
             </div>
 
-            <button onClick={openExcludeModal} disabled={isShuffling} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#3D3D3D] border border-[#707070] hover:bg-[#4E4E4E] text-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={openExcludeModal} disabled={isBusy} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well-2 border border-line hover:bg-surface text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <UserX className="w-3.5 h-3.5" /> <span>제외 학생{excludedStudentNums.size > 0 ? ` (${excludedStudentNums.size})` : ""}</span>
             </button>
 
-            <button onClick={handleReset} disabled={isShuffling} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#3D3D3D] border border-[#707070] hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/50 text-[#E0E0E0] transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={handleReset} disabled={isBusy} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well-2 border border-line hover:bg-rose-500/10 hover:text-rose-400 hover:border-rose-500/50 text-ink transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
               <RotateCcw className="w-3.5 h-3.5" /> <span>초기화</span>
             </button>
 
-            <button onClick={() => setIsTeacherView(!isTeacherView)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] bg-[#3D3D3D] border border-[#707070] hover:bg-[#4E4E4E] text-[#E0E0E0]">
+            <button onClick={() => setIsTeacherView(!isTeacherView)} className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] bg-well-2 border border-line hover:bg-surface text-ink">
               <Eye className="w-3.5 h-3.5" /> <span>{isTeacherView ? "교사 시점" : "학생 시점"}</span>
             </button>
-            <button onClick={handleShuffle} disabled={isShuffling} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button onClick={handleShuffle} disabled={isBusy} className="flex items-center gap-1.5 px-4 py-2 rounded-full text-[12px] font-bold bg-indigo-500 hover:bg-indigo-400 text-white shadow-[0_0_12px_rgba(99,102,241,0.4)] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
               <Shuffle className="w-3.5 h-3.5" /> <span>자리 셔플</span>
             </button>
-            <label className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-[#3D3D3D] border border-[#707070] hover:bg-[#4E4E4E] text-[#E0E0E0] transition-colors cursor-pointer">
+            <label className="flex items-center gap-1.5 px-3.5 py-2 rounded-full text-[12px] font-medium bg-well-2 border border-line hover:bg-surface text-ink transition-colors cursor-pointer">
               <FileUp className="w-3.5 h-3.5" />
               <span>{hwpxBlob ? "HWPX 등록됨" : "HWPX 올리기"}</span>
               <input type="file" accept=".hwpx" className="hidden" onChange={(e) => e.target.files?.[0] && setHwpxBlob(e.target.files[0])} />
@@ -319,34 +327,41 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
       {/* 🎯 학생 시점일 때 교탁이 위에 렌더링됨 */}
       {!isTeacherView && (
         <div className="w-full flex justify-center py-2" onClick={handleDeskClick}>
-          <div className="px-10 py-1.5 rounded-full border border-[#707070] bg-[#3D3D3D] text-[#A0A0A0] font-mono text-[12px] uppercase tracking-widest shadow-sm cursor-pointer hover:bg-[#4E4E4E] transition-colors select-none">
+          <div className="px-10 py-1.5 rounded-full border border-line bg-well-2 text-ink-muted font-mono text-[12px] uppercase tracking-widest shadow-sm cursor-pointer hover:bg-surface transition-colors select-none">
             [ 칠판 및 교탁 (TEACHER'S DESK) ]
           </div>
         </div>
       )}
 
-      <div className="border border-[#707070] bg-[#4E4E4E] rounded-3xl p-6 shadow-xl overflow-x-auto custom-scrollbar">
-        <div className="grid gap-3.5 mx-auto min-w-[700px] max-w-5xl" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
-          {renderRowIndices.map((r) =>
+      <div className="border border-line bg-surface rounded-card p-6 shadow-xl overflow-x-auto custom-scrollbar">
+        <div aria-busy={seatLoading} className="grid gap-3.5 mx-auto min-w-[700px] max-w-5xl" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {seatLoading ? Array.from({ length: rows * cols }, (_, i) => (
+            <div
+              key={i}
+              aria-hidden="true"
+              className="ui-skeleton rounded-panel min-h-[96px]"
+              style={{ animationDelay: `-${((i % cols) + Math.floor(i / cols)) * 90}ms` }}
+            />
+          )) : renderRowIndices.map((r) =>
             Array.from({ length: cols }, (_, c) => {
               const cell = seatGrid[r]?.[c] || { student: null, isLocked: false, isDisabled: false };
               const isSelected = selectedSeat?.r === r && selectedSeat?.c === c;
               
               let cellStyle;
               if (isSelected) cellStyle = "border-indigo-400 bg-indigo-500/20 shadow-[0_0_12px_rgba(99,102,241,0.5)]";
-              else if (cell.isDisabled) cellStyle = "bg-[#343434] border-dashed border-[#666666] text-[#777777]";
-              else if (cell.student) cellStyle = "bg-[#3D3D3D] border-[#707070] hover:border-[#A0A0A0]";
-              else cellStyle = "bg-[#343434] border-dashed border-[#666666] text-[#888888] hover:border-[#A0A0A0]";
+              else if (cell.isDisabled) cellStyle = "bg-well border-dashed border-line text-ink-faint";
+              else if (cell.student) cellStyle = "bg-well-2 border-line hover:border-ink-muted";
+              else cellStyle = "bg-well border-dashed border-line text-ink-faint hover:border-ink-muted";
 
               return (
-                <div key={`${r}-${c}`} onClick={() => handleSeatClick(r, c)} className={`relative flex flex-col items-center justify-center p-4 rounded-2xl border transition-all min-h-[96px] ${cellStyle} ${currentUser ? "cursor-pointer active:scale-95 select-none" : ""}`}>
+                <div key={`${r}-${c}`} onClick={() => handleSeatClick(r, c)} className={`relative flex flex-col items-center justify-center p-4 rounded-panel border transition-all min-h-[96px] ${cellStyle} ${currentUser ? "cursor-pointer active:scale-95 select-none" : ""}`}>
                   {currentUser && cell.student && (
-                    <button disabled={isShuffling} onClick={(e) => { e.stopPropagation(); const next = seatGrid.map(row => [...row]); next[r][c].isLocked = !next[r][c].isLocked; saveSeatingData(next); }} className="absolute top-2 right-2">
-                      {cell.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-[#707070] hover:text-[#C0C0C0]" />}
+                    <button disabled={isBusy} onClick={(e) => { e.stopPropagation(); const next = seatGrid.map(row => [...row]); next[r][c].isLocked = !next[r][c].isLocked; saveSeatingData(next); }} className="absolute top-2 right-2">
+                      {cell.isLocked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Unlock className="w-3.5 h-3.5 text-ink-ghost hover:text-ink" />}
                     </button>
                   )}
                   {cell.isDisabled ? (
-                    <span className="font-mono text-[12px] font-bold text-[#707070]">제외 자리</span>
+                    <span className="font-mono text-[12px] font-bold text-ink-ghost">제외 자리</span>
                   ) : cell.student ? (
                     <><span className="text-[11px] font-mono font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full mb-1">{cell.student.num}번</span><span className="text-[15px] font-medium text-white truncate">{cell.student.name}</span></>
                   ) : (
@@ -362,7 +377,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
       {/* 🎯 교사 시점일 때 교탁이 아래에 렌더링됨 */}
       {isTeacherView && (
         <div className="w-full flex justify-center py-2" onClick={handleDeskClick}>
-          <div className="px-10 py-1.5 rounded-full border border-[#707070] bg-[#3D3D3D] text-[#A0A0A0] font-mono text-[12px] uppercase tracking-widest shadow-sm cursor-pointer hover:bg-[#4E4E4E] transition-colors select-none">
+          <div className="px-10 py-1.5 rounded-full border border-line bg-well-2 text-ink-muted font-mono text-[12px] uppercase tracking-widest shadow-sm cursor-pointer hover:bg-surface transition-colors select-none">
             [ 칠판 및 교탁 (TEACHER'S DESK) ]
           </div>
         </div>
@@ -370,13 +385,13 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
 
       {/* 기피 조합 모달 */}
       {isAvoidModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#4E4E4E] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#707070]">
-            <div className="flex justify-between items-center border-b border-[#707070] pb-3 mb-4">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-card p-6 max-w-md w-full shadow-2xl border border-line ui-pop">
+            <div className="flex justify-between items-center border-b border-line pb-3 mb-4">
               <h4 className="text-[18px] font-medium text-white">기피 조합 일괄 입력</h4>
-              <button onClick={() => setIsAvoidModalOpen(false)} className="text-[#A0A0A0] hover:text-white"><X className="w-4 h-4" /></button>
+              <button onClick={() => setIsAvoidModalOpen(false)} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
             </div>
-            <textarea value={avoidPairText} onChange={(e) => setAvoidPairText(e.target.value)} rows={5} className="w-full bg-[#3D3D3D] border border-[#707070] text-white rounded-xl p-3 text-[13px] outline-none font-mono" placeholder="1, 2&#10;3, 4" />
+            <textarea value={avoidPairText} onChange={(e) => setAvoidPairText(e.target.value)} rows={5} className="w-full bg-well-2 border border-line text-white rounded-field p-3 text-[13px] outline-none font-mono" placeholder="1, 2&#10;3, 4" />
             <button onClick={() => {
               const lines = avoidPairText.split('\n');
               const pairs = [];
@@ -386,21 +401,21 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
               });
               saveSeatingData(seatGrid, pairs);
               setIsAvoidModalOpen(false);
-            }} className="w-full mt-3 py-2.5 bg-white text-black font-bold rounded-xl text-[13px]">비밀 저장하기</button>
+            }} className="w-full mt-3 py-2.5 bg-white text-black font-bold rounded-field text-[13px]">비밀 저장하기</button>
           </div>
         </div>
       )}
       
       {/* 배치 제외 학생 모달 */}
       {isExcludeModalOpen && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#4E4E4E] rounded-3xl p-6 max-w-md w-full shadow-2xl border border-[#707070]">
-            <div className="flex justify-between items-start border-b border-[#707070] pb-3 mb-4">
+        <div className="ui-fade fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-surface rounded-card p-6 max-w-md w-full shadow-2xl border border-line ui-pop">
+            <div className="flex justify-between items-start border-b border-line pb-3 mb-4">
               <div>
                 <h4 className="text-[18px] font-medium text-white">배치 제외 학생</h4>
-                <p className="text-[11px] text-[#A0A0A0] mt-1">결석·전학 등으로 이번 배치에서 뺄 학생을 선택하세요.</p>
+                <p className="text-[11px] text-ink-muted mt-1">결석·전학 등으로 이번 배치에서 뺄 학생을 선택하세요.</p>
               </div>
-              <button onClick={() => setIsExcludeModalOpen(false)} className="text-[#A0A0A0] hover:text-white"><X className="w-4 h-4" /></button>
+              <button onClick={() => setIsExcludeModalOpen(false)} className="text-ink-muted hover:text-white"><X className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-2 gap-2 max-h-[320px] overflow-y-auto pr-1">
               {fullStudentList.map((s) => {
@@ -408,7 +423,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
                 return (
                   <label
                     key={s.num}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-[13px] cursor-pointer select-none transition-colors ${checked ? "border-rose-400 bg-rose-500/10 text-rose-300" : "border-[#707070] bg-[#3D3D3D] text-[#E0E0E0] hover:border-[#A0A0A0]"}`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-field border text-[13px] cursor-pointer select-none transition-colors ${checked ? "border-rose-400 bg-rose-500/10 text-rose-300" : "border-line bg-well-2 text-ink hover:border-ink-muted"}`}
                   >
                     <input type="checkbox" checked={checked} onChange={() => toggleExcludeDraft(s.num)} className="accent-rose-400" />
                     <span className="font-mono text-[11px] opacity-70">{s.num}번</span>
@@ -417,9 +432,9 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
                 );
               })}
             </div>
-            <div className="flex justify-between items-center mt-4 pt-3 border-t border-[#707070]">
-              <span className="text-[12px] text-[#A0A0A0]">제외 {excludeDraft.size}명 · 배치 {fullStudentList.length - excludeDraft.size}명</span>
-              <button onClick={handleSaveExcluded} className="px-5 py-2 bg-white text-black font-bold rounded-xl text-[13px]">저장</button>
+            <div className="flex justify-between items-center mt-4 pt-3 border-t border-line">
+              <span className="text-[12px] text-ink-muted">제외 {excludeDraft.size}명 · 배치 {fullStudentList.length - excludeDraft.size}명</span>
+              <button onClick={handleSaveExcluded} className="px-5 py-2 bg-white text-black font-bold rounded-field text-[13px]">저장</button>
             </div>
           </div>
         </div>

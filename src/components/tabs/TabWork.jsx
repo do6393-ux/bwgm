@@ -3,6 +3,8 @@ import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { ExternalLink, Plus, RefreshCw, Search, X } from "lucide-react";
+import { useDialog } from "@/components/ui/dialogContext";
+import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
 
 const CATEGORIES = [
   { id: "all", label: "전체 업무", code: "ALL" },
@@ -23,25 +25,27 @@ const STATUS_MAP = {
   },
   doing: {
     label: "진행",
-    badge: "bg-[#0066FF]/[0.08] hover:bg-[#0066FF]/[0.14] text-[#0066FF] border-[#0066FF]/20",
-    dot: "bg-[#0066FF]",
+    badge: "bg-accent/[0.08] hover:bg-accent/[0.14] text-accent border-accent/20",
+    dot: "bg-accent",
     glow: "shadow-[0_0_8px_rgba(0,102,255,0.6)] animate-pulse",
     next: "done",
   },
   done: {
     label: "완료",
-    badge: "bg-[#00A86B]/[0.08] hover:bg-[#00A86B]/[0.14] text-[#00965E] border-[#00A86B]/20",
-    dot: "bg-[#00A86B]",
+    badge: "bg-ok/[0.08] hover:bg-ok/[0.14] text-ok-strong border-ok/20",
+    dot: "bg-ok",
     glow: "shadow-[0_0_6px_rgba(0,168,107,0.5)]",
     next: "todo",
   },
 };
 
 function TabWork({ currentUser }) {
+  const { confirm, toast } = useDialog();
   // 이 탭은 정보 업무 권한자(관리자 + 허용된 교사)에게만 렌더링되므로 등록·수정·삭제도 모두 가능.
   // 실제 통제는 firestore.rules 의 hasWorkAccess() 가 한다.
   const canEdit = !!currentUser;
   const [tasks, setTasks] = useState([]);
+  const [tasksLoaded, setTasksLoaded] = useState(false); // 첫 응답 전에는 숫자 0 / "업무 없음" 대신 자리 표시를 보여 준다
   const [selectedCat, setSelectedCat] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState("all");
   const [searchKeyword, setSearchKeyword] = useState("");
@@ -57,9 +61,14 @@ function TabWork({ currentUser }) {
   });
 
   useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, "work_tasks"), orderBy("createdAt", "desc")), (snap) => {
-      setTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = onSnapshot(
+      query(collection(db, "work_tasks"), orderBy("createdAt", "desc")),
+      (snap) => {
+        setTasks(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+        setTasksLoaded(true);
+      },
+      (err) => { console.error("work_tasks listener:", err); setTasksLoaded(true); } // 실패해도 스켈레톤이 남지 않게
+    );
     return () => unsub();
   }, []);
 
@@ -112,7 +121,7 @@ function TabWork({ currentUser }) {
 
   const handleSubmitTask = async (e) => {
     e.preventDefault();
-    if (!taskForm.title.trim()) return alert("업무 제목을 입력해주세요.");
+    if (!taskForm.title.trim()) return toast("업무 제목을 입력해 주세요.", "info");
 
     if (editingTaskId) {
       await updateDoc(doc(db, "work_tasks", editingTaskId), {
@@ -132,17 +141,17 @@ function TabWork({ currentUser }) {
   };
 
   return (
-    <div className="space-y-16 animate-in fade-in duration-500 pb-20">
-      <section className="border border-black/[0.08] bg-[#F4F4F6] rounded-3xl p-5 md:p-8 shadow-sm">
+    <div className="space-y-16 ui-enter pb-20">
+      <section className="border border-black/[0.08] bg-well rounded-card p-5 md:p-8 shadow-sm">
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-black/[0.06] pb-6 md:mb-6 mb-2">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 flex-wrap">
             <div>
               <div className="flex items-center gap-2 mb-2 font-mono text-[11px] uppercase tracking-wider text-neutral-500">
-                <span className="w-2 h-2 rounded-full bg-[#0066FF] shadow-[0_0_8px_#0066FF] animate-pulse"></span>
+                <span className="w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_#0066FF] animate-pulse"></span>
                 <span className="font-semibold text-neutral-700">TASK CONTROL MATRIX</span>
               </div>
               <h2 className="text-[26px] md:text-[32px] font-normal tracking-tight text-neutral-900 leading-tight">
-                정보기획 업무 관제탑
+                정보부 업무
               </h2>
             </div>
 
@@ -153,7 +162,7 @@ function TabWork({ currentUser }) {
                 value={searchKeyword}
                 onChange={(e) => setSearchKeyword(e.target.value)}
                 placeholder="업무 제목, 내용 검색..."
-                className="pl-9 pr-8 py-2 rounded-full text-[13px] bg-white/90 border border-black/[0.08] text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-[#0066FF] focus:bg-white focus:ring-2 focus:ring-[#0066FF]/15 transition-all w-60 sm:w-72 shadow-sm font-sans"
+                className="pl-9 pr-8 py-2 rounded-full text-[13px] bg-white/90 border border-black/[0.08] text-neutral-800 placeholder-neutral-400 focus:outline-none focus:border-accent focus:bg-white focus:ring-2 focus:ring-accent/15 transition-all w-60 sm:w-72 shadow-sm font-sans"
               />
               {searchKeyword && (
                 <button
@@ -170,7 +179,7 @@ function TabWork({ currentUser }) {
           {canEdit && (
             <button
               onClick={handleOpenAddModal}
-              className="flex items-center gap-2 bg-[#0066FF] hover:bg-[#0055DD] text-white px-5 py-2.5 rounded-full font-sans text-[13px] font-medium transition-all shadow-sm active:scale-95 shrink-0"
+              className="flex items-center gap-2 bg-accent hover:bg-accent-strong text-white px-5 py-2.5 rounded-full font-sans text-[13px] font-medium transition-all shadow-sm active:scale-95 shrink-0"
             >
               <Plus className="w-4 h-4" />
               <span>새 업무 등록</span>
@@ -181,42 +190,42 @@ function TabWork({ currentUser }) {
         <div className="hidden md:grid grid-cols-4 gap-4 text-[13px]">
           <div 
             onClick={() => setSelectedStatus("all")}
-            className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
+            className={`p-4 rounded-panel cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
               selectedStatus === "all" ? "border-neutral-800 shadow-[0_4px_12px_rgba(0,0,0,0.1)]" : "border-black/[0.06] hover:border-black/[0.15]"
             }`}
           >
             <span className="block text-neutral-500 text-[11px] font-mono mb-1">TOTAL WORK</span>
-            <span className="text-[22px] font-semibold text-neutral-900">{stats.total}</span>
+            <span className="text-[22px] font-semibold text-neutral-900">{tasksLoaded ? stats.total : "–"}</span>
           </div>
 
           <div 
             onClick={() => setSelectedStatus("todo")}
-            className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
+            className={`p-4 rounded-panel cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
               selectedStatus === "todo" ? "border-neutral-400 shadow-[0_4px_12px_rgba(0,0,0,0.08)]" : "border-black/[0.06] hover:border-black/[0.15]"
             }`}
           >
             <span className="block text-neutral-500 text-[11px] font-mono mb-1">WAITING (대기)</span>
-            <span className="text-[22px] font-semibold text-neutral-600">{stats.todo}</span>
+            <span className="text-[22px] font-semibold text-neutral-600">{tasksLoaded ? stats.todo : "–"}</span>
           </div>
 
           <div 
             onClick={() => setSelectedStatus("doing")}
-            className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
-              selectedStatus === "doing" ? "border-[#0066FF] shadow-[0_4px_16px_rgba(0,102,255,0.2)]" : "border-black/[0.06] hover:border-[#0066FF]/40"
+            className={`p-4 rounded-panel cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
+              selectedStatus === "doing" ? "border-accent shadow-[0_4px_16px_rgba(0,102,255,0.2)]" : "border-black/[0.06] hover:border-accent/40"
             }`}
           >
-            <span className="block text-[#0066FF]/60 text-[11px] font-mono mb-1">IN PROGRESS (진행)</span>
-            <span className="text-[22px] font-semibold text-[#0066FF]">{stats.doing}</span>
+            <span className="block text-accent/60 text-[11px] font-mono mb-1">IN PROGRESS (진행)</span>
+            <span className="text-[22px] font-semibold text-accent">{tasksLoaded ? stats.doing : "–"}</span>
           </div>
 
           <div 
             onClick={() => setSelectedStatus("done")}
-            className={`p-4 rounded-2xl cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
-              selectedStatus === "done" ? "border-[#00A86B] shadow-[0_4px_16px_rgba(0,168,107,0.2)]" : "border-black/[0.06] hover:border-[#00A86B]/40"
+            className={`p-4 rounded-panel cursor-pointer transition-all duration-200 hover:-translate-y-1 bg-white/70 backdrop-blur-sm border ${
+              selectedStatus === "done" ? "border-ok shadow-[0_4px_16px_rgba(0,168,107,0.2)]" : "border-black/[0.06] hover:border-ok/40"
             }`}
           >
-            <span className="block text-[#00A86B]/60 text-[11px] font-mono mb-1">COMPLETED (완료)</span>
-            <span className="text-[22px] font-semibold text-[#00965E]">{stats.done}</span>
+            <span className="block text-ok/60 text-[11px] font-mono mb-1">COMPLETED (완료)</span>
+            <span className="text-[22px] font-semibold text-ok-strong">{tasksLoaded ? stats.done : "–"}</span>
           </div>
         </div>
       </section>
@@ -248,20 +257,40 @@ function TabWork({ currentUser }) {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredTasks.length === 0 ? (
+          {!tasksLoaded ? (
+            <SkeletonGroup label="업무를 불러오는 중" className="col-span-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={`${i >= 1 ? "hidden md:flex" : "flex"} flex-col justify-between border border-black/[0.08] bg-white rounded-panel p-6`}>
+                  <div>
+                    <div className="flex justify-between items-center mb-4">
+                      <Skeleton className="h-6 w-20" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-6 w-4/5 mb-3" />
+                    <Skeleton className="h-4 w-full mb-2" />
+                    <Skeleton className="h-4 w-3/5" />
+                  </div>
+                  <div className="mt-6 pt-4 border-t border-black/[0.05]">
+                    <Skeleton className="h-3 w-28" />
+                  </div>
+                </div>
+              ))}
+            </SkeletonGroup>
+          ) : filteredTasks.length === 0 ? (
             <div className="col-span-full py-20 text-center font-mono text-neutral-400 text-sm">
               {searchKeyword ? `"${searchKeyword}"에 일치하는 업무가 없습니다.` : "NO TASKS RECORDED IN THIS VIEW."}
             </div>
           ) : (
-            filteredTasks.map((t) => {
+            filteredTasks.map((t, i) => {
               const statusInfo = STATUS_MAP[t.status] || STATUS_MAP.todo;
               const catObj = CATEGORIES.find((c) => c.id === t.category);
 
               return (
                 <div
                   key={t.id}
+                  style={{ "--i": Math.min(i, 8) }}
                   onClick={() => window.open(`?task=${t.id}`, "_blank")}
-                  className="flex flex-col justify-between border border-black/[0.08] bg-white rounded-2xl p-6 h-full hover:border-black/20 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all cursor-pointer group"
+                  className="flex flex-col justify-between border border-black/[0.08] bg-white rounded-panel p-6 h-full hover:border-black/20 hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] transition-all cursor-pointer group ui-enter"
                 >
                   <div>
                     <div className="flex justify-between items-center mb-4">
@@ -285,7 +314,7 @@ function TabWork({ currentUser }) {
                       </button>
                     </div>
 
-                    <h4 className="text-[19px] font-medium text-neutral-900 group-hover:text-[#0066FF] transition-colors leading-snug mb-2">
+                    <h4 className="text-[19px] font-medium text-neutral-900 group-hover:text-accent transition-colors leading-snug mb-2">
                       {t.title}
                     </h4>
                     {t.summary && (
@@ -311,14 +340,19 @@ function TabWork({ currentUser }) {
                       <div className="flex items-center gap-3 font-mono text-[11px]" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => handleOpenEditModal(t)}
-                          className="text-neutral-400 hover:text-[#0066FF] transition-colors"
+                          className="text-neutral-400 hover:text-accent transition-colors"
                         >
                           [ EDIT ]
                         </button>
                         <button
                           onClick={async () => {
-                            if (confirm("해당 업무를 삭제하시겠습니까?")) {
+                            if (!(await confirm(`"${t.title}" 업무를 삭제하시겠습니까?`, { danger: true, confirmText: "삭제" }))) return;
+                            try {
                               await deleteDoc(doc(db, "work_tasks", t.id));
+                              toast("삭제했습니다.", "success");
+                            } catch (err) {
+                              console.error("work task delete:", err);
+                              toast("삭제하지 못했습니다. 권한이나 연결을 확인해 주세요.", "error");
                             }
                           }}
                           className="text-neutral-400 hover:text-red-500 transition-colors"
@@ -336,11 +370,11 @@ function TabWork({ currentUser }) {
       </section>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-xl w-full shadow-2xl border border-black/[0.08] animate-in fade-in zoom-in-95 duration-200">
+        <div className="ui-fade fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-card p-8 max-w-xl w-full shadow-2xl border border-black/[0.08] ui-pop">
             <div className="flex justify-between items-start border-b border-black/[0.06] pb-4 mb-6">
               <div>
-                <span className="text-[11px] font-mono text-[#0066FF] uppercase tracking-wider block mb-1">
+                <span className="text-[11px] font-mono text-accent uppercase tracking-wider block mb-1">
                   // TASK DISPATCH
                 </span>
                 <h3 className="text-[24px] font-normal tracking-tight text-neutral-900">
@@ -356,7 +390,7 @@ function TabWork({ currentUser }) {
                   <select
                     value={taskForm.category}
                     onChange={(e) => setTaskForm({ ...taskForm, category: e.target.value })}
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-[#0066FF] transition-colors"
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-accent transition-colors"
                   >
                     {CATEGORIES.filter((c) => c.id !== "all").map((c) => (
                       <option key={c.id} value={c.id}>{c.label}</option>
@@ -368,7 +402,7 @@ function TabWork({ currentUser }) {
                   <select
                     value={taskForm.status}
                     onChange={(e) => setTaskForm({ ...taskForm, status: e.target.value })}
-                    className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-[#0066FF] transition-colors font-mono"
+                    className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-accent transition-colors font-mono"
                   >
                     <option value="todo">대기중 (TODO)</option>
                     <option value="doing">진행중 (DOING)</option>
@@ -384,7 +418,7 @@ function TabWork({ currentUser }) {
                   placeholder="업무 제목을 입력하세요"
                   value={taskForm.title}
                   onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[15px] outline-none focus:border-[#0066FF] font-medium transition-colors"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[15px] outline-none focus:border-accent font-medium transition-colors"
                 />
               </div>
 
@@ -395,7 +429,7 @@ function TabWork({ currentUser }) {
                   placeholder="업무 핵심 요약 (한 줄 설명)"
                   value={taskForm.summary}
                   onChange={(e) => setTaskForm({ ...taskForm, summary: e.target.value })}
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] outline-none focus:border-[#0066FF] transition-colors"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-accent transition-colors"
                 />
               </div>
 
@@ -405,7 +439,7 @@ function TabWork({ currentUser }) {
                   placeholder="업무 진행 매뉴얼 및 세부 내용을 입력하세요..."
                   value={taskForm.content}
                   onChange={(e) => setTaskForm({ ...taskForm, content: e.target.value })}
-                  className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-[14px] h-32 resize-none outline-none focus:border-[#0066FF] transition-colors"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] h-32 resize-none outline-none focus:border-accent transition-colors"
                 />
               </div>
 
@@ -419,7 +453,7 @@ function TabWork({ currentUser }) {
                 </button>
                 <button
                   type="submit"
-                  className="bg-[#0066FF] text-white px-6 py-2.5 rounded-full font-medium text-[13px] hover:bg-[#0055DD] transition-all shadow-sm active:scale-95"
+                  className="bg-accent text-white px-6 py-2.5 rounded-full font-medium text-[13px] hover:bg-accent-strong transition-all shadow-sm active:scale-95"
                 >
                   저장하기
                 </button>

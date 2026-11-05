@@ -16,6 +16,17 @@ React + Vite + Tailwind 로 만들었고, 서버 코드는 없이 **Firebase(Aut
 
 - 로그인하지 않은 방문자(학생)는 "정보 수업" 탭만 볼 수 있습니다.
 - 교사가 로그인하면 첫 화면은 **교무실(시간표)** 입니다.
+- 휴대폰에서는 헤더가 2줄(로고·설정 / 탭 4개)로 줄고, 교무실은 교사 시간표가 맨 위에 와서 스크롤 없이 1~7교시가 보입니다.
+
+## 디자인 구조
+
+탭마다 분위기는 다르지만 코드는 같은 이름을 씁니다. 분위기는 **[src/index.css](src/index.css)** 의 탭별 블록만 고치면 바뀝니다.
+
+- **색·모서리**: `<html data-theme="class|homeroom|work|office">`(App.jsx 가 전환)에 따라 CSS 변수가 바뀝니다.
+  코드에서는 `bg-surface`, `text-ink-muted`, `border-line`, `text-accent`, `rounded-dialog` 같은 이름만 씁니다. 새 색이 필요하면 `tailwind.config.js` 에 이름을 넣고 네 블록에 값을 채웁니다.
+- **움직임**: 같은 `ui-enter`(탭·카드 등장), `ui-fade`(모달 뒷배경), `ui-pop`(모달·알림)을 쓰되, 속도·이동 거리는 탭마다 다릅니다(`--m-dur`, `--m-shift` …). 교무실은 빠르고 짧게, 내 학급은 느리고 부드럽게. 목록 카드는 `style={{ "--i": 번호 }}` 로 차례대로 나타나고, 운영체제의 "동작 줄이기" 설정이면 모두 꺼집니다.
+- **불러오는 중**: Firestore 응답이 오기 전에는 "없음" 대신 [Skeleton](src/components/ui/Skeleton.jsx) 자리 표시를 보여 줍니다. 실제 항목과 같은 크기라 화면이 밀리지 않습니다. 읽기가 실패해도 스켈레톤이 남지 않도록 오류 콜백에서도 "불러옴"으로 바꿉니다.
+- **알림창**: 브라우저 기본 `alert`/`confirm` 은 쓰지 않습니다. `const { confirm, alert, toast } = useDialog()` ([DialogProvider](src/components/ui/DialogProvider.jsx))를 씁니다. 삭제 확인은 `confirm(msg, { danger: true, confirmText })` 로 "취소"에 먼저 포커스가 갑니다.
 
 ## 권한 구조
 
