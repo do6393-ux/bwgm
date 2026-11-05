@@ -18,6 +18,9 @@ export default function Header({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTeacherAdminOpen, setIsTeacherAdminOpen] = useState(false);
   const isAdminUser = isAdmin(currentUser);
+  const sheet = isOutline
+    ? { fill: cutoutColor, stroke: "currentColor", strokeWidth: 2.8 }
+    : { fill: "currentColor", stroke: cutoutColor, strokeWidth: 2.2 };
 
   return (
     <>
@@ -80,19 +83,24 @@ export default function Header({
               onClick={() => currentUser && setActiveTab("homeroom")}
             >
               <div className="relative md:pt-[clamp(2px,0.25vw,4px)] w-8 h-8 md:w-[clamp(48px,6.5vw,90px)] md:h-[clamp(58px,7.8vw,110px)]">
-                <svg viewBox="0 0 100 100" className="w-full h-full absolute top-0 left-0">
-                  <g fill={isOutline ? "none" : "currentColor"} stroke={isOutline ? "currentColor" : "none"} strokeWidth={isOutline ? "5" : "0"}>
-                    <circle cx="16" cy="16" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[16px_16px]" style={{transitionDelay: '0ms'}}/>
-                    <circle cx="50" cy="16" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[50px_16px]" style={{transitionDelay: '50ms'}}/>
-                    <circle cx="84" cy="16" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[84px_16px]" style={{transitionDelay: '100ms'}}/>
-                    
-                    <circle cx="16" cy="50" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[16px_50px]" style={{transitionDelay: '50ms'}}/>
-                    <circle cx="50" cy="50" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[50px_50px]" style={{transitionDelay: '100ms'}}/>
-                    <circle cx="84" cy="50" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[84px_50px]" style={{transitionDelay: '150ms'}}/>
-                    
-                    <circle cx="16" cy="84" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[16px_84px]" style={{transitionDelay: '100ms'}}/>
-                    <circle cx="50" cy="84" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[50px_84px]" style={{transitionDelay: '150ms'}}/>
-                    <circle cx="84" cy="84" r={isOutline ? "11.5" : "14"} className="transition-transform duration-500 group-hover:scale-50 origin-[84px_84px]" style={{transitionDelay: '200ms'}}/>
+                <svg viewBox="9.5 3 81 97.6" className="w-full h-full absolute top-0 left-0 overflow-visible">
+                  {/* 학생 명찰: 위 구멍을 중심으로 마우스를 올리면 살랑 흔들린다 */}
+                  <g className="origin-[50px_16px] motion-safe:group-hover:animate-swing">
+                    {isOutline ? (
+                      <g fill="none" stroke="currentColor" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round">
+                        <rect x="19.5" y="6.5" width="61" height="87" rx="7" />
+                        <line x1="40" y1="16" x2="60" y2="16" />
+                        <circle cx="50" cy="46" r="9.5" />
+                        <path d="M33 82 A17 17 0 0 1 67 82" />
+                      </g>
+                    ) : (
+                      <>
+                        <rect x="17" y="4" width="66" height="92" rx="9" fill="currentColor" />
+                        <rect x="38" y="12" width="24" height="8" rx="4" fill={cutoutColor} />
+                        <circle cx="50" cy="46" r="12" fill={cutoutColor} />
+                        <path d="M28 88 A22 22 0 0 1 72 88 Z" fill={cutoutColor} />
+                      </>
+                    )}
                   </g>
                 </svg>
               </div>
@@ -109,24 +117,17 @@ export default function Header({
               onClick={() => canWork && setActiveTab("work")}
             >
               <div className="relative md:pt-[clamp(2px,0.25vw,4px)] w-8 h-8 md:w-[clamp(48px,6.5vw,90px)] md:h-[clamp(58px,7.8vw,110px)]">
-                <svg viewBox="0 0 100 100" className="w-full h-full absolute top-0 left-0">
-                  {isOutline ? (
-                    <g fill="none" stroke="currentColor" strokeWidth="5">
-                      <rect x="2.5" y="2.5" width="95" height="23" />
-                      <rect x="2.5" y="38.5" width="95" height="23" />
-                      <rect x="2.5" y="74.5" width="95" height="23" />
+                <svg viewBox="22.5 11.2 55 66.25" className="w-full h-full absolute top-0 left-0 overflow-visible">
+                  {/* 서류 더미: 마우스를 올리면 뒤의 두 장이 부채꼴로 펼쳐진다 (펼쳐도 글자와 안 겹치게 데스크톱에서 살짝 왼쪽) */}
+                  <g className="md:-translate-x-1.5">
+                    <g className="origin-[50px_86px] transition-transform duration-500 -rotate-[10deg] motion-safe:group-hover:-rotate-[16deg]">
+                      <rect x="31" y="14" width="38" height="56" rx="3" {...sheet} />
                     </g>
-                  ) : (
-                    <g fill="currentColor">
-                      <path d="M0 0 H100 V28 H0 Z" />
-                      <path d="M0 36 H100 V64 H0 Z" />
-                      <path d="M0 72 H100 V100 H0 Z" />
+                    <g className="origin-[50px_86px] transition-transform duration-500 rotate-[10deg] motion-safe:group-hover:rotate-[16deg]">
+                      <rect x="31" y="14" width="38" height="56" rx="3" {...sheet} />
                     </g>
-                  )}
-                  <g fill={isOutline ? "currentColor" : cutoutColor}>
-                    <circle cx="15" cy="14" r="5" className="transition-transform duration-500 group-hover:translate-x-12" />
-                    <circle cx="85" cy="50" r="5" className="transition-transform duration-700 group-hover:-translate-x-20" />
-                    <circle cx="25" cy="86" r="5" className="transition-transform duration-500 group-hover:translate-x-16" />
+                    <rect x="31" y="14" width="38" height="56" rx="3" {...sheet} />
+                    <path d="M39 28H61M39 39H61M39 50H53" fill="none" stroke={isOutline ? "currentColor" : cutoutColor} strokeWidth={isOutline ? 2.8 : 3.6} strokeLinecap="round" />
                   </g>
                 </svg>
               </div>

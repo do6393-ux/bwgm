@@ -56,6 +56,17 @@ export default {
         dialog: "var(--r-dialog)",
         control: "var(--r-control)",
       },
+      // 헤더 "내 학급" 명찰이 마우스를 올리면 살랑 흔들린다 (Header.jsx: group-hover:animate-swing)
+      keyframes: {
+        swing: {
+          "0%, 100%": { transform: "rotate(0deg)" },
+          "25%": { transform: "rotate(10deg)" },
+          "75%": { transform: "rotate(-10deg)" },
+        },
+      },
+      animation: {
+        swing: "swing 1.4s ease-in-out infinite",
+      },
     },
   },
   plugins: [],
