@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ExternalLink, RefreshCw } from "lucide-react";
+import DatePicker from "@/components/ui/DatePicker";
 
 const EVENT_KEYWORDS = ["자치", "동아", "봉사", "진로"];
 const DAYS = ["월", "화", "수", "목", "금"];
@@ -615,22 +616,8 @@ export default function TabOffice({ currentUser }) {
 
           <div className="border border-[#222222] bg-[#050505] p-6 space-y-6">
             <div className="flex items-center gap-3">
-              <input
-                type="date"
-                value={mealDate}
-                onChange={(e) => setMealDate(e.target.value)}
-                // 입력칸 어디를 눌러도 달력이 열리게 한다 (기본은 오른쪽 작은 아이콘만 열림)
-                onClick={(e) => {
-                  try {
-                    e.currentTarget.showPicker?.();
-                  } catch {
-                    // 달력을 지원하지 않는 브라우저는 기본 입력 방식을 쓴다
-                  }
-                }}
-                // 어두운 배경에서도 달력 아이콘과 달력 창이 보이도록 다크 모드로 표시
-                style={{ colorScheme: "dark" }}
-                className="flex-1 cursor-pointer bg-[#111111] border border-[#222222] p-3 text-[14px] font-mono text-white outline-none focus:border-[#FF5000] transition-colors"
-              />
+              {/* 눌러서 작은 달력에서 날짜를 고르면 바로 그 날짜로 조회된다 */}
+              <DatePicker value={mealDate} onChange={setMealDate} className="flex-1" />
               <button
                 onClick={() => mealDate && setMealReloadKey((k) => k + 1)}
                 className="bg-[#111111] border border-[#222222] hover:border-white text-white px-5 py-3 font-mono text-[12px] font-bold transition-colors"

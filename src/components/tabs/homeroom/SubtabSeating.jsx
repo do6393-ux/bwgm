@@ -5,6 +5,10 @@ import { doc, setDoc } from "firebase/firestore";
 import { Shuffle, Lock, Unlock, Eye, Download, FileUp, UserX, X, RotateCcw } from "lucide-react";
 import JSZip from "jszip";
 
+// 처음 열었거나 저장된 자리배치가 없는 학급의 기본 크기 (앞뒤 6줄 × 양옆 6칸)
+const DEFAULT_ROWS = 6;
+const DEFAULT_COLS = 6;
+
 // 🎯 폭죽 애니메이션 스크립트 로더
 const triggerConfetti = () => {
   if (window.confetti) {
@@ -18,12 +22,12 @@ const triggerConfetti = () => {
 };
 
 export default function SubtabSeating({ userId, grade, classNum, contacts, excludedStudentNums, setExcludedStudentNums, currentUser }) {
-  const [rows, setRows] = useState(6);
-  const [cols, setCols] = useState(5);
+  const [rows, setRows] = useState(DEFAULT_ROWS);
+  const [cols, setCols] = useState(DEFAULT_COLS);
   // 🎯 교사 시점(Teacher View)을 기본값으로 설정
   const [isTeacherView, setIsTeacherView] = useState(true);
 
-  const [seatGrid, setSeatGrid] = useState(() => Array(6).fill().map(() => Array(5).fill({ student: null, isLocked: false, isDisabled: false })));
+  const [seatGrid, setSeatGrid] = useState(() => Array(DEFAULT_ROWS).fill().map(() => Array(DEFAULT_COLS).fill({ student: null, isLocked: false, isDisabled: false })));
   const [avoidPairs, setAvoidPairs] = useState([]);
   const [avoidPairText, setAvoidPairText] = useState("");
 
@@ -46,7 +50,7 @@ export default function SubtabSeating({ userId, grade, classNum, contacts, exclu
 
     // 저장된 데이터가 없는 학급이면 이전 학급의 자리배치가 남지 않도록 기본값으로 되돌린다
     // (남아 있으면 다음 저장 때 이전 학급 배치가 이 학급 문서에 덮어써진다)
-    const targetRows = loaded?.rows || 6; const targetCols = loaded?.cols || 5;
+    const targetRows = loaded?.rows || DEFAULT_ROWS; const targetCols = loaded?.cols || DEFAULT_COLS;
     setRows(targetRows);
     setCols(targetCols);
     setSeatGrid(loaded?.grid || Array(targetRows).fill().map(() => Array(targetCols).fill({ student: null, isLocked: false, isDisabled: false })));
