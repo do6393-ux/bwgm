@@ -16,6 +16,9 @@ const groupLabel = (i) => `${String(i + 1).padStart(2, "0")}조`;
 // HWPX(XML) 안에 넣는 글자는 &, < 등이 들어 있으면 파일이 깨지므로 바꿔 준다 (구역 이름은 자유롭게 적을 수 있다)
 const escapeXml = (s) => String(s).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&apos;" })[ch]);
 
+// 폰이 진동을 지원하면(안드로이드) 집을 때·칸이 바뀔 때 살짝 울린다. 아이폰 등은 지원하지 않아 조용히 넘어간다.
+const buzz = (ms) => { try { navigator.vibrate?.(ms); } catch { /* 지원하지 않으면 무시 */ } };
+
 const toolBtn = "flex items-center gap-1.5 px-3 md:px-3.5 py-2 whitespace-nowrap rounded-full text-[12px] font-medium bg-well border border-line hover:bg-raised text-ink transition-colors";
 
 export default function SubtabCleaning({ userId, grade, classNum, contacts, currentUser }) {
@@ -26,10 +29,13 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   const [editMode, setEditMode] = useState(false); // 구역·조를 추가/삭제/이름 바꾸는 모드
   const [areaDialog, setAreaDialog] = useState(null); // { mode: "add" } | { mode: "rename", row }
   const [areaName, setAreaName] = useState("");
-  const [drag, setDrag] = useState(null); // 끌고 있는 줄: { from: 집은 줄, over: 지금 놓을 줄 }
+  const [drag, setDrag] = useState(null); // 끌고 있는 줄: { from: 집은 줄, over: 지금 놓을 줄, top·height: 집은 순간 줄의 위치·높이 }
 
   const dragRef = useRef(null); // 이벤트가 연달아 와도 최신 값을 읽기 위한 사본
   const pointerYRef = useRef(0); // 끌고 있는 손가락·마우스의 화면 세로 위치
+  const grabOffsetRef = useRef(0); // 줄 위쪽 끝에서 얼마나 아래를 집었는지 (집은 자리 그대로 따라오게)
+  const wrapRef = useRef(null); // 떠 있는 줄(ghost)의 위치 기준
+  const ghostRef = useRef(null); // 손을 따라다니는 줄
   const scrollRafRef = useRef(0); // 가장자리 자동 스크롤 반복(requestAnimationFrame)
   const rowRefs = useRef([]);
   const handleRefs = useRef([]);
@@ -92,10 +98,22 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* 캡처가 안 돼도 끌기는 동작 */ } // 손잡이 밖으로 나가도 계속 따라온다
-    const d = { from: r, over: r };
+    const rowRect = rowRefs.current[r]?.getBoundingClientRect();
+    const wrapTop = wrapRef.current?.getBoundingClientRect().top ?? 0;
+    const d = { from: r, over: r, top: (rowRect?.top ?? e.clientY) - wrapTop, height: rowRect?.height ?? 48 };
     pointerYRef.current = e.clientY;
+    grabOffsetRef.current = e.clientY - (rowRect?.top ?? e.clientY);
     dragRef.current = d;
     setDrag(d);
+    buzz(12);
+  };
+
+  // 집은 줄이 손가락·마우스를 따라다니게 한다 (React 를 거치지 않고 위치만 바꿔 가볍게)
+  const positionGhost = () => {
+    const ghost = ghostRef.current;
+    const wrap = wrapRef.current;
+    if (!ghost || !wrap) return;
+    ghost.style.top = `${pointerYRef.current - grabOffsetRef.current - wrap.getBoundingClientRect().top}px`;
   };
 
   const updateOver = () => {
@@ -106,6 +124,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
       const next = { ...d, over };
       dragRef.current = next;
       setDrag(next);
+      buzz(6);
     }
   };
 
@@ -119,6 +138,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
     const dy = y < edge ? -Math.ceil((edge - y) / 4) : y > vh - edge ? Math.ceil((y - (vh - edge)) / 4) : 0;
     if (!dy) return;
     window.scrollBy(0, dy);
+    positionGhost();
     updateOver();
     scrollRafRef.current = requestAnimationFrame(autoScroll);
   };
@@ -126,6 +146,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   const moveDrag = (e) => {
     if (!dragRef.current) return;
     pointerYRef.current = e.clientY;
+    positionGhost();
     updateOver();
     if (!scrollRafRef.current) scrollRafRef.current = requestAnimationFrame(autoScroll);
   };
@@ -138,7 +159,10 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
     scrollRafRef.current = 0;
     setDrag(null);
     try { e.currentTarget.releasePointerCapture?.(e.pointerId); } catch { /* 이미 풀렸으면 무시 */ }
-    if (commit && d.from !== d.over) saveCleaning(moveAssignments(cleaning, d.from, d.over));
+    if (commit && d.from !== d.over) {
+      saveCleaning(moveAssignments(cleaning, d.from, d.over));
+      buzz(8);
+    }
   };
 
   // 키보드: 손잡이에서 ↑ ↓ 로 한 줄씩 옮긴다
@@ -211,7 +235,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
         // {{A_1}} = 첫 구역 이름, {{C_1_1}} = 첫 구역·01조 학생
         sectionXml = sectionXml.replaceAll(`{{A_${r + 1}}}`, escapeXml(areas[r]));
         row.forEach((item, c) => {
-          sectionXml = sectionXml.replaceAll(`{{C_${r + 1}_${c + 1}}}`, item ? escapeXml(`${item.num}번 ${item.name}`) : "");
+          sectionXml = sectionXml.replaceAll(`{{C_${r + 1}_${c + 1}}}`, item ? escapeXml(`${item.num}.${item.name}`) : "");
         });
       });
       // 양식에는 있는데 지금 표에는 없는 칸(지운 구역·조)은 비워 둔다
@@ -231,7 +255,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
   const studentPool = contacts.length > 0 ? contacts : Array.from({ length: 36 }, (_, i) => ({ num: i + 1, name: `${i + 1}번 학생` }));
 
   return (
-    <div className="space-y-4 md:space-y-6 text-ink-strong">
+    <div ref={wrapRef} className="relative space-y-4 md:space-y-6 text-ink-strong">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 md:gap-4 border-b border-line pb-3 md:pb-4">
         <div>
           <span className="text-[11px] font-mono text-emerald-400 uppercase tracking-widest hidden md:block mb-0.5">
@@ -291,12 +315,13 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
           </thead>
           <tbody>
             {areas.map((area, r) => {
-              const isTarget = drag && drag.over === r && drag.from !== r;
+              // 손에 든 줄이 놓일 자리: 옅게 칠하고 안의 학생은 흐리게 해서, 손을 따라다니는 줄(ghost)과 구별되게 한다
+              const isSlot = !!drag && drag.over === r;
               return (
                 <tr
                   key={r}
                   ref={(el) => { rowRefs.current[r] = el; }}
-                  className={`border-b border-line last:border-b-0 transition-colors ${isTarget ? "bg-emerald-500/15" : drag ? "" : "hover:bg-raised"}`}
+                  className={`border-b border-line last:border-b-0 transition-colors ${isSlot ? "bg-emerald-500/15" : drag ? "" : "hover:bg-raised"}`}
                 >
                   <td className="p-1.5 md:p-3 text-[11px] md:text-[13px] leading-tight font-bold text-white bg-well-2 border-r border-line [word-break:keep-all]">
                     {editing ? (
@@ -317,7 +342,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
                             onKeyDown={(e) => handleKeyMove(e, r)}
                             aria-label={`${area} 배정 옮기기. 끌어서 다른 구역에 놓거나 위·아래 화살표 키를 누르세요`}
                             title="끌어서 옮기기 (↑ ↓ 키도 가능)"
-                            className={`touch-none shrink-0 p-1 rounded cursor-grab active:cursor-grabbing transition-colors ${drag?.from === r ? "text-emerald-300 bg-emerald-500/20" : "text-ink-faint hover:text-emerald-300 hover:bg-raised"}`}
+                            className={`touch-none select-none shrink-0 p-1 rounded cursor-grab active:cursor-grabbing transition ${drag?.from === r ? "text-emerald-200 bg-emerald-500/30 ring-2 ring-emerald-400/70 scale-110" : "text-ink-faint hover:text-emerald-300 hover:bg-raised"}`}
                           >
                             <GripVertical className="w-4 h-4" />
                           </button>
@@ -329,7 +354,7 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
                   {Array.from({ length: groups }, (_, c) => {
                     const student = shownGrid[r]?.[c];
                     return (
-                      <td key={c} className="p-1 md:p-2 border-r last:border-r-0 border-line text-center align-middle">
+                      <td key={c} className={`p-1 md:p-2 border-r last:border-r-0 border-line text-center align-middle ${isSlot ? "[&>*]:opacity-40" : ""}`}>
                         {student ? (
                           <div onClick={() => currentUser && !drag && setActiveSlot({ row: r, col: c })} className="relative flex flex-col md:flex-row items-center md:justify-between gap-0.5 md:gap-0 px-1 md:px-3 py-1 md:py-1.5 rounded-field bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-medium text-[12px] cursor-pointer hover:bg-emerald-500/20 transition-colors group">
                             <span className="font-mono text-[9px] md:text-[10px] text-black bg-emerald-400 px-1 md:px-1.5 py-0.5 rounded md:mr-1 font-bold">{student.num}번</span>
@@ -361,6 +386,28 @@ export default function SubtabCleaning({ userId, grade, classNum, contacts, curr
           </tbody>
         </table>
       </div>
+
+      {drag && (
+        // 집어 든 줄: 손을 따라다니며 떠 있다. 놓으면 옅게 칠해진 자리(위 표)로 들어간다.
+        <div
+          ref={ghostRef}
+          aria-hidden="true"
+          style={{ top: drag.top, height: drag.height }}
+          className="ui-lift pointer-events-none absolute inset-x-0 !mt-0 z-30 flex items-stretch overflow-hidden rounded-field border-2 border-emerald-400 bg-surface shadow-2xl shadow-black/60"
+        >
+          <div className="flex w-[72px] md:w-44 shrink-0 flex-col md:flex-row items-center justify-center md:justify-start gap-0.5 md:gap-1.5 bg-emerald-500/25 px-1 md:px-3 text-center md:text-left text-[11px] md:text-[13px] font-bold leading-tight text-white [word-break:keep-all]">
+            <GripVertical className="w-4 h-4 shrink-0 text-emerald-300" />
+            <span className="line-clamp-2">{areas[drag.from]}</span>
+          </div>
+          <div className="grid flex-1 items-center gap-1 px-1 md:px-2" style={{ gridTemplateColumns: `repeat(${groups}, minmax(0, 1fr))` }}>
+            {cleaning.grid[drag.from].map((student, c) => (student ? (
+              <div key={c} className="truncate rounded-field border border-emerald-500/40 bg-emerald-500/20 px-1 py-1 text-center text-[11px] md:text-[12px] font-medium text-emerald-200">
+                <span className="hidden md:inline font-mono text-[10px] mr-1">{student.num}번</span>{student.name}
+              </div>
+            ) : <div key={c} />))}
+          </div>
+        </div>
+      )}
 
       {currentUser && (
         <p className="text-[11px] text-ink-faint leading-relaxed">

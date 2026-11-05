@@ -221,8 +221,15 @@
     from { opacity: 0; transform: translateY(8px) scale(0.97); }
     to { opacity: 1; transform: none; }
   }
+  /* ui-lift: 끌려고 집어 든 줄이 살짝 커졌다가 자리 잡는다 (집었다는 느낌) */
+  @keyframes ui-lift {
+    0% { transform: scale(1); }
+    55% { transform: scale(1.04); }
+    100% { transform: scale(1.02); }
+  }
   .ui-fade { animation: ui-fade 160ms ease-out both; }
   .ui-pop { animation: ui-pop 200ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+  .ui-lift { animation: ui-lift 180ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 
   /* fill-mode 가 backwards 인 이유: 끝난 뒤에도 opacity/transform 을 붙들고 있으면 그 안의 fixed 모달이 갇힌다 */
   @keyframes ui-enter {
@@ -247,6 +254,7 @@
   @media (prefers-reduced-motion: reduce) {
     .ui-fade,
     .ui-pop,
+    .ui-lift,
     .ui-enter,
     .ui-skeleton { animation: none; }
   }
