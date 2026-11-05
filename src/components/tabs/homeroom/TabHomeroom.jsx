@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { loadSynced } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { Users, PhoneCall, Grid, Sparkles, RefreshCw } from "lucide-react";
 
-import { DEFAULT_BEHAVIOR_PRESETS, DEFAULT_STYLES, CLEANING_AREAS } from "./defaultPresets";
+import { DEFAULT_BEHAVIOR_PRESETS } from "./defaultPresets";
 
 import SubtabContacts from "./SubtabContacts";
 import SubtabCleaning from "./SubtabCleaning";

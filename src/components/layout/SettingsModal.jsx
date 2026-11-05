@@ -1,23 +1,17 @@
-import React, { useState, useEffect } from "react";
+import { useState } from "react";
 import { updateProfile } from "firebase/auth";
 
+// 모달이 열릴 때마다 폼을 새로 만들어서, 열 때 저장된 값으로 입력칸이 채워지게 한다.
 export default function SettingsModal({ isOpen, onClose, currentUser }) {
-  const [name, setName] = useState("");
-  const [grade, setGrade] = useState(1);
-  const [classNum, setClassNum] = useState(7);
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      setName(currentUser?.displayName || "");
-      const savedGrade = Number(localStorage.getItem("homeroom_grade")) || 1;
-      const savedClass = Number(localStorage.getItem("homeroom_class")) || 7;
-      setGrade(savedGrade);
-      setClassNum(savedClass);
-    }
-  }, [isOpen, currentUser]);
-
   if (!isOpen) return null;
+  return <SettingsForm onClose={onClose} currentUser={currentUser} />;
+}
+
+function SettingsForm({ onClose, currentUser }) {
+  const [name, setName] = useState(currentUser?.displayName || "");
+  const [grade, setGrade] = useState(() => Number(localStorage.getItem("homeroom_grade")) || 1);
+  const [classNum, setClassNum] = useState(() => Number(localStorage.getItem("homeroom_class")) || 7);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -40,6 +34,7 @@ export default function SettingsModal({ isOpen, onClose, currentUser }) {
       alert("✅ 설정이 저장되었습니다. 변경사항 적용을 위해 새로고침합니다.");
       window.location.reload();
     } catch (error) {
+      console.error("Settings save error:", error);
       alert("설정 저장 중 오류가 발생했습니다.");
     } finally {
       setIsSaving(false);

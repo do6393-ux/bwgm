@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { db } from "@/lib/firebase";
 import { doc, setDoc } from "firebase/firestore";
 import { saveLocal } from "@/lib/syncedStorage";
@@ -12,7 +12,7 @@ function parseBulkStudentText(rawText) {
 
   const headerKeywords = ["성명", "학생명", "전화번호", "핸드폰", "보호자", "학부모", "집전화", "연락처", "비고"];
   const extractStdPhones = (str) => {
-    const matches = str.match(/01[0-9][-\s\.]?[0-9]{3,4}[-\s\.]?[0-9]{4}/g) || [];
+    const matches = str.match(/01[0-9][-\s.]?[0-9]{3,4}[-\s.]?[0-9]{4}/g) || [];
     return matches.map((p) => {
       const digits = p.replace(/\D/g, "");
       if (digits.length === 11) return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`;
@@ -24,13 +24,13 @@ function parseBulkStudentText(rawText) {
   const rowParsed = [];
   lines.forEach((line, idx) => {
     if (headerKeywords.some((k) => line.includes(k)) && idx <= 1) return;
-    let tokens = [];
+    let tokens;
     if (line.includes("\t")) tokens = line.split("\t").map((t) => t.trim()).filter(Boolean);
     else if (line.includes(",")) tokens = line.split(",").map((t) => t.trim()).filter(Boolean);
     else tokens = line.split(/\s+/).map((t) => t.trim()).filter(Boolean);
 
     if (tokens.length >= 2) {
-      let num = null; let name = "";
+      let num; let name;
       const numMatch0 = tokens[0].match(/\d+/); const numMatch1 = tokens[1].match(/\d+/);
       if (numMatch0 && tokens[0].length <= 5) { num = parseInt(numMatch0[0], 10); name = tokens[1]; } 
       else if (numMatch1 && tokens[1].length <= 5) { name = tokens[0]; num = parseInt(numMatch1[0], 10); } 

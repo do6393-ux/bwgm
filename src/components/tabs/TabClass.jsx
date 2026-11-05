@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { ExternalLink } from "lucide-react";
@@ -172,7 +172,7 @@ function TabClass({ currentUser, currentTheme }) {
                     {currentUser && (
                       <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity text-[12px] font-mono uppercase">
                         <button onClick={() => { setEditingNoticeId(n.id); setEditNoticeData({ title: n.title, body: n.body }); }}>[ edit ]</button>
-                        <button onClick={() => deleteDoc(doc(db, "notices", n.id))} className="text-red-500">[ del ]</button>
+                        <button onClick={() => { if (confirm(`"${n.title}" 공지를 삭제하시겠습니까?`)) deleteDoc(doc(db, "notices", n.id)); }} className="text-red-500">[ del ]</button>
                       </div>
                     )}
                   </div>
@@ -336,11 +336,22 @@ function TabClass({ currentUser, currentTheme }) {
                   
                   <div className={`px-6 py-4 border-t flex justify-between items-center ${currentTheme.border} bg-white/30`}>
                     <div className="flex items-center gap-2">
-                      <div className="w-[6px] h-[6px] bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5">active</span>
+                      <div className={`w-[6px] h-[6px] rounded-full ${lesson.isVisible === false ? "bg-neutral-400" : "bg-green-500 animate-pulse"}`}></div>
+                      <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5">{lesson.isVisible === false ? "hidden (비공개)" : "active"}</span>
                     </div>
                     {currentUser && (
                       <div className="flex items-center gap-4 font-mono text-[11px] uppercase opacity-0 group-hover:opacity-100 transition-opacity pt-0.5">
+                        {/* 학생에게 공개/비공개 전환 (비로그인 방문자 목록에서 숨겨진다) */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateDoc(doc(db, "lessons", lesson.id), { isVisible: lesson.isVisible === false });
+                          }}
+                          title="학생에게 공개/비공개 전환"
+                          className="opacity-50 hover:opacity-100 hover:text-black transition-all"
+                        >
+                          [ {lesson.isVisible === false ? "show" : "hide"} ]
+                        </button>
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
@@ -359,7 +370,7 @@ function TabClass({ currentUser, currentTheme }) {
                         <button 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            deleteDoc(doc(db, "lessons", lesson.id)); 
+                            if (confirm(`"${lesson.title}" 수업 자료를 삭제하시겠습니까?`)) deleteDoc(doc(db, "lessons", lesson.id)); 
                           }} 
                           className="opacity-50 hover:opacity-100 text-red-500 transition-all"
                         >
@@ -435,7 +446,7 @@ function TabClass({ currentUser, currentTheme }) {
                         <span>{item.timeStr}</span>
                         {currentUser && (
                           <button 
-                            onClick={() => deleteDoc(doc(db, "assignments", item.id))} 
+                            onClick={() => { if (confirm(`${item.studentNum} ${item.studentName} 학생의 제출물을 삭제하시겠습니까?`)) deleteDoc(doc(db, "assignments", item.id)); }} 
                             className="opacity-0 group-hover:opacity-100 text-red-500 hover:underline transition-all"
                           >
                             [ del ]

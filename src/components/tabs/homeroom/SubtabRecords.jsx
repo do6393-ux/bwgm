@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { loadSynced, saveLocal } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { Copy, Check, Sparkles, AlertCircle, Trash2, Plus, Edit3, Type, ListPlus, Database } from "lucide-react";
+import { Copy, Check, Sparkles, Trash2, Plus, Type, Database } from "lucide-react";
 import { DEFAULT_STYLES } from "./defaultPresets";
 
 const FORBIDDEN_WORDS = [
@@ -74,11 +74,12 @@ const KoreanGrammar = {
   }
 };
 
-export default function SubtabRecords({ userId, grade, classNum, contacts, currentUser }) {
+export default function SubtabRecords({ userId, grade, classNum, contacts }) {
   const [activeInnerTab, setActiveInnerTab] = useState("engine"); // engine | archive
   const [selectedStudentNum, setSelectedStudentNum] = useState(1);
   const [studentRecords, setStudentRecords] = useState({});
-  const [archiveText, setArchiveText] = useState("");
+  // 누적 보관함의 글은 학생별 기록에서 바로 가져온다 (따로 상태를 두지 않는다)
+  const archiveText = studentRecords[selectedStudentNum] || "";
 
   const [behaviorPresets, setBehaviorPresets] = useState({});
   const [selectedCategoryKey, setSelectedCategoryKey] = useState("");
@@ -154,13 +155,6 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, [flushRecordsSave]);
 
-  useEffect(() => {
-    if (activeInnerTab === "archive") {
-      setArchiveText(studentRecords[selectedStudentNum] || "");
-    } else {
-      setAssembledResults([]);
-    }
-  }, [selectedStudentNum, activeInnerTab, studentRecords]);
 
   const handleAssemble = () => {
     if (!selectedAction) return alert("구체적 행동/변화를 반드시 선택해주세요.");
@@ -203,7 +197,6 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
     
     const updated = { ...studentRecords, [selectedStudentNum]: updatedText };
     setStudentRecords(updated);
-    if (activeInnerTab === "archive") setArchiveText(updatedText);
 
     queueRecordsSave(updated, true); // 버튼으로 추가하는 경우는 바로 저장
     
@@ -211,7 +204,6 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
   };
 
   const handleSaveArchiveDirectly = async (text) => {
-    setArchiveText(text);
     const updated = { ...studentRecords, [selectedStudentNum]: text };
     setStudentRecords(updated);
     queueRecordsSave(updated); // 입력이 멈춘 뒤 Firestore 에 저장
@@ -252,7 +244,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
       setIsPresetModalOpen(false);
       setPresetInputText(""); setPresetNewCategory("");
       alert("✅ 공용 데이터베이스에 추가되었습니다.");
-    } catch (e) { alert("저장 오류"); }
+    } catch (e) { console.error("Preset save error:", e); alert("저장 오류"); }
   };
 
   const handleDeletePreset = async (catKey, type, text) => {
@@ -264,7 +256,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
       data[catKey][type] = data[catKey][type].filter(t => t !== text);
       await setDoc(docRef, { presets: data, updatedAt: new Date().toISOString() });
       setBehaviorPresets(data);
-    } catch (e) {}
+    } catch (e) { console.error("Preset delete error:", e); }
   };
 
   const studentList = contacts.length > 0 ? contacts : Array.from({ length: 30 }, (_, i) => ({ num: i + 1, name: `${i + 1}번 학생` }));
@@ -284,7 +276,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
           </h3>
         </div>
         <div className="flex gap-2 p-1 bg-[#333333] rounded-xl border border-[#666666]">
-          <button onClick={() => setActiveInnerTab("engine")} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "engine" ? "bg-white text-purple-600 shadow-sm" : "text-[#A0A0A0] hover:text-white"}`}>조립 엔진</button>
+          <button onClick={() => { setActiveInnerTab("engine"); setAssembledResults([]); }} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "engine" ? "bg-white text-purple-600 shadow-sm" : "text-[#A0A0A0] hover:text-white"}`}>조립 엔진</button>
           <button onClick={() => setActiveInnerTab("archive")} className={`px-4 py-2 text-[13px] font-bold rounded-lg transition-all ${activeInnerTab === "archive" ? "bg-white text-purple-600 shadow-sm" : "text-[#A0A0A0] hover:text-white"}`}>누적 보관함</button>
         </div>
       </div>
@@ -297,7 +289,7 @@ export default function SubtabRecords({ userId, grade, classNum, contacts, curre
             const hasRecord = !!studentRecords[s.num]?.trim();
             const isSelected = selectedStudentNum === s.num;
             return (
-              <button key={s.num} onClick={() => setSelectedStudentNum(s.num)} className={`w-full flex items-center justify-between p-2.5 rounded-2xl text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-[#555555] text-[#E0E0E0]"}`}>
+              <button key={s.num} onClick={() => { setSelectedStudentNum(s.num); setAssembledResults([]); }} className={`w-full flex items-center justify-between p-2.5 rounded-2xl text-[13px] font-medium transition-all ${isSelected ? "bg-purple-500 text-white shadow-sm" : "hover:bg-[#555555] text-[#E0E0E0]"}`}>
                 <div className="flex items-center gap-2">
                   <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${isSelected ? "bg-white/20" : "bg-[#333333] text-[#A0A0A0]"}`}>{s.num}번</span>
                   <span>{s.name}</span>

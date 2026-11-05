@@ -1,16 +1,95 @@
-# React + Vite
+# 부원여자중학교 정보교사 포털
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+정보교사 한 명이 수업·담임·정보 업무·교무실 정보를 한곳에서 관리하는 웹 포털입니다.
+React + Vite + Tailwind 로 만들었고, 서버 코드는 없이 **Firebase(Auth, Firestore)** 만 사용합니다.
 
-Currently, two official plugins are available:
+## 화면 구성
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+상단 탭 4개가 각각 다른 테마를 씁니다.
 
-## React Compiler
+| 탭 | 누가 보나 | 기능 |
+|---|---|---|
+| **정보 수업** | 누구나 (학생 포함) | 공지사항, 외부 도구 링크, 단원별 수업 자료실(비공개 전환 가능), 학생 과제 제출 |
+| **내 학급** | 로그인한 교사 | 비상연락망, 자리배치(셔플·제외 학생·HWPX 출력), 청소구역, 행발·세특 문장 조립기 |
+| **정보 업무** | 관리자 + 관리자가 허용한 교사 | 업무 칸반 대시보드, 업무별 상세 매뉴얼 |
+| **교무실** | 로그인한 교사 | 컴시간 시간표(교사별·학급별)와 변동 감지, NEIS 급식 |
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 로그인하지 않은 방문자(학생)는 "정보 수업" 탭만 볼 수 있습니다.
+- 교사가 로그인하면 첫 화면은 **교무실(시간표)** 입니다.
 
-## Expanding the ESLint configuration
+## 권한 구조
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+실제 접근 통제는 화면이 아니라 **[firestore.rules](firestore.rules)** 가 합니다. 화면의 숨김은 편의일 뿐입니다.
+
+- **관리자**: `do6393@ice.go.kr` 한 명. 교사 계정 추가·삭제, 정보 업무 접근.
+- **교사**: 관리자 + `teachers/{이메일}` 문서가 있는 사람. 헤더의 `teachers` 화면에서 관리자가 추가합니다.
+- **정보 업무 허용**: `teachers/{이메일}.canWork === true` 인 교사. 같은 화면에서 교사별로 켜고 끕니다. 열람·수정 모두 가능합니다.
+- **그 외(학생·외부인)**: 공지·수업 자료 읽기와 과제 제출(쓰기)만 가능합니다.
+
+관리자 이메일을 바꾸려면 [src/lib/admin.js](src/lib/admin.js) 와 [firestore.rules](firestore.rules) 의 `isAdmin()` 을 **둘 다** 고치세요.
+
+## 시작하기
+
+```bash
+npm install
+cp .env.example .env.local   # 값을 채웁니다 (아래 참고)
+npm run dev
+```
+
+| 명령 | 설명 |
+|---|---|
+| `npm run dev` | 개발 서버 |
+| `npm run build` | 배포용 빌드 (`dist/`) |
+| `npm run lint` | ESLint |
+| `npm test` | 단위 테스트(vitest) |
+
+### 환경 변수
+
+| 이름 | 설명 |
+|---|---|
+| `VITE_NEIS_KEY` | NEIS 급식 API 인증키 ([open.neis.go.kr](https://open.neis.go.kr) 에서 발급). 없으면 키 없는 샘플 호출로 대체되어 조회가 제한될 수 있습니다. 배포 환경에도 같은 이름으로 설정하세요. |
+
+`.env.local` 은 git 에 올라가지 않습니다.
+
+## Firebase 설정
+
+1. **Authentication** → 로그인 방법에서 이메일/비밀번호를 켭니다. 포털에서 교사 계정을 만들려면 계정 생성(sign-up)도 허용 상태여야 합니다. 외부인이 계정을 만들어도 `teachers` 허용 목록에 없으면 데이터에는 접근할 수 없습니다.
+2. **Firestore** → 규칙 탭에 [firestore.rules](firestore.rules) 내용을 통째로 붙여넣고 **게시**합니다. (이 저장소에는 `firebase.json` 이 없어서 CLI 배포 설정은 되어 있지 않습니다.)
+3. 규칙을 고칠 때마다 다시 게시해야 적용됩니다.
+
+게시 후 점검:
+- 시크릿 창: "정보 수업" 탭만 보이고, 공지·자료가 읽히며, 과제 제출이 되는지. 제출 목록은 보이지 않아야 합니다.
+- 일반 교사: 정보 업무 탭이 잠겨 있고 `teachers` 버튼이 없는지. 관리자가 허용하면 탭이 열리는지.
+- 관리자: 내 학급 / 정보 업무 / 교무실 / `teachers` 버튼이 모두 보이는지.
+
+### 주요 컬렉션
+
+| 컬렉션 | 용도 | 읽기 / 쓰기 |
+|---|---|---|
+| `notices`, `lessons` | 공지, 수업 자료 | 공개 / 교사 |
+| `assignments` | 학생 과제 제출 | 교사 / 제출(create)은 누구나, 삭제는 교사 |
+| `work_tasks` | 정보 업무 | 관리자 + 허용된 교사 |
+| `teachers` | 교사 허용 목록 (문서 ID = 소문자 이메일) | 관리자 (교사는 자기 문서만 읽기) |
+| `homeroom_*` | 연락처·자리배치·청소·누적 기록 (문서 ID = `<uid>_<학년>_<반>`) | 본인 uid 문서만 |
+| `base_timetables`, `shared_records_presets` | 기본 시간표, 공용 문구 프리셋 | 교사 |
+| `timetable_schedules` | 컴시간 시간표 캐시 | 교사 (쓰기는 아래 동기화가 함) |
+
+## 컴시간 시간표 동기화
+
+`timetable_schedules` 는 포털이 쓰지 않고 **읽기만** 합니다. 매일 오전 7시 30분(KST)에 별도 저장소의
+GitHub Actions(`sync-comcigan.js`)가 `firebase-admin`(서비스 계정)으로 기록합니다.
+Admin SDK 는 보안 규칙을 거치지 않으므로 규칙과 무관하게 동작합니다.
+
+포털의 "데이터 연동 상태"는 실제로 읽어 온 결과를 보여줍니다 (정상 / 일부만 수신 / 없음 / 실패).
+
+## 기기 간 동기화
+
+연락처·자리배치·청소·누적 기록은 **Firestore 를 기준**으로 읽고, 이 기기의 localStorage 는 캐시·오프라인 대비로만
+씁니다. 이 기기에 더 최근에 저장된 사본(저장 실패, 오프라인 편집)이 있으면 그것을 우선합니다.
+자세한 내용은 [src/lib/syncedStorage.js](src/lib/syncedStorage.js) 의 주석과 테스트를 보세요.
+
+## 알아둘 점
+
+- 수업 자료의 "비공개(hide)"는 학생에게 보이는 목록과 상세 화면에서 가리는 기능입니다. `lessons` 는 공개 읽기라서
+  자료 ID 를 아는 사람이 Firestore 를 직접 읽는 것까지 막지는 못합니다. 민감한 내용은 올리지 마세요.
+- 자리배치의 기피 조합 입력은 학생에게 화면을 보여줄 때를 대비해 일부러 숨겨져 있습니다. 교탁 라벨을 **세 번** 누르면 열립니다.

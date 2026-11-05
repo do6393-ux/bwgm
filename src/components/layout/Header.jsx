@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import SettingsModal from "./SettingsModal";
@@ -132,7 +132,7 @@ export default function Header({
               </div>
               <div className="flex flex-col pt-[clamp(2px,0.25vw,4px)]">
                 <span className="font-normal tracking-tight leading-[1.0] text-[clamp(16px,2.4vw,34px)] mb-[clamp(0.4rem,0.9vw,0.75rem)]">정보 업무</span>
-                <span className="leading-[1.5] font-light lowercase text-[clamp(9px,0.95vw,14px)]">진행 현황<br/>아카이브<br/>보안 로그</span>
+                <span className="leading-[1.5] font-light lowercase text-[clamp(9px,0.95vw,14px)]">업무 현황<br/>업무 매뉴얼<br/>업무 검색</span>
               </div>
             </div>
 

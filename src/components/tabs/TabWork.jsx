@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
@@ -37,7 +37,7 @@ const STATUS_MAP = {
   },
 };
 
-function TabWork({ currentUser, currentTheme }) {
+function TabWork({ currentUser }) {
   // 이 탭은 정보 업무 권한자(관리자 + 허용된 교사)에게만 렌더링되므로 등록·수정·삭제도 모두 가능.
   // 실제 통제는 firestore.rules 의 hasWorkAccess() 가 한다.
   const canEdit = !!currentUser;

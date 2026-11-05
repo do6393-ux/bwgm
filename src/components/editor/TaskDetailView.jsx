@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -33,6 +33,13 @@ function TaskDetailView({ taskId, currentUser }) {
   const containerRef = useRef(null);
   const quillInstanceRef = useRef(null);
 
+  // 편집 모드에 들어갈 때의 본문만 에디터에 넣는다.
+  // (편집 중에 실시간 갱신이 와도 에디터가 초기화되지 않도록 ref 로 들고 있는다)
+  const contentRef = useRef("");
+  useEffect(() => {
+    contentRef.current = task?.content || "";
+  }, [task?.content]);
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "work_tasks", taskId), (docSnap) => {
       if (docSnap.exists()) {
@@ -50,11 +57,12 @@ function TaskDetailView({ taskId, currentUser }) {
   }, [taskId]);
 
   useEffect(() => {
-    if (!isEditing || !containerRef.current) return;
+    const container = containerRef.current;
+    if (!isEditing || !container) return;
 
-    containerRef.current.innerHTML = "";
+    container.innerHTML = "";
     const editorDiv = document.createElement("div");
-    containerRef.current.appendChild(editorDiv);
+    container.appendChild(editorDiv);
 
     const quill = new Quill(editorDiv, {
       theme: "snow",
@@ -71,12 +79,12 @@ function TaskDetailView({ taskId, currentUser }) {
       },
     });
 
-    quill.root.innerHTML = task?.content || "";
+    quill.root.innerHTML = contentRef.current;
     quillInstanceRef.current = quill;
 
     return () => {
       quillInstanceRef.current = null;
-      if (containerRef.current) containerRef.current.innerHTML = "";
+      container.innerHTML = "";
     };
   }, [isEditing]);
 

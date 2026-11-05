@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ExternalLink, RefreshCw } from "lucide-react";
@@ -74,104 +74,143 @@ function isCellChanged(r, c, scheduleMap, baseMatrix, isClass = false) {
 export default function TabOffice({ currentUser }) {
   const userId = currentUser?.uid || "default_teacher";
 
-  const [teacherName, setTeacherName] = useState(() => localStorage.getItem("office_teacher_name") || "신정훈");
+  // 조회할 교사 이름: 이 기기에서 지정한 값 → 로그인 계정의 표시 이름 → (없으면) 비워 두고 직접 설정하게 한다
+  const [teacherName, setTeacherName] = useState(() => localStorage.getItem("office_teacher_name") || currentUser?.displayName || "");
+  // 컴시간 교사 번호(선택). 동기화 데이터가 교사 번호를 문서 ID 로 쓰는 경우에만 필요하다.
+  const [teacherCode, setTeacherCode] = useState(() => {
+    const saved = localStorage.getItem("office_teacher_code");
+    if (saved !== null) return saved;
+    // 예전 버전은 "신정훈" 선생님의 컴시간 번호(32)를 코드에 고정해 두었다.
+    // 이미 쓰던 사용자의 시간표가 끊기지 않도록 처음 한 번만 이어받고, 이후에는 화면에서 바꿀 수 있다.
+    const name = localStorage.getItem("office_teacher_name") || currentUser?.displayName || "";
+    return name.startsWith("신정") || name.includes("정훈") ? "32" : "";
+  });
   const [grade, setGrade] = useState(() => Number(localStorage.getItem("office_grade")) || 1);
   const [classNum, setClassNum] = useState(() => Number(localStorage.getItem("office_class")) || 7);
   const [isNextWeek, setIsNextWeek] = useState(false);
-  const [isSyncingSchedule, setIsSyncingSchedule] = useState(false);
 
   const [teacherBase, setTeacherBase] = useState(() => Array(7).fill().map(() => Array(5).fill("")));
   const [classBase, setClassBase] = useState(() => Array(7).fill().map(() => Array(5).fill("")));
-  const [teacherSchedule, setTeacherSchedule] = useState(null);
-  const [classSchedule, setClassSchedule] = useState(null);
 
   // 오늘 날짜(기기의 현지 시간 기준). toISOString() 은 UTC 라서 한국 시간 09시 이전에는 전날이 나온다.
   const [mealDate, setMealDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   });
-  const [mealList, setMealList] = useState([]);
-  const [mealLoading, setMealLoading] = useState(false);
 
   const [modalType, setModalType] = useState(null); 
   const [modalInputMatrix, setModalInputMatrix] = useState(() => Array(7).fill().map(() => Array(5).fill("")));
   const [tempTeacherName, setTempTeacherName] = useState("");
+  const [tempTeacherCode, setTempTeacherCode] = useState("");
 
-  const loadBaseTimetables = useCallback(async () => {
-    const classKey = `${grade}-${classNum}`;
+  // ── 기본 시간표(교사가 직접 등록해 둔 표) ─────────────────────────────────
+  // baseReloadKey 를 올리면 다시 불러온다 (기본 시간표를 저장한 직후).
+  const [baseReloadKey, setBaseReloadKey] = useState(0);
 
-    let tBase = null;
-    for (const key of [`${userId}_teacher_${teacherName}`, `teacher_${teacherName}`]) {
-      try {
-        const snap = await getDoc(doc(db, "base_timetables", key));
-        if (snap.exists()) {
-          tBase = parseMatrixData(snap.data().matrixJson || snap.data().matrix);
-          if (tBase) break;
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const classKey = `${grade}-${classNum}`;
+
+      let tBase = null;
+      if (teacherName) {
+        for (const key of [`${userId}_teacher_${teacherName}`, `teacher_${teacherName}`]) {
+          try {
+            const snap = await getDoc(doc(db, "base_timetables", key));
+            if (snap.exists()) {
+              tBase = parseMatrixData(snap.data().matrixJson || snap.data().matrix);
+              if (tBase) break;
+            }
+          } catch {
+            // 읽기에 실패하면 다음 키를 보고, 그래도 없으면 이 기기에 저장된 사본을 쓴다
+          }
         }
-      } catch {}
-    }
-    if (!tBase) {
-      const local = localStorage.getItem(`base_tt_teacher_${userId}_${teacherName}`) || localStorage.getItem(`base_tt_teacher_${teacherName}`);
-      tBase = parseMatrixData(local) || Array(7).fill().map(() => Array(5).fill(""));
-    }
-    setTeacherBase(tBase);
-
-    let cBase = null;
-    for (const key of [`${userId}_class_${grade}_${classNum}`, `class_${grade}_${classNum}`]) {
-      try {
-        const snap = await getDoc(doc(db, "base_timetables", key));
-        if (snap.exists()) {
-          cBase = parseMatrixData(snap.data().matrixJson || snap.data().matrix);
-          if (cBase) break;
-        }
-      } catch {}
-    }
-    if (!cBase) {
-      const local = localStorage.getItem(`base_tt_class_${userId}_${classKey}`) || localStorage.getItem(`base_tt_class_${classKey}`);
-      cBase = parseMatrixData(local) || Array(7).fill().map(() => Array(5).fill(""));
-    }
-    setClassBase(cBase);
-  }, [userId, teacherName, grade, classNum]);
-
-  const loadLiveSchedules = useCallback(async () => {
-    setIsSyncingSchedule(true);
-    const weekKey = isNextWeek ? "next" : "this";
-    const classKey = `${grade}-${classNum}`;
-
-    const namePrefix = teacherName.substring(0, 2);
-    const tKeys = [namePrefix, teacherName];
-    if (namePrefix === "신정" || teacherName.includes("정훈")) tKeys.push("32");
-
-    let tSched = null;
-    for (const k of tKeys) {
-      try {
-        const snap = await getDoc(doc(db, "timetable_schedules", `tt_teacher_${weekKey}_${k}`));
-        if (snap.exists() && snap.data().schedule) {
-          tSched = snap.data().schedule;
-          break;
-        }
-      } catch {}
-    }
-    setTeacherSchedule(tSched);
-
-    let cSched = null;
-    try {
-      const snap = await getDoc(doc(db, "timetable_schedules", `tt_class_${weekKey}_${classKey}`));
-      if (snap.exists() && snap.data().schedule) {
-        cSched = snap.data().schedule;
       }
-    } catch {}
-    setClassSchedule(cSched);
-    setIsSyncingSchedule(false);
-  }, [teacherName, grade, classNum, isNextWeek]);
+      if (!tBase) {
+        const local = localStorage.getItem(`base_tt_teacher_${userId}_${teacherName}`) || localStorage.getItem(`base_tt_teacher_${teacherName}`);
+        tBase = parseMatrixData(local) || Array(7).fill().map(() => Array(5).fill(""));
+      }
+
+      let cBase = null;
+      for (const key of [`${userId}_class_${grade}_${classNum}`, `class_${grade}_${classNum}`]) {
+        try {
+          const snap = await getDoc(doc(db, "base_timetables", key));
+          if (snap.exists()) {
+            cBase = parseMatrixData(snap.data().matrixJson || snap.data().matrix);
+            if (cBase) break;
+          }
+        } catch {
+          // 위와 같이 다음 키 → 로컬 사본 순으로 대신한다
+        }
+      }
+      if (!cBase) {
+        const local = localStorage.getItem(`base_tt_class_${userId}_${classKey}`) || localStorage.getItem(`base_tt_class_${classKey}`);
+        cBase = parseMatrixData(local) || Array(7).fill().map(() => Array(5).fill(""));
+      }
+
+      if (cancelled) return;
+      setTeacherBase(tBase);
+      setClassBase(cBase);
+    })();
+    return () => { cancelled = true; };
+  }, [userId, teacherName, grade, classNum, baseReloadKey]);
+
+  // ── 컴시간 실시간 시간표 (GitHub Actions 동기화가 timetable_schedules 에 기록) ──
+  // 요청한 조건(scheduleKey)과 결과의 key 가 다르면 아직 받아오는 중이다.
+  const scheduleKey = `${teacherName}|${teacherCode}|${grade}-${classNum}|${isNextWeek ? "next" : "this"}`;
+  const [scheduleResult, setScheduleResult] = useState({ key: null, teacher: null, cls: null, failed: false });
+  const isSyncingSchedule = scheduleResult.key !== scheduleKey;
+  const teacherSchedule = scheduleResult.teacher;
+  const classSchedule = scheduleResult.cls;
 
   useEffect(() => {
-    loadBaseTimetables();
-  }, [loadBaseTimetables]);
+    let cancelled = false;
+    (async () => {
+      const weekKey = isNextWeek ? "next" : "this";
+      const classKey = `${grade}-${classNum}`;
+      let failed = false; // 문서가 없는 것과 읽기 자체가 실패한 것을 구분한다
 
-  useEffect(() => {
-    loadLiveSchedules();
-  }, [loadLiveSchedules]);
+      // 교사 문서 ID 후보: 이름 앞 2글자, 전체 이름, (설정한 경우) 컴시간 교사 번호
+      const tKeys = [...new Set([teacherName.substring(0, 2), teacherName, teacherCode].filter(Boolean))];
+
+      let tSched = null;
+      for (const k of tKeys) {
+        try {
+          const snap = await getDoc(doc(db, "timetable_schedules", `tt_teacher_${weekKey}_${k}`));
+          if (snap.exists() && snap.data().schedule) {
+            tSched = snap.data().schedule;
+            break;
+          }
+        } catch {
+          failed = true;
+        }
+      }
+
+      let cSched = null;
+      try {
+        const snap = await getDoc(doc(db, "timetable_schedules", `tt_class_${weekKey}_${classKey}`));
+        if (snap.exists() && snap.data().schedule) {
+          cSched = snap.data().schedule;
+        }
+      } catch {
+        failed = true;
+      }
+
+      if (!cancelled) setScheduleResult({ key: scheduleKey, teacher: tSched, cls: cSched, failed });
+    })();
+    return () => { cancelled = true; };
+  }, [scheduleKey, teacherName, teacherCode, grade, classNum, isNextWeek]);
+
+  // "데이터 연동 상태" 표시: 항상 "정상"이 아니라 실제로 받은 결과를 보여준다
+  const scheduleStatus = isSyncingSchedule
+    ? { label: "동기화 중...", className: "text-[#FF5000]" }
+    : teacherSchedule && classSchedule
+    ? { label: "정상 수신 (컴시간)", className: "text-[#00E599]" }
+    : scheduleResult.failed
+    ? { label: "수신 실패 (연결·권한 확인)", className: "text-[#FF4D4D]" }
+    : teacherSchedule || classSchedule
+    ? { label: `일부만 수신 (${teacherSchedule ? "학급" : "교사"} 시간표 없음)`, className: "text-[#FFB000]" }
+    : { label: "수신된 시간표 없음 (동기화 대기)", className: "text-[#FFB000]" };
 
   const teacherChangeCount = useMemo(() => {
     let count = 0;
@@ -197,53 +236,68 @@ export default function TabOffice({ currentUser }) {
     return count;
   }, [classSchedule, classBase]);
 
-  const fetchMeal = useCallback(async (targetDate) => {
-    setMealLoading(true);
-    const dateStr = targetDate.replace(/-/g, "");
-    const officeCode = "E10";
-    const schoolCode = "7331057";
-
-    // NEIS 인증키는 소스에 두지 않고 환경변수(VITE_NEIS_KEY)로 주입. 없으면 키 없는 샘플 호출로 대체.
-    const baseUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}`;
-    const neisKey = import.meta.env.VITE_NEIS_KEY;
-    const urls = neisKey ? [`${baseUrl}&KEY=${neisKey}`, baseUrl] : [baseUrl];
-
-    let data = null;
-    for (const url of urls) {
-      try {
-        const res = await fetch(url);
-        const json = await res.json();
-        if (json.mealServiceDietInfo || json.RESULT?.CODE === "INFO-200") {
-          data = json;
-          break;
-        }
-      } catch {}
-    }
-
-    if (data?.mealServiceDietInfo?.[1]?.row?.length > 0) {
-      const rows = data.mealServiceDietInfo[1].row;
-      const lunch = rows.find(r => r.MMEAL_SC_NM === "중식" || r.MMEAL_SC_CODE === "2") || rows[0];
-      if (lunch?.DDISH_NM) {
-        const clean = lunch.DDISH_NM
-          .replace(/<br\s*\/?>/gi, "\n")
-          .replace(/\([0-9\.\s]+\)/g, "")
-          .split("\n")
-          .map(item => item.trim())
-          .filter(Boolean);
-        setMealList(clean);
-        setMealLoading(false);
-        return;
-      }
-    }
-
-    setMealList([]);
-    setMealLoading(false);
-  }, []);
+  // ── 급식 (NEIS) ──────────────────────────────────────────────────────────
+  // mealReloadKey 를 올리면 같은 날짜라도 다시 조회한다 ("조회" 버튼).
+  // 날짜를 빠르게 바꿔도 늦게 도착한 이전 응답이 화면을 덮어쓰지 않는다.
+  const [mealReloadKey, setMealReloadKey] = useState(0);
+  const mealRequestKey = `${mealDate}#${mealReloadKey}`;
+  const [mealResult, setMealResult] = useState({ key: null, list: [], status: "ok" }); // status: ok | empty | error
+  const mealLoading = !!mealDate && mealResult.key !== mealRequestKey;
+  const mealList = mealResult.list;
+  const mealStatus = mealResult.status;
 
   useEffect(() => {
     // 날짜를 지우는 중간 상태("")에서는 조회하지 않는다
-    if (mealDate) fetchMeal(mealDate);
-  }, [mealDate, fetchMeal]);
+    if (!mealDate) return;
+    let cancelled = false;
+    (async () => {
+      const dateStr = mealDate.replace(/-/g, "");
+      const officeCode = "E10";
+      const schoolCode = "7331057";
+
+      // NEIS 인증키는 소스에 두지 않고 환경변수(VITE_NEIS_KEY)로 주입. 없으면 키 없는 샘플 호출로 대체.
+      const baseUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}`;
+      const neisKey = import.meta.env.VITE_NEIS_KEY;
+      const urls = neisKey ? [`${baseUrl}&KEY=${neisKey}`, baseUrl] : [baseUrl];
+
+      let data = null;
+      for (const url of urls) {
+        try {
+          const res = await fetch(url);
+          const json = await res.json();
+          if (json.mealServiceDietInfo || json.RESULT?.CODE === "INFO-200") {
+            data = json;
+            break;
+          }
+        } catch {
+          // 네트워크 오류나 JSON 이 아닌 응답이면 다음 주소를 시도한다
+        }
+      }
+
+      // error: 응답을 받지 못함 / empty: 응답은 받았지만 그날 급식이 없음(주말·휴업일) / ok: 급식 있음
+      let status = "error";
+      let list = [];
+      if (data) {
+        status = "empty";
+        const rows = data.mealServiceDietInfo?.[1]?.row;
+        if (rows?.length > 0) {
+          const lunch = rows.find((r) => r.MMEAL_SC_NM === "중식" || r.MMEAL_SC_CODE === "2") || rows[0];
+          if (lunch?.DDISH_NM) {
+            list = lunch.DDISH_NM
+              .replace(/<br\s*\/?>/gi, "\n")
+              .replace(/\([0-9.\s]+\)/g, "")
+              .split("\n")
+              .map((item) => item.trim())
+              .filter(Boolean);
+            status = list.length > 0 ? "ok" : "empty";
+          }
+        }
+      }
+
+      if (!cancelled) setMealResult({ key: mealRequestKey, list, status });
+    })();
+    return () => { cancelled = true; };
+  }, [mealDate, mealRequestKey]);
 
   const handleSaveBaseModal = async () => {
     const matrixStr = JSON.stringify(modalInputMatrix);
@@ -272,7 +326,7 @@ export default function TabOffice({ currentUser }) {
     }
 
     setModalType(null);
-    loadBaseTimetables();
+    setBaseReloadKey((k) => k + 1);
   };
 
   const renderCell = (periodIdx, dayIdx, currentScheduleMap, baseMatrix, isClass = false) => {
@@ -358,13 +412,14 @@ export default function TabOffice({ currentUser }) {
           <div
             onClick={() => {
               setTempTeacherName(teacherName);
+              setTempTeacherCode(teacherCode);
               setModalType("switchTeacher");
             }}
             className="p-4 border border-[#222222] bg-[#050505] cursor-pointer hover:border-[#FF5000] transition-colors group"
           >
             <span className="block text-[#666666] mb-1">조회 교사 (클릭하여 변경)</span>
             <span className="text-[#E5E5E5] group-hover:text-[#FF5000] font-bold text-[14px]">
-              {teacherName} 선생님 ↗
+              {teacherName ? `${teacherName} 선생님 ↗` : "교사 이름 설정 ↗"}
             </span>
           </div>
 
@@ -381,8 +436,8 @@ export default function TabOffice({ currentUser }) {
           <div className="p-4 border border-[#222222] bg-[#050505] flex items-center justify-between">
             <div>
               <span className="block text-[#666666] mb-1">데이터 연동 상태</span>
-              <span className="text-[#00E599] font-bold">
-                {isSyncingSchedule ? "동기화 중..." : "정상 수신 (컴시간·나이스)"}
+              <span className={`${scheduleStatus.className} font-bold`}>
+                {scheduleStatus.label}
               </span>
             </div>
             <RefreshCw className={`w-4 h-4 text-[#333333] ${isSyncingSchedule ? "animate-spin text-[#FF5000]" : ""}`} />
@@ -577,7 +632,7 @@ export default function TabOffice({ currentUser }) {
                 className="flex-1 cursor-pointer bg-[#111111] border border-[#222222] p-3 text-[14px] font-mono text-white outline-none focus:border-[#FF5000] transition-colors"
               />
               <button
-                onClick={() => mealDate && fetchMeal(mealDate)}
+                onClick={() => mealDate && setMealReloadKey((k) => k + 1)}
                 className="bg-[#111111] border border-[#222222] hover:border-white text-white px-5 py-3 font-mono text-[12px] font-bold transition-colors"
               >
                 조회
@@ -587,7 +642,9 @@ export default function TabOffice({ currentUser }) {
             <div className="border border-dashed border-[#222222] bg-[#0A0A0A] p-6 font-mono relative">
               <div className="flex justify-between items-center text-[11px] text-[#666666] pb-3 border-b border-[#1A1A1A] mb-4">
                 <span>급식 정보 수신</span>
-                <span className="text-[#00E599]">정상 조회</span>
+                <span className={mealLoading ? "text-[#FF5000]" : mealStatus === "error" ? "text-[#FF4D4D]" : mealStatus === "empty" ? "text-[#888888]" : "text-[#00E599]"}>
+                  {mealLoading ? "조회 중..." : mealStatus === "error" ? "조회 실패" : mealStatus === "empty" ? "급식 없음" : "정상 조회"}
+                </span>
               </div>
 
               {mealLoading ? (
@@ -596,8 +653,17 @@ export default function TabOffice({ currentUser }) {
                 </div>
               ) : mealList.length === 0 ? (
                 <div className="py-12 text-center text-[#555555] text-[12px] leading-relaxed">
-                  등록된 급식 정보가 없습니다.<br />
-                  (주말 또는 공휴일/휴업일)
+                  {mealStatus === "error" ? (
+                    <>
+                      급식 정보를 불러오지 못했습니다.<br />
+                      (네트워크 또는 NEIS 인증키를 확인하세요)
+                    </>
+                  ) : (
+                    <>
+                      등록된 급식 정보가 없습니다.<br />
+                      (주말 또는 공휴일/휴업일)
+                    </>
+                  )}
                 </div>
               ) : (
                 <ul className="space-y-2.5">
@@ -703,9 +769,20 @@ export default function TabOffice({ currentUser }) {
                     type="text"
                     value={tempTeacherName}
                     onChange={(e) => setTempTeacherName(e.target.value)}
-                    placeholder="예: 신정훈"
+                    placeholder="예: 홍길동"
                     className="w-full bg-[#111111] border border-[#222222] p-3 text-[16px] font-mono text-white outline-none focus:border-[#FF5000]"
                   />
+                  <label className="block text-[11px] font-mono text-[#666666] mt-4 mb-2">컴시간 교사 번호 (선택)</label>
+                  <input
+                    type="text"
+                    value={tempTeacherCode}
+                    onChange={(e) => setTempTeacherCode(e.target.value)}
+                    placeholder="예: 32"
+                    className="w-full bg-[#111111] border border-[#222222] p-3 text-[16px] font-mono text-white outline-none focus:border-[#FF5000]"
+                  />
+                  <p className="text-[11px] text-[#555555] mt-2 leading-relaxed">
+                    시간표 동기화 데이터가 교사 번호로 저장되어 있을 때만 입력하세요. 모르면 비워 두어도 됩니다.
+                  </p>
                 </div>
 
                 <div className="flex justify-end gap-4 font-mono text-[12px] pt-4 border-t border-[#222222]">
@@ -717,6 +794,8 @@ export default function TabOffice({ currentUser }) {
                       if (!tempTeacherName.trim()) return;
                       setTeacherName(tempTeacherName.trim());
                       localStorage.setItem("office_teacher_name", tempTeacherName.trim());
+                      setTeacherCode(tempTeacherCode.trim());
+                      localStorage.setItem("office_teacher_code", tempTeacherCode.trim());
                       setModalType(null);
                     }}
                     className="bg-[#FF5000] text-white px-6 py-2 font-bold hover:bg-[#FF3000] transition-colors"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
@@ -28,6 +28,13 @@ export default function LessonDetailView({ lessonId, currentUser }) {
   const containerRef = useRef(null);
   const quillInstanceRef = useRef(null);
 
+  // 편집 모드에 들어갈 때의 본문만 에디터에 넣는다.
+  // (편집 중에 실시간 갱신이 와도 에디터가 초기화되지 않도록 ref 로 들고 있는다)
+  const contentRef = useRef("");
+  useEffect(() => {
+    contentRef.current = lesson?.content || "";
+  }, [lesson?.content]);
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, "lessons", lessonId), (docSnap) => {
       if (docSnap.exists()) {
@@ -45,11 +52,12 @@ export default function LessonDetailView({ lessonId, currentUser }) {
   }, [lessonId]);
 
   useEffect(() => {
-    if (!isEditing || !containerRef.current) return;
+    const container = containerRef.current;
+    if (!isEditing || !container) return;
 
-    containerRef.current.innerHTML = "";
+    container.innerHTML = "";
     const editorDiv = document.createElement("div");
-    containerRef.current.appendChild(editorDiv);
+    container.appendChild(editorDiv);
 
     const quill = new Quill(editorDiv, {
       theme: "snow",
@@ -66,12 +74,12 @@ export default function LessonDetailView({ lessonId, currentUser }) {
       },
     });
 
-    quill.root.innerHTML = lesson?.content || "";
+    quill.root.innerHTML = contentRef.current;
     quillInstanceRef.current = quill;
 
     return () => {
       quillInstanceRef.current = null;
-      if (containerRef.current) containerRef.current.innerHTML = "";
+      container.innerHTML = "";
     };
   }, [isEditing]);
 
@@ -103,6 +111,13 @@ export default function LessonDetailView({ lessonId, currentUser }) {
   };
 
   if (!lesson) return <div className="p-20 text-center font-mono opacity-50 uppercase tracking-widest">Loading context...</div>;
+
+  // 비공개로 전환된 자료는 로그인하지 않은 방문자(학생)에게 보여주지 않는다.
+  // ⚠️ 화면에서만 가리는 것이다. Firestore 규칙상 lessons 는 공개 읽기라서
+  //    자료 ID 를 아는 사람이 DB 를 직접 읽는 것까지 막지는 못한다.
+  if (lesson.isVisible === false && !currentUser) {
+    return <div className="p-20 text-center font-mono opacity-50 uppercase tracking-widest">비공개 자료입니다.</div>;
+  }
 
   return (
     <div className="min-h-screen bg-white text-black font-sans font-light selection:bg-[#FF5000] selection:text-white pb-32">
