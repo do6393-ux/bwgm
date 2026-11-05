@@ -399,13 +399,13 @@ function TabClass({ currentUser, currentTheme }) {
                     </div>
                   </div>
                   
-                  <div className={`px-6 py-4 border-t flex justify-between items-center ${currentTheme.border} bg-white/30`}>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-[6px] h-[6px] rounded-full ${lesson.isVisible === false ? "bg-neutral-400" : "bg-green-500 animate-pulse"}`}></div>
-                      <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5">{lesson.isVisible === false ? "hidden (비공개)" : "active"}</span>
+                  <div className={`px-6 py-4 border-t flex flex-wrap justify-between items-center gap-x-4 gap-y-2 ${currentTheme.border} bg-white/30`}>
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <div className={`w-[6px] h-[6px] shrink-0 rounded-full ${lesson.isVisible === false ? "bg-neutral-400" : "bg-green-500 animate-pulse"}`}></div>
+                      <span className="text-[11px] font-mono uppercase tracking-widest opacity-60 pt-0.5 whitespace-nowrap">{lesson.isVisible === false ? "hidden (비공개)" : "active"}</span>
                     </div>
                     {currentUser && (
-                      <div className="flex items-center gap-4 font-mono text-[11px] uppercase opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity pt-0.5">
+                      <div className="flex items-center gap-2 ml-auto md:basis-full md:justify-end whitespace-nowrap font-mono text-[11px] uppercase opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity pt-0.5">
                         {/* 학생에게 공개/비공개 전환 (비로그인 방문자 목록에서 숨겨진다) */}
                         <button
                           onClick={(e) => {
