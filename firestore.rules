@@ -85,14 +85,6 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
-    // ---------- 예전 과제 제출 (rx feed) ----------
-    // 새 과제 기능(homework)으로 바뀌어 더 받지 않는다. 남은 문서를 교사가 정리(읽기·삭제)할 수만 있다.
-    // 모두 지운 뒤에는 이 블록을 통째로 지워도 된다.
-    match /assignments/{id} {
-      allow read, delete: if isTeacher();
-      allow create, update: if false;
-    }
-
     // ---------- 과제 ----------
     // 과제는 누구나 읽고 교사만 쓴다. 학생 제출은 두 문서를 같은 ID 로 한 번에(batch) 쓴다.
     //   submissions/{sid}: 원본(학번·이름·내용). 학생은 쓰기만, 읽기는 교사만
