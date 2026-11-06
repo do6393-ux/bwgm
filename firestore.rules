@@ -127,6 +127,31 @@ service cloud.firestore {
                             && request.resource.data.data.size() <= 900000;
     }
 
+    // 정보 업무 달력 일정. 카드에서 "달력에 넣기"를 하면 한 건씩 생긴다.
+    // 날짜는 "YYYY-MM-DD" 문자열. 시작 ≤ 마감 점검은 포털 화면에서 하고, 여기서는 모양과 크기만 본다.
+    // 제목·메모 길이는 src/lib/workCalendar.js 의 TITLE_MAX / NOTE_MAX 와 같게 둘 것.
+    match /work_events/{id} {
+      allow read, delete: if hasWorkAccess();
+      allow create, update: if hasWorkAccess()
+                            && request.resource.data.keys().hasOnly(['taskId', 'title', 'part', 'start', 'end', 'note', 'done', 'createdAt'])
+                            && request.resource.data.keys().hasAll(['taskId', 'title', 'part', 'start', 'end', 'note', 'done', 'createdAt'])
+                            && request.resource.data.taskId is string
+                            && request.resource.data.taskId.size() <= 100
+                            && request.resource.data.title is string
+                            && request.resource.data.title.size() > 0
+                            && request.resource.data.title.size() <= 120
+                            && request.resource.data.part is string
+                            && request.resource.data.part.size() <= 20
+                            && request.resource.data.start is string
+                            && request.resource.data.start.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                            && request.resource.data.end is string
+                            && request.resource.data.end.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+                            && request.resource.data.note is string
+                            && request.resource.data.note.size() <= 1000
+                            && request.resource.data.done is bool
+                            && request.resource.data.createdAt is timestamp;
+    }
+
     // ---------- 교사 공용 ----------
     match /base_timetables/{id} {
       allow read, write: if isTeacher();

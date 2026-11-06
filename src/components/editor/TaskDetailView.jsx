@@ -5,18 +5,9 @@ import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { ArrowLeft } from "lucide-react";
 import DetailPlaceholder from "./DetailPlaceholder";
 import TaskAttachments from "./TaskAttachments";
+import { DEFAULT_PART, PARTS, findPart } from "@/lib/workParts";
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
-
-const CATEGORIES = [
-  { id: "devices", label: "💻 계정 및 기기" },
-  { id: "network", label: "🌐 네트워크/서버" },
-  { id: "privacy", label: "🛡️ 보안점검" },
-  { id: "software", label: "🔑 SW관리자" },
-  { id: "disposal", label: "📊 행정/공시" },
-  { id: "edu", label: "🎓 교육/연수" },
-  { id: "calendar", label: "📅 월별 일정·서식" },
-];
 
 const STATUS_MAP = {
   todo: { label: "대기중", next: "doing", color: "bg-[#555555] text-white" },
@@ -30,7 +21,7 @@ function TaskDetailView({ taskId, currentUser }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
-    category: "devices",
+    part: DEFAULT_PART,
     status: "todo",
     summary: "",
   });
@@ -52,7 +43,7 @@ function TaskDetailView({ taskId, currentUser }) {
         setTask(data);
         setEditForm({
           title: data.title || "",
-          category: data.category || "devices",
+          part: findPart(data.part).id,
           status: data.status || "todo",
           summary: data.summary || "",
         });
@@ -108,7 +99,7 @@ function TaskDetailView({ taskId, currentUser }) {
     const htmlContent = quillInstanceRef.current ? quillInstanceRef.current.root.innerHTML : (task?.content || "");
     await updateDoc(doc(db, "work_tasks", taskId), {
       title: editForm.title,
-      category: editForm.category,
+      part: editForm.part,
       status: editForm.status,
       summary: editForm.summary,
       content: htmlContent,
@@ -172,12 +163,12 @@ function TaskDetailView({ taskId, currentUser }) {
             <div className="space-y-4 bg-white border border-line p-6 shadow-sm">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <select
-                  value={editForm.category}
-                  onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                  value={editForm.part}
+                  onChange={(e) => setEditForm({ ...editForm, part: e.target.value })}
                   className="w-full bg-paper border border-line p-3 text-[14px] outline-none focus:border-accent"
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c.id} value={c.id}>{c.label}</option>
+                  {PARTS.map((p) => (
+                    <option key={p.id} value={p.id}>{p.icon} {p.label}</option>
                   ))}
                 </select>
                 <select
@@ -217,7 +208,7 @@ function TaskDetailView({ taskId, currentUser }) {
             <div className="border-b border-line pb-8">
               <div className="flex items-center gap-3 mb-4">
                 <span className="px-3 py-1 text-[11px] font-mono border border-black uppercase tracking-widest bg-black text-white">
-                  {CATEGORIES.find((c) => c.id === task.category)?.label || task.category}
+                  {findPart(task.part).icon} {findPart(task.part).label}
                 </span>
                 <button
                   onClick={handleToggleStatus}
