@@ -4,6 +4,7 @@ import { sanitizeHtml } from "@/lib/sanitize";
 import { doc, onSnapshot, updateDoc } from "firebase/firestore";
 import { ArrowLeft } from "lucide-react";
 import DetailPlaceholder from "./DetailPlaceholder";
+import TaskAttachments from "./TaskAttachments";
 import Quill from "quill";
 import "quill/dist/quill.snow.css";
 
@@ -13,6 +14,8 @@ const CATEGORIES = [
   { id: "privacy", label: "🛡️ 보안점검" },
   { id: "software", label: "🔑 SW관리자" },
   { id: "disposal", label: "📊 행정/공시" },
+  { id: "edu", label: "🎓 교육/연수" },
+  { id: "calendar", label: "📅 월별 일정·서식" },
 ];
 
 const STATUS_MAP = {
@@ -206,6 +209,8 @@ function TaskDetailView({ taskId, currentUser }) {
               <label className="block text-[12px] font-mono opacity-60 mb-2 uppercase tracking-widest">TASK PROTOCOL CONTENT</label>
               <div ref={containerRef} className="shadow-sm" />
             </div>
+
+            <TaskAttachments taskId={taskId} attachments={task.attachments || []} canEdit={!!currentUser} />
           </div>
         ) : (
           <div className="space-y-8">
@@ -236,6 +241,8 @@ function TaskDetailView({ taskId, currentUser }) {
                 __html: sanitizeHtml(task.content || "<p class='opacity-30 font-mono tracking-widest uppercase text-sm'>No content written yet.</p>"),
               }}
             />
+
+            <TaskAttachments taskId={taskId} attachments={task.attachments || []} canEdit={!!currentUser} />
           </div>
         )}
       </main>

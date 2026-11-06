@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { sanitizeHtml } from "@/lib/sanitize";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
-import { ExternalLink, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ExternalLink, Paperclip, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
+import { deleteTaskFiles } from "@/lib/taskAttachments";
 
 const CATEGORIES = [
   { id: "all", label: "전체 업무", code: "ALL" },
@@ -13,6 +14,8 @@ const CATEGORIES = [
   { id: "privacy", label: "보안점검", code: "SEC", icon: "🛡️" },
   { id: "software", label: "SW관리자", code: "SFT", icon: "🔑" },
   { id: "disposal", label: "행정/공시", code: "ADM", icon: "📊" },
+  { id: "edu", label: "교육/연수", code: "EDU", icon: "🎓" },
+  { id: "calendar", label: "월별 일정·서식", code: "CAL", icon: "📅" },
 ];
 
 const STATUS_MAP = {
@@ -89,8 +92,9 @@ function TabWork({ currentUser }) {
       const summaryMatch = (t.summary || "").toLowerCase().includes(q);
       const plainContent = (t.content || "").replace(/<[^>]*>/g, "").toLowerCase();
       const contentMatch = plainContent.includes(q) || (t.content || "").toLowerCase().includes(q);
-      
-      if (!titleMatch && !summaryMatch && !contentMatch) return false;
+      const fileMatch = (t.attachments || []).some((a) => (a.name || "").toLowerCase().includes(q));
+
+      if (!titleMatch && !summaryMatch && !contentMatch && !fileMatch) return false;
     }
 
     return true;
@@ -325,15 +329,22 @@ function TabWork({ currentUser }) {
 
                     {t.content && (
                       <div
-                        className="text-[13px] text-neutral-600 border-t border-black/[0.05] pt-3 my-2 line-clamp-3 leading-relaxed font-light opacity-80"
+                        className="text-[13px] text-neutral-600 border-t border-black/[0.05] pt-3 my-2 line-clamp-3 leading-relaxed font-light opacity-80 [&_img]:hidden"
                         dangerouslySetInnerHTML={{ __html: sanitizeHtml(t.content) }}
                       />
                     )}
                   </div>
 
                   <div className="mt-6 pt-4 border-t border-black/[0.05] flex justify-between items-center text-[12px]">
-                    <span className="text-neutral-400 group-hover:text-neutral-900 flex items-center gap-1 font-mono text-[11px] transition-colors">
-                      OPEN TERMINAL <ExternalLink className="w-3 h-3 ml-0.5" />
+                    <span className="text-neutral-400 group-hover:text-neutral-900 flex items-center gap-3 font-mono text-[11px] transition-colors">
+                      <span className="flex items-center gap-1">
+                        OPEN TERMINAL <ExternalLink className="w-3 h-3 ml-0.5" />
+                      </span>
+                      {t.attachments?.length > 0 && (
+                        <span className="flex items-center gap-1" title={`첨부파일 ${t.attachments.length}개`}>
+                          <Paperclip className="w-3 h-3" /> {t.attachments.length}
+                        </span>
+                      )}
                     </span>
 
                     {canEdit && (
@@ -350,6 +361,8 @@ function TabWork({ currentUser }) {
                             try {
                               await deleteDoc(doc(db, "work_tasks", t.id));
                               toast("삭제했습니다.", "success");
+                              // 카드가 사라진 뒤 딸린 첨부 조각을 치운다 (실패해도 카드 삭제는 이미 끝났으므로 조용히 로그만)
+                              deleteTaskFiles(t.id, t.attachments).catch((e) => console.error("task files cleanup:", e));
                             } catch (err) {
                               console.error("work task delete:", err);
                               toast("삭제하지 못했습니다. 권한이나 연결을 확인해 주세요.", "error");

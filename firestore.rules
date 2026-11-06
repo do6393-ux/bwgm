@@ -113,6 +113,20 @@ service cloud.firestore {
       allow read, write: if hasWorkAccess();
     }
 
+    // 정보 업무 카드의 첨부파일. Firebase Storage(유료 요금제 필요) 대신 Firestore 에 파일을 조각내어 둔다.
+    // 조각 하나는 Bytes 800KB (문서 한계 1MiB). 권한은 위 work_tasks 와 같다.
+    // 상위 규칙은 하위 컬렉션까지 적용되지 않으므로 따로 열어 줘야 한다.
+    // 조각 크기 제한(900000)은 src/lib/attachments.js 의 CHUNK_BYTES(800KB)보다 크게 둔다.
+    match /work_tasks/{id}/work_files/{chunkId} {
+      allow read, delete: if hasWorkAccess();
+      allow create, update: if hasWorkAccess()
+                            && request.resource.data.keys().hasOnly(['attId', 'index', 'data'])
+                            && request.resource.data.attId is string
+                            && request.resource.data.index is int
+                            && request.resource.data.data is bytes
+                            && request.resource.data.data.size() <= 900000;
+    }
+
     // ---------- 교사 공용 ----------
     match /base_timetables/{id} {
       allow read, write: if isTeacher();
