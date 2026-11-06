@@ -11,6 +11,8 @@ import TabWork from "@/components/tabs/TabWork";
 import TabHomeroom from "@/components/tabs/homeroom/TabHomeroom";
 import LessonDetailView from "@/components/editor/LessonDetailView";
 import TaskDetailView from "@/components/editor/TaskDetailView";
+import HomeworkView from "@/components/homework/HomeworkView";
+import HomeworkManager from "@/components/homework/HomeworkManager";
 
 // 탭별 색은 src/index.css 의 [data-theme] 블록에 있고, 여기서는 그 색 이름(page, ink, line …)만 쓴다.
 const THEME_CLASSES = {
@@ -33,6 +35,8 @@ export default function App() {
   const urlParams = new URLSearchParams(window.location.search);
   const activeLessonId = urlParams.get("lesson");
   const activeTaskId = urlParams.get("task");
+  const activeHomeworkId = urlParams.get("assignment"); // 과제 화면 (학생 공개)
+  const isHomeworkManager = urlParams.get("manage") === "assignments"; // 과제 관리 (교사 전용)
 
   const [currentUser, setCurrentUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -59,7 +63,7 @@ export default function App() {
 
   // 지금 화면의 색 테마를 <html data-theme> 으로 알린다 (알림창·모달·페이지 배경까지 같은 색을 쓰도록).
   // 업무 상세는 work, 수업 자료 상세는 class 테마.
-  const themeKey = activeTaskId ? "work" : activeLessonId ? "class" : authReady ? visibleTab : "class";
+  const themeKey = activeTaskId ? "work" : activeLessonId || activeHomeworkId || isHomeworkManager ? "class" : authReady ? visibleTab : "class";
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = themeKey;
     let meta = document.querySelector('meta[name="theme-color"]');
@@ -101,6 +105,32 @@ export default function App() {
 
   // 수업 자료는 학생에게 공개
   if (activeLessonId) return <LessonDetailView lessonId={activeLessonId} currentUser={currentUser} />;
+
+  // 과제 관리는 교사 전용 (학생 제출물 원본이 보인다)
+  if (isHomeworkManager) {
+    if (!authReady) return <div className="min-h-screen bg-white" />;
+    if (!currentUser) {
+      return (
+        <div className="min-h-screen bg-white text-black flex flex-col items-center justify-center gap-6 font-mono px-6 text-center">
+          <p className="text-[13px] uppercase tracking-widest opacity-60">교사 로그인이 필요한 페이지입니다.</p>
+          <button
+            onClick={() => setIsLoginOpen(true)}
+            className="border border-black bg-black text-white px-8 py-3 text-[13px] uppercase tracking-widest hover:bg-accent hover:border-accent transition-colors"
+          >
+            teacher login
+          </button>
+          <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+        </div>
+      );
+    }
+    return <HomeworkManager />;
+  }
+
+  // 과제 화면은 학생에게 공개. 교사로 로그인돼 있으면 제출 현황이 함께 보인다
+  if (activeHomeworkId) {
+    if (!authReady) return <div className="min-h-screen bg-white" />;
+    return <HomeworkView homeworkId={activeHomeworkId} currentUser={currentUser} />;
+  }
 
   // 인증 상태가 확정되기 전에는 아무 탭도 그리지 않음 (교사 전용 탭이 잠깐이라도 보이지 않도록)
   if (!authReady) return <div className="min-h-screen bg-white" />;

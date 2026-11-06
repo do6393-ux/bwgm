@@ -9,15 +9,15 @@ rules_version = '2';
 //                      (포털의 "teachers" 화면에서 관리자가 추가/삭제)
 //   - 정보 업무 접근(hasWorkAccess): 관리자 + teachers 문서에 canWork: true 가 있는 교사.
 //                      (포털의 "teachers" 화면에서 관리자가 교사별로 허용/해제. 열람·수정 모두 가능)
-//   - 그 외(학생·외부인): 공지/수업자료 읽기, 과제 제출(쓰기)만 가능.
+//   - 그 외(학생·외부인): 공지/수업자료/과제 읽기, 과제 제출(쓰기), 제출 확인 목록(학번·가린 이름) 읽기만 가능.
 //
 //  Firebase 콘솔 > Authentication 에서 이메일/비밀번호 "가입(sign-up)"은
 //  켜 두어야 포털에서 교사 계정을 만들 수 있습니다. 외부인이 계정을 만들어도
 //  teachers 허용 목록에 없으면 데이터에는 접근할 수 없습니다.
 //
 //  올린 뒤 점검
-//   - 시크릿 창: "정보 수업" 탭만 보이고 공지/자료가 읽히는지, 과제 제출이 되는지,
-//     제출 목록(rx feed)이 보이지 않는지
+//   - 시크릿 창: "정보 수업" 탭만 보이고 공지/자료/과제가 읽히는지, 과제 화면에서 제출이 되는지,
+//     제출 확인 목록에 학번·가린 이름만 보이고 내용은 보이지 않는지
 //   - 관리자 로그인: 내 학급 / 정보 업무 / 교무실 / teachers 버튼
 //   - 일반 교사 로그인: 첫 화면이 교무실(시간표), 정보 업무 탭은 흐리게 잠김, teachers 버튼 없음.
 //     관리자가 teachers 화면에서 "정보 업무: 허용"을 켜면 탭이 열리고 열람·수정이 되는지 확인
@@ -85,26 +85,70 @@ service cloud.firestore {
       allow write: if isTeacher();
     }
 
-    // ---------- 과제 제출: 학생은 쓰기(제출)만, 읽기는 교사만 ----------
+    // ---------- 예전 과제 제출 (rx feed) ----------
+    // 새 과제 기능(homework)으로 바뀌어 더 받지 않는다. 남은 문서를 교사가 정리(읽기·삭제)할 수만 있다.
+    // 모두 지운 뒤에는 이 블록을 통째로 지워도 된다.
     match /assignments/{id} {
-      allow read: if isTeacher();
+      allow read, delete: if isTeacher();
+      allow create, update: if false;
+    }
 
-      allow create: if request.resource.data.keys().hasOnly(
-                         ['studentNum', 'studentName', 'text', 'timeStr', 'createdAt'])
-                    && request.resource.data.keys().hasAll(
-                         ['studentNum', 'studentName', 'text', 'timeStr', 'createdAt'])
-                    && request.resource.data.studentNum is string
-                    && request.resource.data.studentNum.size() <= 10
+    // ---------- 과제 ----------
+    // 과제는 누구나 읽고 교사만 쓴다. 학생 제출은 두 문서를 같은 ID 로 한 번에(batch) 쓴다.
+    //   submissions/{sid}: 원본(학번·이름·내용). 학생은 쓰기만, 읽기는 교사만
+    //   roster/{sid}:      공개 확인 목록(학번·가린 이름). 누구나 읽기
+    // 한쪽만 생기지 않도록 서로 existsAfter/getAfter 로 확인한다.
+    // 길이 제한은 src/lib/homework.js 의 NAME_MAX / TEXT_MAX 와 같게 둘 것.
+    function homeworkOpen(hid) {
+      return exists(/databases/$(database)/documents/homework/$(hid))
+        && get(/databases/$(database)/documents/homework/$(hid)).data.get('open', false) == true;
+    }
+
+    function validStudentNum(v) {
+      return v is string && v.matches('[1-9][0-9]{4}');
+    }
+
+    match /homework/{hid} {
+      allow read: if true;
+      allow write: if isTeacher();
+    }
+
+    match /homework/{hid}/submissions/{sid} {
+      allow read, delete: if isTeacher();
+      allow create: if request.resource.data.keys().hasOnly(['studentNum', 'studentName', 'text', 'createdAt'])
+                    && request.resource.data.keys().hasAll(['studentNum', 'studentName', 'text', 'createdAt'])
+                    && validStudentNum(request.resource.data.studentNum)
                     && request.resource.data.studentName is string
+                    && request.resource.data.studentName.size() > 0
                     && request.resource.data.studentName.size() <= 20
                     && request.resource.data.text is string
+                    && request.resource.data.text.size() > 0
                     && request.resource.data.text.size() <= 5000
-                    && request.resource.data.timeStr is string
-                    && request.resource.data.timeStr.size() <= 5
-                    && request.resource.data.createdAt == request.time;
-
+                    && request.resource.data.createdAt == request.time
+                    && (homeworkOpen(hid) || isTeacher())
+                    && getAfter(/databases/$(database)/documents/homework/$(hid)/roster/$(sid)).data.studentNum
+                         == request.resource.data.studentNum;
       allow update: if false;
+    }
+
+    match /homework/{hid}/roster/{sid} {
+      allow read: if true;
       allow delete: if isTeacher();
+      allow create: if request.resource.data.keys().hasOnly(['studentNum', 'maskedName', 'createdAt'])
+                    && request.resource.data.keys().hasAll(['studentNum', 'maskedName', 'createdAt'])
+                    && validStudentNum(request.resource.data.studentNum)
+                    && request.resource.data.maskedName is string
+                    && request.resource.data.maskedName.size() > 0
+                    && request.resource.data.maskedName.size() <= 20
+                    && request.resource.data.maskedName.matches('.*[*].*')
+                    && request.resource.data.createdAt == request.time
+                    && existsAfter(/databases/$(database)/documents/homework/$(hid)/submissions/$(sid));
+      allow update: if false;
+    }
+
+    // 과제 관리의 반 설정(반·인원). 교사만
+    match /homework_settings/{id} {
+      allow read, write: if isTeacher();
     }
 
     // ---------- 정보 업무 (보안점검·네트워크 매뉴얼 등) ----------

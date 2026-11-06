@@ -4,6 +4,7 @@ import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, order
 import { ExternalLink } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
+import HomeworkSection from "@/components/homework/HomeworkSection";
 
 const QUICK_TOOLS = [
   { id: "01", name: "엔트리", desc: "블록 코딩", url: "https://playentry.org" },
@@ -39,11 +40,6 @@ function TabClass({ currentUser, currentTheme }) {
   const [editingLessonId, setEditingLessonId] = useState(null);
   const [editLessonData, setEditLessonData] = useState({ title: "", summary: "", lessonNum: "", unit: "unit1" });
 
-  const [assignments, setAssignments] = useState([]);
-  const [studentNum, setStudentNum] = useState("");
-  const [studentName, setStudentName] = useState("");
-  const [assignmentText, setAssignmentText] = useState("");
-
   useEffect(() => {
     // 읽기에 실패해도(연결·권한) 스켈레톤이 영원히 남지 않도록 loaded 는 오류 때에도 올린다
     const unsubNotices = onSnapshot(
@@ -67,21 +63,6 @@ function TabClass({ currentUser, currentTheme }) {
       unsubLessons();
     };
   }, []);
-
-  // 제출물 피드는 교사만 구독한다 (학생에게는 Firestore 읽기 권한도 없음)
-  const teacherUid = currentUser?.uid;
-  useEffect(() => {
-    if (!teacherUid) return;
-    const unsub = onSnapshot(
-      query(collection(db, "assignments"), orderBy("createdAt", "desc")),
-      (snap) => setAssignments(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-      (err) => console.error("assignments listener:", err)
-    );
-    return () => {
-      unsub();
-      setAssignments([]);
-    };
-  }, [teacherUid]);
 
   const handleCreateNotice = async (e) => {
     e.preventDefault();
@@ -116,26 +97,6 @@ function TabClass({ currentUser, currentTheme }) {
       summary: editLessonData.summary
     });
     setEditingLessonId(null);
-  };
-
-  const handleSubmitAssignment = async (e) => {
-    e.preventDefault();
-    if (!studentNum || !studentName || !assignmentText) return;
-    const now = new Date();
-    const timeStr = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-    try {
-      await addDoc(collection(db, "assignments"), {
-        studentNum, studentName, text: assignmentText, timeStr, createdAt: serverTimestamp()
-      });
-    } catch (err) {
-      console.error("assignment submit:", err);
-      toast("과제를 전송하지 못했습니다. 잠시 후 다시 시도해 주세요.", "error");
-      return; // 쓴 내용은 그대로 남겨 둔다
-    }
-    setAssignmentText("");
-    setStudentNum("");
-    setStudentName("");
-    toast("과제 전송이 완료되었습니다.", "success");
   };
 
   // 삭제 전에 확인을 받고, 결과를 알려 준다
@@ -451,83 +412,8 @@ function TabClass({ currentUser, currentTheme }) {
         </div>
       </section>
 
-      {/* 4. 과제 제출 터미널 */}
-      <section className="space-y-8">
-        <div className={`grid grid-cols-1 gap-20 ${currentUser ? "lg:grid-cols-2" : "max-w-2xl"}`}>
-          <div className="space-y-8">
-            <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText} border-b border-line pb-6`}>과제 제출 터미널</h3>
-            <form onSubmit={handleSubmitAssignment} className={`border ${currentTheme.border} p-10 space-y-8 ${currentTheme.cardBg}`}>
-              <div className="grid grid-cols-2 gap-8">
-                <div>
-                  <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">id</label>
-                  <input 
-                    type="text" placeholder="예: 10101" value={studentNum} onChange={(e) => setStudentNum(e.target.value)} required 
-                    className={`w-full bg-transparent border-b ${currentTheme.border} py-3 text-[18px] outline-none focus:border-black transition-colors`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">name</label>
-                  <input 
-                    type="text" placeholder="홍길동" value={studentName} onChange={(e) => setStudentName(e.target.value)} required 
-                    className={`w-full bg-transparent border-b ${currentTheme.border} py-3 text-[18px] outline-none focus:border-black transition-colors`}
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-[13px] font-mono opacity-60 mb-3 uppercase tracking-widest">payload</label>
-                <textarea 
-                  placeholder="내용을 입력하세요..." value={assignmentText} onChange={(e) => setAssignmentText(e.target.value)} required 
-                  className={`w-full bg-transparent border ${currentTheme.border} p-4 text-[16px] outline-none focus:border-black transition-colors h-36 resize-none`}
-                />
-              </div>
-              <button type="submit" className="bg-black text-white px-8 py-4 text-[15px] font-mono uppercase tracking-widest w-full hover:bg-accent transition-colors">
-                transmit
-              </button>
-              {!currentUser && (
-                <p className="text-[12px] font-mono opacity-50 leading-relaxed">
-                  제출한 과제는 선생님만 확인할 수 있습니다.
-                </p>
-              )}
-            </form>
-          </div>
-
-          {currentUser && (
-          <div className="space-y-8">
-            <div className="flex justify-between items-end border-b border-line pb-6">
-              <h3 className={`text-[28px] font-normal tracking-tight ${currentTheme.activeText}`}>
-                rx feed
-              </h3>
-              <span className="text-[14px] font-mono opacity-60 uppercase tracking-widest">[{assignments.length}] items</span>
-            </div>
-            <div className={`border-t ${currentTheme.border} pt-6 max-h-[480px] overflow-y-auto space-y-5 pr-4 custom-scrollbar`}>
-              {assignments.length === 0 ? (
-                <p className="text-[14px] font-mono opacity-40 uppercase tracking-widest">listening...</p>
-              ) : (
-                assignments.map((item) => (
-                  <div key={item.id} className="text-[15px] space-y-2 p-5 border border-line bg-paper group transition-colors hover:border-black">
-                    <div className="flex gap-4 opacity-50 text-[12px] font-mono justify-between items-center">
-                      <span className="font-bold opacity-100 text-black">{item.studentNum} {item.studentName}</span>
-                      <div className="flex items-center gap-3">
-                        <span>{item.timeStr}</span>
-                        {currentUser && (
-                          <button 
-                            onClick={() => removeWithConfirm("assignments", item.id, `${item.studentNum} ${item.studentName} 학생의 제출물을 삭제하시겠습니까?`)} 
-                            className="opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 text-red-500 hover:underline transition-all"
-                          >
-                            [ del ]
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    <p className="break-all opacity-90 leading-relaxed pt-1">{item.text}</p>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-          )}
-        </div>
-      </section>
+      {/* 4. 과제: 누르면 새 탭에서 과제 화면이 열리고, 학생은 거기서 제출한다 */}
+      <HomeworkSection currentUser={currentUser} currentTheme={currentTheme} />
     </div>
   );
 }

@@ -73,7 +73,7 @@ export default function Header({
               </div>
               <div className="flex flex-col items-center md:items-start md:pt-[clamp(2px,0.25vw,4px)]">
                 <span className="font-normal tracking-tight leading-[1.0] text-[13px] md:text-[clamp(16px,2.4vw,34px)] md:mb-[clamp(0.4rem,0.9vw,0.75rem)]">정보 수업</span>
-                <span className="hidden md:block leading-[1.5] font-light lowercase text-[clamp(9px,0.95vw,14px)]">공지사항<br/>수업 자료실<br/>과제 제출</span>
+                <span className="hidden md:block leading-[1.5] font-light lowercase text-[clamp(9px,0.95vw,14px)]">공지사항<br/>수업 자료실<br/>과제</span>
               </div>
             </div>
 
