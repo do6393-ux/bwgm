@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useWorkAccess } from "@/lib/useWorkAccess";
+import { LESSONS_HASH } from "@/lib/classSubtabs";
 
 import Header from "@/components/layout/Header";
 import LoginModal from "@/components/layout/LoginModal";
@@ -47,8 +48,9 @@ export default function App() {
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      // 로그인하면 교무실(시간표) 탭으로, 로그아웃하면 공개 탭으로 이동
-      setActiveTab(user ? "office" : "class");
+      // 로그인하면 교무실(시간표) 탭으로, 로그아웃하면 공개 탭으로 이동.
+      // 단, 수업 자료실 주소(…/#lessons)로 들어왔으면 정보 수업 탭에 그대로 둔다.
+      setActiveTab(user && window.location.hash !== LESSONS_HASH ? "office" : "class");
       setAuthReady(true);
     });
   }, []);
@@ -60,6 +62,13 @@ export default function App() {
   // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
   const canView = activeTab === "class" || (activeTab === "work" ? canWork : !!currentUser);
   const visibleTab = canView ? activeTab : "class";
+
+  // 정보 수업 탭을 떠나면 자료실 주소(#lessons)를 지운다. 남아 있으면 새로고침 때 교무실 대신 정보 수업이 열린다.
+  useEffect(() => {
+    if (authReady && visibleTab !== "class" && window.location.hash === LESSONS_HASH) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, [authReady, visibleTab]);
 
   // 지금 화면의 색 테마를 <html data-theme> 으로 알린다 (알림창·모달·페이지 배경까지 같은 색을 쓰도록).
   // 업무 상세는 work, 수업 자료 상세는 class 테마.
