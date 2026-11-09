@@ -7,7 +7,8 @@
 
 const path = require('path');
 const { pathToFileURL } = require('url');
-const admin = require('firebase-admin');
+const { initializeApp, cert } = require('firebase-admin/app');
+const { getFirestore, FieldValue } = require('firebase-admin/firestore');
 
 const SCHOOL_NAME = '부원여자중학교';
 const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
@@ -160,10 +161,11 @@ async function runSync() {
   if (!process.env.FIREBASE_SERVICE_ACCOUNT) {
     throw new Error('FIREBASE_SERVICE_ACCOUNT 키 누락');
   }
-  admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
-  const db = admin.firestore();
+  // firebase-admin v14 는 예전 admin.credential / admin.firestore() 방식을 없앴다
+  initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) });
+  const db = getFirestore();
   const batch = db.batch();
-  const updatedAt = admin.firestore.FieldValue.serverTimestamp();
+  const updatedAt = FieldValue.serverTimestamp();
 
   // merge 없이 덮어써서 지난 데이터가 남지 않게 한다
   for (const [id, data] of writes) {
