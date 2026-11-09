@@ -1,0 +1,36 @@
+name: Comcigan Timetable Auto Sync
+
+on:
+  schedule:
+    # 한국 시간 기준 월~금 07:30 (UTC 22:30, 일~목)
+    - cron: '30 22 * * 0-4'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: '저장하지 않고 가져온 내용만 확인'
+        type: boolean
+        default: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: scripts/comcigan
+    steps:
+      - name: 코드 체크아웃
+        uses: actions/checkout@v4
+
+      - name: Node.js 세팅
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 의존 패키지 설치
+        run: npm install --no-audit --no-fund
+
+      - name: 컴시간 크롤링 실행
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: node sync-comcigan.cjs

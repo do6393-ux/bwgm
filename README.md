@@ -87,9 +87,15 @@ npm run dev
 
 ## 컴시간 시간표 동기화
 
-`timetable_schedules` 는 포털이 쓰지 않고 **읽기만** 합니다. 매일 오전 7시 30분(KST)에 별도 저장소의
-GitHub Actions(`sync-comcigan.js`)가 `firebase-admin`(서비스 계정)으로 기록합니다.
+`timetable_schedules` 는 포털이 쓰지 않고 **읽기만** 합니다. 월~금 오전 7시 30분(KST)에 이 저장소의
+GitHub Actions([.github/workflows/comcigan-sync.yml](.github/workflows/comcigan-sync.yml))가
+[scripts/comcigan/sync-comcigan.cjs](scripts/comcigan/sync-comcigan.cjs) 를 돌려 `firebase-admin`(서비스 계정)으로 기록합니다.
 Admin SDK 는 보안 규칙을 거치지 않으므로 규칙과 무관하게 동작합니다.
+
+- 저장소 시크릿 `FIREBASE_SERVICE_ACCOUNT` 에 서비스 계정 JSON 이 있어야 합니다.
+- Actions 탭에서 직접 실행할 때 "저장하지 않고 가져온 내용만 확인"을 켜면 Firestore 에 쓰지 않고 로그만 남깁니다.
+- 컴시간 페이지는 `parse-comcigan` 으로 읽습니다. 내부 파일(`dist/loader.js`)을 쓰므로 버전을 고정해 두었고, 올릴 때는 확인 실행부터 하세요.
+- 읽어 온 수업이 학급당 10칸 미만이면 기존 데이터를 지우지 않도록 저장하지 않고 실패로 끝납니다.
 
 포털의 "데이터 연동 상태"는 실제로 읽어 온 결과를 보여줍니다 (정상 / 일부만 수신 / 없음 / 실패).
 
