@@ -1,18 +1,21 @@
-// 반별 제출 현황: 번호마다 네모 칸 하나. 제출 = 초록, 기한 후 제출 = 노랑, 미제출 = 빈 칸.
+// 반별 제출 현황: 번호마다 네모 칸 하나. 제출 = 초록, 기한 후 제출 = 노랑, 내용 부족 = 주황, 미제출 = 빈 칸.
 // 칸을 누르면 그 학생의 제출물만 아래 목록에 보인다 (onSelect).
+import { STATE_LABEL } from "@/lib/homework";
 
 const CELL_TONE = {
   ok: "bg-ok border-ok text-white",
   late: "bg-warn border-warn text-black",
+  lacking: "bg-accent border-accent text-white",
   none: "bg-transparent border-line-strong text-ink-muted hover:border-ink",
 };
-const STATE_LABEL = { ok: "제출", late: "기한 후 제출", none: "미제출" };
+
 
 export function GridLegend({ className = "" }) {
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] font-mono opacity-70 ${className}`}>
       <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-ok inline-block" /> 제출</span>
       <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-warn inline-block" /> 기한 후 제출</span>
+      <span className="flex items-center gap-1.5"><span className="w-3 h-3 bg-accent inline-block" /> 내용 부족</span>
       <span className="flex items-center gap-1.5"><span className="w-3 h-3 border border-line-strong inline-block" /> 미제출</span>
       <span className="flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-ink inline-block" /> 여러 번 제출</span>
     </div>
@@ -74,6 +77,9 @@ export default function ClassGrid({ grid, selected = null, onSelect }) {
                   </>
                 )}
                 {c.late > 0 && <span className="font-mono opacity-60"> · 기한 후 {c.late}명</span>}
+                {c.lackingNums.length > 0 && (
+                  <span className="text-accent"> · <span className="font-mono">내용 부족 {c.lackingNums.length}명</span> {c.lackingNums.join(", ")}번</span>
+                )}
               </p>
             )}
           </section>

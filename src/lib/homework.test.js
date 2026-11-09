@@ -8,6 +8,7 @@ import {
   maskName,
   missingText,
   normalizeClassSettings,
+  openHomework,
   parseStudentNum,
   sortSubmissions,
   targetClasses,
@@ -106,12 +107,12 @@ describe("제출 현황 칸", () => {
     const [c] = grid.classes;
     expect(c.cells.map((x) => x.state)).toEqual(["ok", "none", "late", "none", "ok"]);
     expect(c.cells[2].subs.map((s) => s.id)).toEqual(["b", "c"]);
-    expect(c).toMatchObject({ label: "1학년 3반", size: 5, done: 3, late: 1, missing: [2, 4] });
+    expect(c).toMatchObject({ label: "1학년 3반", size: 5, done: 3, late: 1, lackingNums: [], missing: [2, 4] });
   });
 
   it("칸에 들어가지 않는 제출물은 따로 모은다", () => {
     expect(grid.extras.map((s) => s.id)).toEqual(["f", "g"]);
-    expect(grid.totals).toEqual({ size: 5, done: 3, late: 1, missing: 2 });
+    expect(grid.totals).toEqual({ size: 5, done: 3, late: 1, lacking: 0, missing: 2 });
   });
 
   it("인원을 모르면 제출한 가장 큰 번호까지 보여 준다", () => {
@@ -124,11 +125,34 @@ describe("제출 현황 칸", () => {
     expect(missingText(grid, "1차 과제")).toBe("[1차 과제]\n1학년 3반 미제출(2명): 2, 4번");
   });
 
+  it("내용 부족: 낸 학생만 주황 칸이 되고, 제출 수에는 들어간다", () => {
+    // 10301(제출)·10303(지각)을 내용 부족으로, 10302(미제출)에 붙은 표시는 무시
+    const g = buildClassGrid([{ id: "1-3", size: 5 }], subs, "2026-11-20", { 10301: true, 10303: true, 10302: true });
+    const [c] = g.classes;
+    expect(c.cells.map((x) => x.state)).toEqual(["lacking", "none", "lacking", "none", "ok"]);
+    expect(c).toMatchObject({ done: 3, late: 0, lackingNums: [1, 3], missing: [2, 4] });
+    expect(g.totals).toEqual({ size: 5, done: 3, late: 0, lacking: 2, missing: 2 });
+    expect(missingText(g)).toBe("1학년 3반 미제출(2명): 2, 4번 / 내용 부족(2명): 1, 3번");
+  });
+
   it("정렬", () => {
     expect(sortSubmissions(subs, "num").map((s) => s.id)).toEqual(["a", "b", "c", "e", "d", "f", "g"]);
     expect(sortSubmissions(subs, "new")[0].id).toBe("c");
     expect(sortSubmissions([...subs, { id: "p", studentNum: "10302" }], "new")[0].id).toBe("p"); // 방금 낸 것
     expect(sortSubmissions(subs, "old").at(-1).id).toBe("c");
+  });
+});
+
+describe("받는 중인 과제 (정보 수업 홈)", () => {
+  it("마감 남은 것(가까운 순) → 마감 없음 → 마감 지남, 닫힌 과제는 뺀다", () => {
+    const list = [
+      { id: "past", open: true, due: "2026-11-01" },
+      { id: "nodue", open: true, due: "" },
+      { id: "later", open: true, due: "2026-11-20" },
+      { id: "closed", open: false, due: "2026-11-12" },
+      { id: "soon", open: true, due: "2026-11-10" },
+    ];
+    expect(openHomework(list, "2026-11-09").map((h) => h.id)).toEqual(["soon", "later", "nodue", "past"]);
   });
 });
 
@@ -145,6 +169,7 @@ describe("누적 현황표", () => {
     };
     const t = cumulativeTable("1-3", 3, homeworks, rosters);
     expect(t.columns.map((h) => h.id)).toEqual(["h1", "h3"]);
+    expect(cumulativeTable("1-3", 3, homeworks, rosters, { h3: { 10301: true } }).rows[0].cells).toEqual(["ok", "lacking"]);
     expect(t.rows).toEqual([
       { num: 1, studentNum: "10301", cells: ["ok", "ok"], done: 2, missing: 0 },
       { num: 2, studentNum: "10302", cells: ["late", "none"], done: 1, missing: 1 },

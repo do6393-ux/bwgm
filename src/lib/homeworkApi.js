@@ -4,6 +4,7 @@ import { db } from "@/lib/firebase";
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   getDocs,
   onSnapshot,
@@ -126,6 +127,32 @@ export function saveClassSettings(classes) {
   return setDoc(doc(db, "homework_settings", "classes"), { classes: normalizeClassSettings(classes) });
 }
 
+// 교사가 매긴 표시 (교사만 읽고 쓴다 — homework_settings 규칙). 학생 화면에는 나오지 않는다.
+//   homework_settings/marks = { lacking: { [과제ID]: { [학번]: true } } }
+const marksRef = () => doc(db, "homework_settings", "marks");
+
+/** 내용 부족 표시 전체. { lacking: { [과제ID]: { [학번]: true } }, loaded } */
+export function useHomeworkMarks(enabled = true) {
+  const [state, setState] = useState({ lacking: {}, loaded: false });
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return onSnapshot(
+      marksRef(),
+      (snap) => setState({ lacking: snap.data()?.lacking || {}, loaded: true }),
+      (err) => {
+        console.error("homework marks listener:", err);
+        setState({ lacking: {}, loaded: true });
+      }
+    );
+  }, [enabled]);
+  return state;
+}
+
+/** 한 학생을 그 과제에서 "내용 부족"으로 표시하거나 푼다 */
+export function setLacking(homeworkId, studentNum, on) {
+  return setDoc(marksRef(), { lacking: { [homeworkId]: { [studentNum]: on ? true : deleteField() } } }, { merge: true });
+}
+
 /** 과제 만들기·고치기. id 가 없으면 새로 만든다 */
 export async function saveHomework(id, { title, body, classes, due, open }) {
   const data = { title: title.trim(), body: body ?? "", classes: classes ?? [], due: due ?? "", open: open !== false };
@@ -154,6 +181,12 @@ export async function deleteHomework(id) {
   const batch = writeBatch(db);
   batch.delete(doc(db, "homework", id));
   await batch.commit();
+  // 그 과제의 내용 부족 표시도 지운다 (실패해도 과제 삭제는 끝났으므로 넘어간다)
+  try {
+    await setDoc(marksRef(), { lacking: { [id]: deleteField() } }, { merge: true });
+  } catch (err) {
+    console.error("homework marks cleanup:", err);
+  }
 }
 
 /**

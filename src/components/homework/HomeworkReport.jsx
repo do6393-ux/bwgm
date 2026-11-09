@@ -1,9 +1,10 @@
 // 교사용: 과제 하나의 제출 현황(반별 칸) + 제출물 원본 목록.
 // 과제 화면(?assignment=ID)과 관리 화면(?manage=assignments)에서 같이 쓴다.
+// 제출물마다 [ 내용 부족 ] 을 누르면 그 학생 칸이 주황색이 된다 (homework_settings/marks, 학생에게는 안 보임).
 import { useMemo, useState } from "react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { buildClassGrid, formatTime, isLate, missingText, parseStudentNum, sortSubmissions, targetClasses, toCsv } from "@/lib/homework";
-import { copyText, deleteSubmission, downloadText, useHomeworkEntries } from "@/lib/homeworkApi";
+import { copyText, deleteSubmission, downloadText, setLacking, useHomeworkEntries, useHomeworkMarks } from "@/lib/homeworkApi";
 import ClassGrid, { GridLegend } from "./ClassGrid";
 
 const SORTS = [
@@ -27,9 +28,11 @@ export default function HomeworkReport({ homework, settings }) {
   const [sort, setSort] = useState("num");
   const [selected, setSelected] = useState(null); // 칸에서 고른 학번
   const [onlyExtras, setOnlyExtras] = useState(false);
+  const marks = useHomeworkMarks(true);
+  const lacking = useMemo(() => marks.lacking[homework.id] || {}, [marks.lacking, homework.id]);
 
   const classes = useMemo(() => targetClasses(homework, settings, subs), [homework, settings, subs]);
-  const grid = useMemo(() => buildClassGrid(classes, subs, homework.due), [classes, subs, homework.due]);
+  const grid = useMemo(() => buildClassGrid(classes, subs, homework.due, lacking), [classes, subs, homework.due, lacking]);
   const extraIds = useMemo(() => new Set(grid.extras.map((s) => s.id)), [grid.extras]);
 
   const shown = useMemo(() => {
@@ -54,12 +57,23 @@ export default function HomeworkReport({ homework, settings }) {
         s.studentNum,
         s.studentName,
         formatTime(s.at),
-        isLate(s.at, homework.due) ? "기한 후" : "제출",
+        lacking[s.studentNum] ? "내용 부족" : isLate(s.at, homework.due) ? "기한 후" : "제출",
         s.text,
       ]);
     }
     for (const c of grid.classes) for (const n of c.missing) rows.push([c.id, n, c.cells[n - 1].studentNum, "", "", "미제출", ""]);
     downloadText(`${homework.title.replace(/[\\/:*?"<>|]/g, "_")}_제출현황.csv`, toCsv(rows));
+  };
+
+  const toggleLacking = async (s) => {
+    const on = !lacking[s.studentNum];
+    try {
+      await setLacking(homework.id, s.studentNum, on);
+      toast(on ? `${s.studentNum} 학생을 내용 부족으로 표시했어요.` : "내용 부족 표시를 풀었어요.", "success");
+    } catch (err) {
+      console.error("set lacking:", err);
+      toast("표시하지 못했어요. 권한이나 연결을 확인해 주세요.", "error");
+    }
   };
 
   const remove = async (s) => {
@@ -79,10 +93,11 @@ export default function HomeworkReport({ homework, settings }) {
   const t = grid.totals;
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="제출" value={t.size ? `${t.done} / ${t.size}` : t.done} tone="text-ok-strong" />
         <Stat label="미제출" value={t.missing} tone={t.missing ? "text-danger" : ""} />
         <Stat label="기한 후" value={t.late} />
+        <Stat label="내용 부족" value={t.lacking} tone={t.lacking ? "text-accent" : ""} />
         <Stat label="확인 필요" value={grid.extras.length} tone={grid.extras.length ? "text-warn" : ""} />
       </div>
 
@@ -138,16 +153,28 @@ export default function HomeworkReport({ homework, settings }) {
           <ul className="space-y-3">
             {shown.map((s) => {
               const late = isLate(s.at, homework.due);
+              const isLacking = !!lacking[s.studentNum];
               return (
                 <li key={s.id} className="group border border-line bg-paper p-5 space-y-2 hover:border-ink transition-colors">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-mono">
                     <span className="flex items-center gap-2">
                       <b className="font-bold text-[15px]">{s.studentNum} {s.studentName}</b>
                       {late && <span className="px-1.5 py-0.5 bg-warn text-black text-[11px]">기한 후</span>}
+                      {isLacking && <span className="px-1.5 py-0.5 bg-accent text-white text-[11px]">내용 부족</span>}
                       {extraIds.has(s.id) && <span className="px-1.5 py-0.5 border border-warn text-[11px]">학번 확인</span>}
                     </span>
-                    <span className="flex items-center gap-3 opacity-60">
-                      {formatTime(s.at)}
+                    <span className="flex items-center gap-3">
+                      <span className="opacity-60">{formatTime(s.at)}</span>
+                      {/* 내용 부족 표시는 학생(학번) 단위: 같은 학생의 다른 제출물에도 같이 보인다 */}
+                      <button
+                        type="button"
+                        onClick={() => toggleLacking(s)}
+                        aria-pressed={isLacking}
+                        title="이 학생을 이 과제에서 내용 부족으로 표시하거나 풉니다"
+                        className={`transition-opacity ${isLacking ? "text-accent font-bold" : "opacity-60 hover:opacity-100 hover:text-accent"}`}
+                      >
+                        {isLacking ? "[ 부족 해제 ]" : "[ 내용 부족 ]"}
+                      </button>
                       <button
                         type="button"
                         onClick={() => remove(s)}

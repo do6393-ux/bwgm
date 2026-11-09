@@ -8,6 +8,7 @@
 //   homework/{id}/roster/{sid}         제출 확인용 공개 목록 (같은 sid). 내용 없이 학번과 가린 이름만
 //       { studentNum, maskedName, createdAt }
 //   homework_settings/classes          교사만. { classes: [{ id: "1-3", size: 28 }, ...] }
+//   homework_settings/marks            교사만. 교사가 매긴 표시. { lacking: { [과제ID]: { [학번]: true } } }  (내용 부족)
 //
 // 학번은 5자리 "학년(1) 반(2) 번호(2)". 예) 10307 = 1학년 3반 7번.
 // 길이 제한은 firestore.rules 의 homework 규칙과 같게 둘 것.
@@ -103,6 +104,14 @@ export function isLate(at, due) {
   return dateKey(new Date(at)) > due;
 }
 
+/** 받는 중인 과제: 마감이 남은 것(가까운 순) → 마감 없는 것 → 마감이 지났지만 아직 받는 것 */
+export function openHomework(list, today) {
+  const rank = (h) => (!isDateKey(h.due) ? 1 : h.due >= today ? 0 : 2);
+  return list
+    .filter((h) => h.open !== false)
+    .sort((a, b) => rank(a) - rank(b) || String(a.due).localeCompare(String(b.due)));
+}
+
 /** 마감 표시. due 가 없으면 null */
 export function dueInfo(due, now = new Date()) {
   if (!isDateKey(due)) return null;
@@ -130,15 +139,31 @@ export function groupByStudent(subs) {
   return map;
 }
 
+/** 칸 상태의 이름 (현황 칸·누적표·안내 문구가 같이 쓴다) */
+export const STATE_LABEL = { ok: "제출", late: "기한 후 제출", lacking: "내용 부족", none: "미제출" };
+
+/**
+ * 한 학생의 칸 상태. 낸 것이 없으면 "none", 교사가 내용 부족으로 표시했으면 "lacking",
+ * 한 번이라도 기한 안에 냈으면 "ok", 기한 뒤에만 냈으면 "late".
+ * (내용 부족 표시는 낸 학생에게만 의미가 있다 — 제출물이 지워지면 미제출로 돌아간다)
+ */
+export function cellState(list, due, isLacking) {
+  if (list.length === 0) return "none";
+  if (isLacking) return "lacking";
+  return list.some((s) => !isLate(s.at, due)) ? "ok" : "late";
+}
+
 /**
  * 반별 제출 현황 칸.
  *   classes: [{ id, size }]  대상 반과 인원 (인원을 모르면 size 0 → 제출한 가장 큰 번호까지 보여 준다)
  *   subs:    [{ studentNum, at, ... }]
- * 결과: { classes: [{ id, label, size, cells, done, late, missing }], extras, totals }
- *   cells[i] = { num, studentNum, state: "none"|"ok"|"late", subs }
+ *   lacking: { [학번]: true }  교사가 "내용 부족"으로 표시한 학생 (이 과제)
+ * 결과: { classes: [{ id, label, size, cells, done, late, lackingNums, missing }], extras, totals }
+ *   cells[i] = { num, studentNum, state: "none"|"ok"|"late"|"lacking", subs }
+ *   done 에는 내용 부족도 들어간다 (내기는 냈으므로)
  *   extras   = 대상 반이 아니거나 번호가 인원보다 큰 제출물 (학번을 잘못 쓴 경우를 찾기 쉽게)
  */
-export function buildClassGrid(classes, subs, due = "") {
+export function buildClassGrid(classes, subs, due = "", lacking = {}) {
   const byStudent = groupByStudent(subs);
   const used = new Set();
   const result = classes.map(({ id, size }) => {
@@ -153,8 +178,7 @@ export function buildClassGrid(classes, subs, due = "") {
       const studentNum = `${prefix}${String(num).padStart(2, "0")}`;
       const list = byStudent.get(studentNum) || [];
       if (list.length) used.add(studentNum);
-      // 한 번이라도 기한 안에 냈으면 "제출". 기한 뒤에만 냈으면 "지각"
-      const state = list.length === 0 ? "none" : list.some((s) => !isLate(s.at, due)) ? "ok" : "late";
+      const state = cellState(list, due, !!lacking?.[studentNum]);
       cells.push({ num, studentNum, state, subs: list });
     }
     return {
@@ -164,13 +188,20 @@ export function buildClassGrid(classes, subs, due = "") {
       cells,
       done: cells.filter((c) => c.state !== "none").length,
       late: cells.filter((c) => c.state === "late").length,
+      lackingNums: cells.filter((c) => c.state === "lacking").map((c) => c.num),
       missing: cells.filter((c) => c.state === "none").map((c) => c.num),
     };
   });
   const extras = subs.filter((s) => !used.has(s.studentNum));
   const totals = result.reduce(
-    (t, c) => ({ size: t.size + c.size, done: t.done + c.done, late: t.late + c.late, missing: t.missing + c.missing.length }),
-    { size: 0, done: 0, late: 0, missing: 0 }
+    (t, c) => ({
+      size: t.size + c.size,
+      done: t.done + c.done,
+      late: t.late + c.late,
+      lacking: t.lacking + c.lackingNums.length,
+      missing: t.missing + c.missing.length,
+    }),
+    { size: 0, done: 0, late: 0, lacking: 0, missing: 0 }
   );
   return { classes: result, extras, totals };
 }
@@ -185,11 +216,13 @@ export function targetClasses(homework, settings, subs = []) {
   return sortClassIds(ids).map((id) => ({ id, size: sizes.get(id) || 0 }));
 }
 
-/** "1학년 3반 미제출(3명): 2, 7, 15번" 줄들. 메신저에 붙여 넣기 좋게 */
+/** "1학년 3반 미제출(3명): 2, 7, 15번 / 내용 부족(1명): 4번" 줄들. 메신저에 붙여 넣기 좋게 */
 export function missingText(grid, title = "") {
-  const lines = grid.classes.map((c) =>
-    c.missing.length === 0 ? `${c.label} 모두 제출` : `${c.label} 미제출(${c.missing.length}명): ${c.missing.join(", ")}번`
-  );
+  const lines = grid.classes.map((c) => {
+    const head = c.missing.length === 0 ? `${c.label} 모두 제출` : `${c.label} 미제출(${c.missing.length}명): ${c.missing.join(", ")}번`;
+    const lacking = c.lackingNums?.length ? ` / 내용 부족(${c.lackingNums.length}명): ${c.lackingNums.join(", ")}번` : "";
+    return head + lacking;
+  });
   return [title && `[${title}]`, ...lines].filter(Boolean).join("\n");
 }
 
@@ -206,8 +239,9 @@ export function sortSubmissions(subs, mode = "num") {
  * 누적 현황표: 한 반의 학생 × 그 반이 대상인 과제들.
  *   homeworks: [{ id, title, due, classes }] (오래된 과제부터)
  *   rosters:   { [homeworkId]: [{ studentNum, at }] }
+ *   lacking:   { [homeworkId]: { [학번]: true } }  내용 부족 표시
  */
-export function cumulativeTable(classId, size, homeworks, rosters) {
+export function cumulativeTable(classId, size, homeworks, rosters, lacking = {}) {
   const prefix = classPrefix(classId);
   const columns = homeworks.filter((h) => (h.classes || []).includes(classId));
   let n = size;
@@ -226,8 +260,7 @@ export function cumulativeTable(classId, size, homeworks, rosters) {
   for (let num = 1; num <= n; num++) {
     const studentNum = `${prefix}${String(num).padStart(2, "0")}`;
     const cells = grids.map(({ h, byStudent }) => {
-      const list = byStudent.get(studentNum) || [];
-      return list.length === 0 ? "none" : list.some((s) => !isLate(s.at, h.due)) ? "ok" : "late";
+      return cellState(byStudent.get(studentNum) || [], h.due, !!lacking?.[h.id]?.[studentNum]);
     });
     const missing = cells.filter((c) => c === "none").length;
     rows.push({ num, studentNum, cells, done: cells.length - missing, missing });

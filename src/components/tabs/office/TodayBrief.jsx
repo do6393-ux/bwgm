@@ -10,6 +10,7 @@ import { fetchLunch } from "@/lib/neisMeal";
 import { WEEKDAYS } from "@/lib/workCalendar";
 import { findPart } from "@/lib/workParts";
 import { buildClassGrid, targetClasses } from "@/lib/homework";
+import { hashOfSubtab } from "@/lib/classSubtabs";
 import { useAllRosters, useClassSettings, useHomeworkList } from "@/lib/homeworkApi";
 import { dayLessons, periodState, pickWeekKey, targetSchoolDay, upcomingHomework, workDigest } from "@/lib/todayBrief";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
@@ -286,7 +287,10 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
             </ul>
             <button
               type="button"
-              onClick={() => onOpenTab?.("class")}
+              onClick={() => {
+                window.location.hash = hashOfSubtab("homework"); // 정보 수업의 과제 작은 탭으로
+                onOpenTab?.("class");
+              }}
               className="md:ml-auto self-start md:self-auto flex items-center gap-1 text-ink-faint hover:text-accent transition-colors"
             >
               과제 관리 <ArrowRight className="w-3 h-3" />

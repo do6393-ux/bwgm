@@ -7,6 +7,7 @@ import { ArrowLeft, ArrowUpRight } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import {
   CLASS_SIZE_MAX,
+  STATE_LABEL,
   buildClassGrid,
   classLabel,
   classRange,
@@ -16,7 +17,7 @@ import {
   targetClasses,
   toCsv,
 } from "@/lib/homework";
-import { copyText, downloadText, saveClassSettings, useAllRosters, useClassSettings, useHomeworkList } from "@/lib/homeworkApi";
+import { copyText, downloadText, saveClassSettings, useAllRosters, useClassSettings, useHomeworkList, useHomeworkMarks } from "@/lib/homeworkApi";
 import { GridLegend } from "./ClassGrid";
 import HomeworkReport from "./HomeworkReport";
 import { DueBadge } from "./HomeworkView";
@@ -26,7 +27,7 @@ const VIEWS = [
   { id: "total", label: "누적 현황" },
   { id: "classes", label: "반 설정" },
 ];
-const CELL = { ok: "bg-ok", late: "bg-warn", none: "border border-line-strong" };
+const CELL = { ok: "bg-ok", late: "bg-warn", lacking: "bg-accent", none: "border border-line-strong" };
 
 function EachView({ homeworks, rosters, settings }) {
   const { toast } = useDialog();
@@ -94,7 +95,7 @@ function EachView({ homeworks, rosters, settings }) {
   );
 }
 
-function TotalView({ homeworks, rosters, settings }) {
+function TotalView({ homeworks, rosters, settings, lacking }) {
   // 오래된 과제부터 왼쪽에
   const ordered = useMemo(() => [...homeworks].reverse(), [homeworks]);
   const classIds = useMemo(
@@ -108,12 +109,12 @@ function TotalView({ homeworks, rosters, settings }) {
   if (!current) return <p className="py-12 font-mono text-[14px] opacity-50">반 설정을 하거나, 대상 반을 고른 과제를 올리면 누적 현황을 볼 수 있어요.</p>;
 
   const size = settings.find((c) => c.id === current)?.size || 0;
-  const table = cumulativeTable(current, size, ordered, rosters);
+  const table = cumulativeTable(current, size, ordered, rosters, lacking);
   const rows = sort === "missing" ? [...table.rows].sort((a, b) => b.missing - a.missing || a.num - b.num) : table.rows;
   const n = table.columns.length;
 
   const exportCsv = () => {
-    const mark = { ok: "O", late: "△", none: "X" };
+    const mark = { ok: "O", late: "△", lacking: "부족", none: "X" };
     const out = [["번호", "학번", ...table.columns.map((h) => h.title), "제출", "미제출"]];
     for (const r of table.rows) out.push([r.num, r.studentNum, ...r.cells.map((c) => mark[c]), r.done, r.missing]);
     downloadText(`${classLabel(current)}_과제누적.csv`, toCsv(out));
@@ -177,7 +178,7 @@ function TotalView({ homeworks, rosters, settings }) {
                     </td>
                     {r.cells.map((c, i) => (
                       <td key={i} className="px-1 py-1.5 text-center">
-                        <span title={`${table.columns[i].title}: ${c === "ok" ? "제출" : c === "late" ? "기한 후" : "미제출"}`} className={`inline-block w-5 h-5 align-middle ${CELL[c]}`} />
+                        <span title={`${table.columns[i].title}: ${STATE_LABEL[c]}`} className={`inline-block w-5 h-5 align-middle ${CELL[c]}`} />
                       </td>
                     ))}
                     <td className={`px-3 py-1.5 text-right whitespace-nowrap ${r.missing >= 2 ? "text-danger font-bold" : ""}`}>
@@ -188,7 +189,7 @@ function TotalView({ homeworks, rosters, settings }) {
               </tbody>
             </table>
           </div>
-          <p className="text-[12px] font-mono opacity-50">두 번 이상 안 낸 학생은 줄이 붉게 표시돼요. 기한 후 제출도 제출로 셉니다.</p>
+          <p className="text-[12px] font-mono opacity-50">두 번 이상 안 낸 학생은 줄이 붉게 표시돼요. 기한 후 제출과 내용 부족도 제출로 셉니다.</p>
         </>
       )}
     </div>
@@ -276,6 +277,7 @@ export default function HomeworkManager() {
   const { list: homeworks, loaded } = useHomeworkList();
   const { classes: settings, loaded: settingsLoaded } = useClassSettings(true);
   const rosters = useAllRosters(homeworks.map((h) => h.id));
+  const { lacking } = useHomeworkMarks(true);
   const [view, setView] = useState("each");
 
   return (
@@ -304,7 +306,7 @@ export default function HomeworkManager() {
         ) : view === "each" ? (
           <EachView homeworks={homeworks} rosters={rosters} settings={settings} />
         ) : view === "total" ? (
-          <TotalView homeworks={homeworks} rosters={rosters} settings={settings} />
+          <TotalView homeworks={homeworks} rosters={rosters} settings={settings} lacking={lacking} />
         ) : (
           <ClassSettingsView key={JSON.stringify(settings)} settings={settings} />
         )}

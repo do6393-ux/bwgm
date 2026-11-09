@@ -11,6 +11,8 @@ export default {
   ],
   theme: {
     extend: {
+      // short: 세로가 낮은 화면 (교실 노트북 1366×768 등). 기본 화면 크기 뒤에 붙어서 md: 보다 나중에 적용된다
+      screens: { short: { raw: "(max-height: 820px)" } },
       // 글꼴은 index.html 에서 불러온다. Space Mono 에는 한글이 없으므로 한글은 Pretendard 로 이어서 그리게 한다.
       fontFamily: {
         sans: ["Pretendard", "-apple-system", "BlinkMacSystemFont", "system-ui", "Roboto", "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "sans-serif"],
