@@ -4,76 +4,20 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import DatePicker from "@/components/ui/DatePicker";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
+import TodayBrief from "@/components/tabs/office/TodayBrief";
+import { fetchLunch } from "@/lib/neisMeal";
+import {
+  EVENT_KEYWORDS,
+  fetchClassSchedule,
+  fetchTeacherSchedule,
+  isBaseMatrixEmpty,
+  isCellChanged,
+  parseMatrixData,
+} from "@/lib/timetable";
 
-const EVENT_KEYWORDS = ["자치", "동아", "봉사", "진로"];
 const DAYS = ["월", "화", "수", "목", "금"];
 
-function parseMatrixData(raw) {
-  if (!raw) return null;
-  if (typeof raw === "string") {
-    try {
-      return parseMatrixData(JSON.parse(raw));
-    } catch {
-      return null;
-    }
-  }
-  if (Array.isArray(raw)) {
-    if (Array.isArray(raw[0])) return raw;
-    if (raw.length === 35) {
-      const res = [];
-      for (let i = 0; i < 7; i++) res.push(raw.slice(i * 5, (i + 1) * 5));
-      return res;
-    }
-  }
-  return null;
-}
-
-function isBaseMatrixEmpty(baseMatrix) {
-  if (!baseMatrix) return true;
-  for (let r = 0; r < 7; r++) {
-    for (let c = 0; c < 5; c++) {
-      if (baseMatrix[r]?.[c]?.trim() !== "") return false;
-    }
-  }
-  return true;
-}
-
-function isCellChanged(r, c, scheduleMap, baseMatrix, isClass = false) {
-  if (isBaseMatrixEmpty(baseMatrix)) return false;
-
-  const cellKey = `${r + 1}_${c}`;
-  const item = scheduleMap ? scheduleMap[cellKey] : null;
-
-  let text = "";
-  let isRed = false;
-  if (item) {
-    text = typeof item === "object" ? (item.text || "") : String(item);
-    isRed = typeof item === "object" && item.type === "red";
-  }
-
-  const baseText = baseMatrix?.[r]?.[c] || "";
-  const cleanBase = baseText.trim().replace(/\s+/g, "");
-  const cleanText = text.trim().replace(/\s+/g, "");
-
-  const isMint = EVENT_KEYWORDS.some((k) => cleanText.includes(k));
-  if (isMint) return false;
-
-  if (!cleanBase && !cleanText) return false;
-
-  if (isClass) {
-    if (cleanBase !== "" && cleanText !== "") {
-      const bSub = cleanBase.slice(0, 2);
-      const tSub = cleanText.slice(0, 2);
-      const isMatch = bSub === tSub || cleanText.startsWith(cleanBase);
-      return !isMatch || isRed;
-    }
-    return cleanBase !== cleanText || isRed;
-  } else {
-    return cleanBase !== cleanText || isRed;
-  }
-}
-
-export default function TabOffice({ currentUser }) {
+export default function TabOffice({ currentUser, canWork = false, onOpenTab }) {
   const userId = currentUser?.uid || "default_teacher";
 
   // 조회할 교사 이름: 이 기기에서 지정한 값 → 로그인 계정의 표시 이름 → (없으면) 비워 두고 직접 설정하게 한다
@@ -171,34 +115,14 @@ export default function TabOffice({ currentUser }) {
     let cancelled = false;
     (async () => {
       const weekKey = isNextWeek ? "next" : "this";
-      const classKey = `${grade}-${classNum}`;
-      let failed = false; // 문서가 없는 것과 읽기 자체가 실패한 것을 구분한다
-
-      // 교사 문서 ID 후보: 이름 앞 2글자, 전체 이름, (설정한 경우) 컴시간 교사 번호
-      const tKeys = [...new Set([teacherName.substring(0, 2), teacherName, teacherCode].filter(Boolean))];
-
-      let tSched = null;
-      for (const k of tKeys) {
-        try {
-          const snap = await getDoc(doc(db, "timetable_schedules", `tt_teacher_${weekKey}_${k}`));
-          if (snap.exists() && snap.data().schedule) {
-            tSched = snap.data().schedule;
-            break;
-          }
-        } catch {
-          failed = true;
-        }
-      }
-
-      let cSched = null;
-      try {
-        const snap = await getDoc(doc(db, "timetable_schedules", `tt_class_${weekKey}_${classKey}`));
-        if (snap.exists() && snap.data().schedule) {
-          cSched = snap.data().schedule;
-        }
-      } catch {
-        failed = true;
-      }
+      // failed: 문서가 없는 것과 읽기 자체가 실패한 것을 구분한다
+      const [t, c] = await Promise.all([
+        fetchTeacherSchedule(weekKey, teacherName, teacherCode),
+        fetchClassSchedule(weekKey, `${grade}-${classNum}`),
+      ]);
+      const tSched = t.schedule;
+      const cSched = c.schedule;
+      const failed = t.failed || c.failed;
 
       if (!cancelled) setScheduleResult({ key: scheduleKey, teacher: tSched, cls: cSched, failed });
     })();
@@ -255,49 +179,7 @@ export default function TabOffice({ currentUser }) {
     if (!mealDate) return;
     let cancelled = false;
     (async () => {
-      const dateStr = mealDate.replace(/-/g, "");
-      const officeCode = "E10";
-      const schoolCode = "7331057";
-
-      // NEIS 인증키는 소스에 두지 않고 환경변수(VITE_NEIS_KEY)로 주입. 없으면 키 없는 샘플 호출로 대체.
-      const baseUrl = `https://open.neis.go.kr/hub/mealServiceDietInfo?Type=json&pIndex=1&pSize=10&ATPT_OFCDC_SC_CODE=${officeCode}&SD_SCHUL_CODE=${schoolCode}&MLSV_YMD=${dateStr}`;
-      const neisKey = import.meta.env.VITE_NEIS_KEY;
-      const urls = neisKey ? [`${baseUrl}&KEY=${neisKey}`, baseUrl] : [baseUrl];
-
-      let data = null;
-      for (const url of urls) {
-        try {
-          const res = await fetch(url);
-          const json = await res.json();
-          if (json.mealServiceDietInfo || json.RESULT?.CODE === "INFO-200") {
-            data = json;
-            break;
-          }
-        } catch {
-          // 네트워크 오류나 JSON 이 아닌 응답이면 다음 주소를 시도한다
-        }
-      }
-
-      // error: 응답을 받지 못함 / empty: 응답은 받았지만 그날 급식이 없음(주말·휴업일) / ok: 급식 있음
-      let status = "error";
-      let list = [];
-      if (data) {
-        status = "empty";
-        const rows = data.mealServiceDietInfo?.[1]?.row;
-        if (rows?.length > 0) {
-          const lunch = rows.find((r) => r.MMEAL_SC_NM === "중식" || r.MMEAL_SC_CODE === "2") || rows[0];
-          if (lunch?.DDISH_NM) {
-            list = lunch.DDISH_NM
-              .replace(/<br\s*\/?>/gi, "\n")
-              .replace(/\([0-9.\s]+\)/g, "")
-              .split("\n")
-              .map((item) => item.trim())
-              .filter(Boolean);
-            status = list.length > 0 ? "ok" : "empty";
-          }
-        }
-      }
-
+      const { list, status } = await fetchLunch(mealDate);
       if (!cancelled) setMealResult({ key: mealRequestKey, list, status });
     })();
     return () => { cancelled = true; };
@@ -495,6 +377,14 @@ export default function TabOffice({ currentUser }) {
         <p className={`md:hidden mt-3 font-mono text-[11px] ${scheduleStatus.className}`} role="status">
           ● {scheduleStatus.label}
         </p>
+
+        <TodayBrief
+          teacherName={teacherName}
+          teacherCode={teacherCode}
+          teacherBase={teacherBase}
+          canWork={canWork}
+          onOpenTab={onOpenTab}
+        />
 
         <div className="hidden md:grid grid-cols-2 sm:grid-cols-4 gap-4 font-mono text-[11px]">
           <div

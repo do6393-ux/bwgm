@@ -47,6 +47,15 @@ function parseLessons(html, load) {
     });
 }
 
+// 일과시간 ["1(09:00)", "2(09:55)", ...] → 교시 시작 시각 ["09:00", "09:55", ...] (포털의 "지금 몇 교시" 표시용)
+function parsePeriodTimes(list) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((v) => /^\s*\d+\s*\(\s*(\d{1,2}):(\d{2})\s*\)/.exec(String(v)))
+    .filter(Boolean)
+    .map((m) => `${m[1].padStart(2, '0')}:${m[2]}`);
+}
+
 // 한 주치 데이터 → { 학년: { 반: rows } }
 function collectWeek(page, data, load) {
   const result = {};
@@ -67,6 +76,7 @@ async function runSync() {
   const { load } = await import('cheerio');
   const page = await loadComciganPage();
   let school, resultThis, resultNext = null;
+  let periodTimes = [];
   try {
     const schools = await page.search(SCHOOL_NAME);
     school = schools.find((s) => s.name === SCHOOL_NAME) || schools[0];
@@ -74,7 +84,9 @@ async function runSync() {
     console.log(`학교: ${school.name} (${school.region}, 코드 ${school.code})`);
 
     // 컴시간 주차: 1 = 이번 주, 2 = 다음 주 (예전 코드의 _0_1 / _0_2 와 같다)
-    resultThis = collectWeek(page, await page.data(school.code, 1), load);
+    const dataThis = await page.data(school.code, 1);
+    resultThis = collectWeek(page, dataThis, load);
+    periodTimes = parsePeriodTimes(dataThis.일과시간);
     try {
       resultNext = collectWeek(page, await page.data(school.code, 2), load);
     } catch (e) {
@@ -140,6 +152,8 @@ async function runSync() {
   };
 
   processWeekData(resultThis, 'this');
+  // 교시 시작 시각. 포털이 읽을 수 있도록 timetable_schedules 안에 둔다 (timetable_meta 는 포털 규칙에 없다)
+  if (periodTimes.length) writes.push(['meta_periods', { times: periodTimes }]);
   processWeekData(resultNext, 'next');
 
   // 컴시간 구조가 또 바뀌어 빈 시간표를 읽었을 때 기존 데이터를 지우지 않도록 멈춘다
@@ -153,6 +167,7 @@ async function runSync() {
   if (DRY_RUN) {
     const sample = writes.find(([id]) => id === 'tt_class_this_1-1');
     console.log('예시 tt_class_this_1-1:', JSON.stringify(sample?.[1].schedule, null, 1));
+    console.log('교시 시작 시각:', periodTimes.join(', ') || '(없음)');
     console.log('교사 문서:', writes.filter(([id]) => id.startsWith('tt_teacher_this_')).map(([id]) => id).join(', '));
     console.log(`DRY_RUN 이라 문서 ${writes.length}개를 저장하지 않았습니다.`);
     return;

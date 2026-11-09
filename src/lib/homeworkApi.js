@@ -24,21 +24,20 @@ const fromDoc = (d) => {
   return { id: d.id, ...data, at: toMillis(data.createdAt) };
 };
 
-/** 과제 목록 (최근 것 먼저) */
-export function useHomeworkList() {
+/** 과제 목록 (최근 것 먼저). enabled 가 false 면 구독하지 않는다 */
+export function useHomeworkList(enabled = true) {
   const [state, setState] = useState({ list: [], loaded: false, error: false });
-  useEffect(
-    () =>
-      onSnapshot(
-        query(collection(db, "homework"), orderBy("createdAt", "desc")),
-        (snap) => setState({ list: snap.docs.map(fromDoc), loaded: true, error: false }),
-        (err) => {
-          console.error("homework listener:", err);
-          setState((s) => ({ ...s, loaded: true, error: true }));
-        }
-      ),
-    []
-  );
+  useEffect(() => {
+    if (!enabled) return undefined;
+    return onSnapshot(
+      query(collection(db, "homework"), orderBy("createdAt", "desc")),
+      (snap) => setState({ list: snap.docs.map(fromDoc), loaded: true, error: false }),
+      (err) => {
+        console.error("homework listener:", err);
+        setState((s) => ({ ...s, loaded: true, error: true }));
+      }
+    );
+  }, [enabled]);
   return state;
 }
 

@@ -147,7 +147,7 @@ export default function App() {
       <main className="max-w-[1360px] mx-auto px-4 md:px-10 pt-6 md:pt-16 w-full">
         {visibleTab === "class" && <TabClass currentUser={currentUser} currentTheme={currentTheme} />}
         {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} />}
-        {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} />}
+        {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} canWork={canWork} onOpenTab={setActiveTab} />}
         {currentUser && visibleTab === "homeroom" && <TabHomeroom currentUser={currentUser} currentTheme={currentTheme} />}
       </main>
 
