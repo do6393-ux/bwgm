@@ -1,13 +1,25 @@
 // 정보 수업 탭의 "단원별 수업 자료실" 작은 탭. 카드를 누르면 새 탭에서 자료 화면(?lesson=ID)이 열린다.
 // 비공개(isVisible === false) 자료는 로그인하지 않은 방문자(학생)에게 보이지 않는다.
-// 위쪽 검색 칸에 단어를 치면 제목에 그 단어가 모두 들어간 자료만 보인다 (고른 단원 안에서).
+// 위쪽 검색 칸에 단어를 치면 제목·요약·본문에 그 단어가 모두 들어간 자료만 보인다 (고른 단원 안에서).
+// 제목에서 찾은 자료가 먼저 나오고, 내용에서만 찾은 자료는 뒤에 요약 대신 찾은 부분 한 줄을 보여 준다.
 import { useState } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, deleteDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import { Search, X } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
-import { UNITS, filterLessons, highlightParts, searchTerms } from "@/lib/lessons";
+import { UNITS, highlightParts, searchLessons, searchTerms } from "@/lib/lessons";
+
+// 검색어가 들어간 부분을 칠해서 보여 준다
+function Marked({ text, terms }) {
+  return highlightParts(text, terms).map((part, k) =>
+    part.hit ? (
+      <mark key={k} className="bg-accent/20 text-inherit">{part.text}</mark>
+    ) : (
+      <span key={k}>{part.text}</span>
+    )
+  );
+}
 
 // lessons / lessonsLoaded 는 정보 수업 탭이 한 번 읽어서 홈("최근 올라온 자료")과 같이 쓴다 (useLessons)
 export default function LessonLibrary({ currentUser, currentTheme, lessons, lessonsLoaded }) {
@@ -52,10 +64,13 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
   };
 
   const terms = searchTerms(searchQuery);
-  const filteredLessons = filterLessons(lessons, { unit: selectedUnit, query: searchQuery, showHidden: !!currentUser });
+  const results = searchLessons(lessons, { unit: selectedUnit, query: searchQuery, showHidden: !!currentUser });
+  const titleCount = results.filter((r) => r.match.where === "title").length;
+  const contentCount = results.length - titleCount;
+  const countDetail = [titleCount > 0 && `제목 ${titleCount}`, contentCount > 0 && `내용 ${contentCount}`].filter(Boolean).join(" · ");
   // 다른 단원에는 찾는 자료가 있는지 (없다는 안내에 "전체 단원에서 찾기"를 띄울지)
   const foundElsewhere =
-    terms.length > 0 && selectedUnit !== "all" && filterLessons(lessons, { query: searchQuery, showHidden: !!currentUser }).length > 0;
+    terms.length > 0 && selectedUnit !== "all" && searchLessons(lessons, { query: searchQuery, showHidden: !!currentUser }).length > 0;
 
   return (
     <section className="space-y-8">
@@ -90,8 +105,8 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && setSearchQuery("")}
-          placeholder="제목으로 검색 (예: 인공지능)"
-          aria-label="자료 제목으로 검색"
+          placeholder="제목·내용으로 검색 (예: 인공지능)"
+          aria-label="자료 제목과 내용으로 검색"
           className={`w-full bg-transparent border ${currentTheme.border} pl-11 pr-10 py-3 text-[16px] outline-none focus:border-black transition-colors [&::-webkit-search-cancel-button]:hidden`}
         />
         {searchQuery && (
@@ -107,7 +122,7 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
       </div>
       {terms.length > 0 && lessonsLoaded && (
         <p className="-mt-4 text-[13px] font-mono opacity-60" aria-live="polite">
-          "{searchQuery.trim()}" 검색 결과 {filteredLessons.length}개{selectedUnit !== "all" ? ` · ${UNITS.find((u) => u.id === selectedUnit)?.label}에서` : ""}
+          "{searchQuery.trim()}" 검색 결과 {results.length}개{countDetail ? ` (${countDetail})` : ""}{selectedUnit !== "all" ? ` · ${UNITS.find((u) => u.id === selectedUnit)?.label}에서` : ""}
         </p>
       )}
 
@@ -149,10 +164,10 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
               </div>
             ))}
           </SkeletonGroup>
-        ) : filteredLessons.length === 0 ? (
+        ) : results.length === 0 ? (
           <div className="col-span-full py-20 text-center text-[15px] font-mono space-y-4">
             <p className="opacity-40">
-              {terms.length > 0 ? `제목에 "${searchQuery.trim()}"이(가) 들어간 자료가 없습니다.` : "해당 단원에 등록된 자료가 없습니다."}
+              {terms.length > 0 ? `제목·내용에 "${searchQuery.trim()}"이(가) 들어간 자료가 없습니다.` : "해당 단원에 등록된 자료가 없습니다."}
             </p>
             {foundElsewhere && (
               <button type="button" onClick={() => setSelectedUnit("all")} className="underline opacity-70 hover:opacity-100">
@@ -161,7 +176,7 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
             )}
           </div>
         ) : (
-          filteredLessons.map((lesson, i) => (
+          results.map(({ lesson, match }, i) => (
             editingLessonId === lesson.id ? (
               <div 
                 key={lesson.id} 
@@ -233,15 +248,22 @@ export default function LessonLibrary({ currentUser, currentTheme, lessons, less
                     </div>
                     <div>
                       <h4 className="text-[20px] font-medium text-black mb-3 group-hover:text-accent transition-colors leading-tight">
-                      {highlightParts(lesson.title, terms).map((part, k) =>
-                        part.hit ? (
-                          <mark key={k} className="bg-accent/20 text-inherit">{part.text}</mark>
-                        ) : (
-                          <span key={k}>{part.text}</span>
-                        )
+                        <Marked text={lesson.title} terms={terms} />
+                      </h4>
+                      {match.where === "content" ? (
+                        <>
+                          <p className="text-[12px] font-mono opacity-50 mb-1.5">
+                            내용에서 찾음 · {match.hits}곳
+                          </p>
+                          <p className="text-[14px] opacity-70 line-clamp-3 leading-relaxed font-light">
+                            <Marked text={match.snippet} terms={terms} />
+                          </p>
+                        </>
+                      ) : (
+                        <p className="text-[14px] opacity-60 line-clamp-3 leading-relaxed font-light">
+                          <Marked text={lesson.summary || ""} terms={terms} />
+                        </p>
                       )}
-                    </h4>
-                      <p className="text-[14px] opacity-60 line-clamp-3 leading-relaxed font-light">{lesson.summary}</p>
                     </div>
                   </div>
                 </div>
