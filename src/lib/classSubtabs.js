@@ -6,6 +6,7 @@ export const CLASS_SUBTABS = [
   { id: "lessons", label: "단원별 수업 자료실", shortLabel: "자료실", hash: "#lessons" },
   { id: "homework", label: "과제", hash: "#homework" },
   { id: "timer", label: "수업 타이머", shortLabel: "타이머", hash: "#timer", teacherOnly: true }, // 학생에게는 안 보인다
+  { id: "picker", label: "발표자 뽑기", shortLabel: "뽑기", hash: "#picker", teacherOnly: true },
 ];
 
 /** 이 사람이 볼 수 있는 작은 탭 (로그인하지 않은 학생에게는 teacherOnly 탭을 뺀다) */

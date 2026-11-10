@@ -8,14 +8,15 @@ import HomeworkSection from "@/components/homework/HomeworkSection";
 import LessonLibrary from "@/components/tabs/class/LessonLibrary";
 import ClassTodayBrief from "@/components/tabs/class/ClassTodayBrief";
 import ClassTimer from "@/components/timer/ClassTimer";
+import ClassPicker from "@/components/picker/ClassPicker";
 import { hashOfSubtab, isClassSubtabHash, subtabFromHash, visibleSubtabs } from "@/lib/classSubtabs";
 import { useLessons } from "@/lib/lessonsApi";
 import { WEEKDAYS } from "@/lib/workCalendar";
 
-// 정보 수업 탭은 작은 탭 네 개로 나뉜다 (src/lib/classSubtabs.js).
+// 정보 수업 탭은 작은 탭으로 나뉜다 (src/lib/classSubtabs.js). 학생에게는 앞의 세 개만 보인다.
 //   홈: 오늘 한눈에(공지사항 · 지금 낼 과제 · 최근 올라온 자료) · 수업 도구
-//   단원별 수업 자료실 · 과제 · 수업 타이머(로그인한 교사만)
-// 홈이 아닌 탭을 열면 주소 끝에 #lessons / #homework / #timer 가 붙는다.
+//   단원별 수업 자료실 · 과제 · 수업 타이머(로그인한 교사만) · 발표자 뽑기(로그인한 교사만)
+// 홈이 아닌 탭을 열면 주소 끝에 #lessons / #homework / #timer / #picker 가 붙는다.
 // App 은 다른 탭을 볼 때도 이 탭을 숨겨 둔 채 띄워 둔다 (isVisible) — 교무실을 보는 동안에도 타이머가 끝나면 울린다.
 
 const QUICK_TOOLS = [
@@ -26,6 +27,8 @@ const QUICK_TOOLS = [
 ];
 
 const NOTICE_LIMIT = 3; // 홈에는 최근 공지 몇 개만, 나머지는 "더 보기"
+// 휴대폰에서 작은 탭 줄의 칸 수 (tailwind 가 찾을 수 있게 클래스 이름을 통째로 적는다)
+const GRID_COLS = { 3: "grid-cols-3", 4: "grid-cols-4", 5: "grid-cols-5" };
 
 function TabClass({ currentUser, currentTheme, isVisible = true }) {
   const [subtab, setSubtab] = useState(() => subtabFromHash(window.location.hash));
@@ -67,7 +70,7 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
 
   return (
     <div className="space-y-12 md:space-y-16 ui-enter">
-      <nav ref={navRef} aria-label="정보 수업 메뉴" className={`grid ${tabs.length === 4 ? "grid-cols-4" : "grid-cols-3"} md:inline-grid md:grid-flow-col md:auto-cols-max border border-black`}>
+      <nav ref={navRef} aria-label="정보 수업 메뉴" className={`grid ${GRID_COLS[tabs.length] ?? "grid-cols-3"} md:inline-grid md:grid-flow-col md:auto-cols-max border border-black`}>
         {tabs.map((tab, i) => {
           const active = current === tab.id;
           const badge = tab.id === "timer" && timerBadge && !active ? timerBadge : null;
@@ -89,7 +92,13 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
               ) : (
                 tab.label
               )}
-              {badge && <span className="ml-1.5 font-mono text-[12px] text-accent tabular-nums">{badge}</span>}
+              {/* 휴대폰은 칸이 좁아서 남은 시간 대신 주황 점만 */}
+              {badge && (
+                <>
+                  <span className="hidden md:inline ml-1.5 font-mono text-[12px] text-accent tabular-nums">{badge}</span>
+                  <span className="md:hidden inline-block ml-1 w-1.5 h-1.5 rounded-full bg-accent align-middle" aria-label={`남은 시간 ${badge}`} />
+                </>
+              )}
             </button>
           );
         })}
@@ -108,6 +117,11 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
       {isTeacher && (
         <div hidden={current !== "timer"}>
           <ClassTimer active={isVisible && current === "timer"} onBadge={setTimerBadge} />
+        </div>
+      )}
+      {isTeacher && (
+        <div hidden={current !== "picker"}>
+          <ClassPicker active={isVisible && current === "picker"} />
         </div>
       )}
     </div>
