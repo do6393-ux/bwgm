@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyReturnEdits,
   busyIds,
   countStates,
   describeItems,
-  dueBadge,
-  dueChoices,
   fillRange,
+  formatStamp,
   itemStates,
   loanItemsFor,
   loanMatches,
@@ -14,13 +14,16 @@ import {
   parseLines,
   pickRange,
   planKindEdit,
+  parseStamp,
   recentBorrowers,
-  returnedText,
+  returnGroups,
+  returnStamp,
   sortOpenLoans,
   stateMatchesFilter,
   validateKindName,
   validateLabel,
   validateLoan,
+  validateReturnAt,
 } from "./equipment";
 
 const items = (labels, prefix = "t") => labels.map((label, i) => ({ id: `${prefix}${i + 1}`, label, repair: false }));
@@ -40,7 +43,6 @@ const loan = (id, ids, extra = {}) => ({
   }),
   borrower: "2학년 3반 수업",
   outDate: "2026-11-11",
-  dueDate: "2026-11-11",
   memo: "",
   returned: {},
   open: true,
@@ -134,29 +136,29 @@ describe("목록 칸 (한 줄에 한 대)", () => {
 });
 
 describe("상태", () => {
-  it("빌려 간 것 · 반납 지남 · 수리 중 · 일부 반납", () => {
+  it("빌려 간 것 · 수리 중 · 일부 반납", () => {
     const repairKinds = [{ ...tablets, items: tablets.items.map((it) => (it.id === "t38" ? { ...it, repair: true } : it)) }, laptops];
     const loans = [
-      loan("a", range(1, 30).map((n) => `t${n}`), { returned: { t1: "2026-11-11" } }),
-      loan("b", ["n12"], { dueDate: "2026-11-10" }),
+      loan("a", range(1, 30).map((n) => `t${n}`), { returned: { t1: "2026-11-11 14:20" } }),
+      loan("b", ["n12"], { dueDate: "2026-11-10" }), // 처음 판의 반납 날짜는 무시한다
       loan("c", ["n5"], { open: false }),
     ];
-    const s = itemStates(repairKinds, loans, TODAY);
+    const s = itemStates(repairKinds, loans);
     expect(s.get("t1").state).toBe("stock");
     expect(s.get("t2").state).toBe("loan");
     expect(s.get("t2").loan.id).toBe("a");
-    expect(s.get("n12").state).toBe("over");
+    expect(s.get("n12").state).toBe("loan");
     expect(s.get("n5").state).toBe("stock");
     expect(s.get("t38").state).toBe("repair");
     expect(busyIds(s).size).toBe(30);
-    expect(countStates(repairKinds, s)).toEqual({ total: 60, stock: 29, loan: 30, over: 1, repair: 1 });
+    expect(countStates(repairKinds, s)).toEqual({ total: 60, stock: 29, loan: 30, repair: 1 });
   });
 
   it("상태 칸으로 거르기", () => {
-    expect(stateMatchesFilter("over", "loan")).toBe(true);
+    expect(stateMatchesFilter("loan", "loan")).toBe(true);
     expect(stateMatchesFilter("repair", "stock")).toBe(false);
+    expect(stateMatchesFilter("repair", "repair")).toBe(true);
     expect(stateMatchesFilter("repair", "all")).toBe(true);
-    expect(stateMatchesFilter("loan", "over")).toBe(false);
   });
 });
 
@@ -184,51 +186,73 @@ describe("빌려준 기록 표시", () => {
     expect(describeItems([{ id: "x", kindId: "deleted", kindName: "빔프로젝터", label: "2" }], kinds)).toBe("빔프로젝터 2");
   });
 
-  it("반납 날짜 표시", () => {
-    expect(dueBadge("2026-11-06", TODAY)).toEqual({ tone: "over", label: "5일 지남" });
-    expect(dueBadge(TODAY, TODAY)).toEqual({ tone: "today", label: "오늘까지" });
-    expect(dueBadge("2026-11-12", TODAY).label).toBe("내일까지");
-    expect(dueBadge("2026-11-20", TODAY).label).toBe("9일 남음");
-  });
-
-  it("반납 날짜가 이른 것이 위로", () => {
+  it("지금 빌려 간 것: 최근에 빌려 간 것이 위로, 같은 날이면 나중에 넣은 것이 위로", () => {
+    const at = (ms) => ({ toMillis: () => ms });
     const list = sortOpenLoans([
-      { id: "1", dueDate: "2026-12-31", outDate: "2026-10-28" },
-      { id: "2", dueDate: "2026-11-06", outDate: "2026-11-02" },
-      { id: "3", dueDate: "2026-11-11", outDate: "2026-11-11" },
+      { id: "1", outDate: "2026-03-02", createdAt: at(1) },
+      { id: "2", outDate: "2026-11-11", createdAt: at(2) },
+      { id: "3", outDate: "2026-11-11", createdAt: at(3) },
+      { id: "4", outDate: "2026-11-02", createdAt: at(4) },
     ]);
-    expect(list.map((l) => l.id)).toEqual(["2", "3", "1"]);
+    expect(list.map((l) => l.id)).toEqual(["3", "2", "4", "1"]);
+  });
+});
+
+describe("반납 일시", () => {
+  it("저장 모양과 표시: 시각이 없으면 날짜만 (처음 판의 기록)", () => {
+    expect(returnStamp("2026-11-12", "14:20")).toBe("2026-11-12 14:20");
+    expect(returnStamp("2026-11-12", "")).toBe("2026-11-12");
+    expect(parseStamp("2026-11-12 09:05")).toEqual({ date: "2026-11-12", time: "09:05" });
+    expect(parseStamp("2026-11-09")).toEqual({ date: "2026-11-09", time: "" });
+    expect(formatStamp("2026-11-12 14:20")).toBe("11/12(목) 14:20");
+    expect(formatStamp("2026-11-09")).toBe("11/9(월)");
+    expect(formatStamp(undefined)).toBe("");
   });
 
-  it("반납한 날: 한 번에 / 나눠서", () => {
-    const l = loan("a", ["t1", "t2", "t3"], { returned: { t1: "2026-11-09", t2: "2026-11-09", t3: "2026-11-10" } });
-    expect(returnedText(l)).toBe("11/9(월) 2대 · 11/10(화) 1대");
-    expect(returnedText({ ...l, returned: { t1: "2026-11-09", t2: "2026-11-09", t3: "2026-11-09" } })).toBe("11/9(월)");
-    expect(returnedText({ ...l, returned: {} })).toBe("");
+  it("한 번에 반납하면 한 묶음, 나눠 하면 이른 것부터 여러 묶음", () => {
+    const l = loan("a", ["t1", "t2", "t3"], { returned: { t3: "2026-11-13 08:40", t1: "2026-11-12 14:20", t2: "2026-11-12 14:20" } });
+    const g = returnGroups(l);
+    expect(g.map((x) => [x.stamp, x.items.map((it) => it.id)])).toEqual([
+      ["2026-11-12 14:20", ["t1", "t2"]],
+      ["2026-11-13 08:40", ["t3"]],
+    ]);
+    expect(g[0]).toMatchObject({ date: "2026-11-12", time: "14:20" });
+    expect(returnGroups(loan("b", ["t1"]))).toEqual([]);
   });
 
-  it("반납 날짜 빠른 선택: 월~수는 이번 주 금요일, 목~일은 다음 주 금요일", () => {
-    expect(dueChoices("2026-11-11")[2]).toEqual({ id: "friday", label: "이번 주 금요일", date: "2026-11-13" }); // 수
-    expect(dueChoices("2026-11-09")[2].date).toBe("2026-11-13"); // 월
-    expect(dueChoices("2026-11-12")[2]).toEqual({ id: "friday", label: "다음 주 금요일", date: "2026-11-20" }); // 목
-    expect(dueChoices("2026-11-13")[2].date).toBe("2026-11-20"); // 금
-    expect(dueChoices("2026-11-14")[2].date).toBe("2026-11-20"); // 토
-    expect(dueChoices("2026-11-15")[2].date).toBe("2026-11-20"); // 일
-    expect(dueChoices(TODAY)[1].date).toBe("2026-11-12");
+  it("지난 기록에서 반납 일시 고치기: 그 묶음만 바뀐다", () => {
+    const returned = { t1: "2026-11-12 14:20", t2: "2026-11-12 14:20", t3: "2026-11-13 08:40" };
+    expect(applyReturnEdits(returned, [{ from: "2026-11-12 14:20", to: "2026-11-11 16:00" }, { from: "2026-11-13 08:40", to: "2026-11-13 08:40" }])).toEqual({
+      t1: "2026-11-11 16:00",
+      t2: "2026-11-11 16:00",
+      t3: "2026-11-13 08:40",
+    });
+    expect(applyReturnEdits(undefined, [])).toEqual({});
+  });
+
+  it("반납 일시 점검: 빌린 날과 오늘 사이", () => {
+    expect(validateReturnAt("2026-11-12", "14:20", "2026-11-02", "2026-11-12")).toBeNull();
+    expect(validateReturnAt("2026-11-12", "", "2026-11-02", "2026-11-12")).toBeNull();
+    expect(validateReturnAt("", "14:20", "2026-11-02", "2026-11-12")).toBeTruthy();
+    expect(validateReturnAt("2026-11-12", "25:00", "2026-11-02", "2026-11-12")).toBeTruthy();
+    expect(validateReturnAt("2026-11-01", "14:20", "2026-11-02", "2026-11-12")).toBeTruthy();
+    expect(validateReturnAt("2026-11-13", "14:20", "2026-11-02", "2026-11-12")).toBeTruthy();
   });
 });
 
 describe("빌려주기", () => {
   it("저장 전 점검", () => {
-    const ok = { itemCount: 3, borrower: "방송부", dueDate: TODAY, memo: "" };
+    const ok = { itemCount: 3, borrower: "방송부", outDate: TODAY, memo: "" };
     expect(validateLoan(ok, TODAY)).toBeNull();
     expect(validateLoan({ ...ok, itemCount: 0 }, TODAY)).toBeTruthy();
     expect(validateLoan({ ...ok, borrower: "  " }, TODAY)).toBeTruthy();
-    expect(validateLoan({ ...ok, dueDate: "" }, TODAY)).toBeTruthy();
-    expect(validateLoan({ ...ok, dueDate: "2026-11-10" }, TODAY)).toBeTruthy();
+    expect(validateLoan({ ...ok, outDate: "" }, TODAY)).toBeTruthy();
+    // 예전에 빌려 간 것을 옮겨 적을 때는 앞 날짜, 앞으로의 날짜는 안 된다
+    expect(validateLoan({ ...ok, outDate: "2026-03-02" }, TODAY)).toBeNull();
+    expect(validateLoan({ ...ok, outDate: "2026-11-12" }, TODAY)).toBeTruthy();
     expect(validateLoan({ ...ok, memo: "x".repeat(201) }, TODAY)).toBeTruthy();
     // 고치기에서는 대수를 넘기지 않는다
-    expect(validateLoan({ borrower: "방송부", dueDate: TODAY, memo: "" }, "2026-11-01")).toBeNull();
+    expect(validateLoan({ borrower: "방송부", outDate: "2026-11-01", memo: "" }, TODAY)).toBeNull();
   });
 
   it("범위로 고르기: 목록 순서 기준, 거꾸로 적어도, 01 과 1 은 같게", () => {

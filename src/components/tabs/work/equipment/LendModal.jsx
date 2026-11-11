@@ -5,7 +5,6 @@ import {
   MEMO_MAX,
   STATE_LABELS,
   describeItems,
-  dueChoices,
   itemName,
   loanItemsFor,
   pickRange,
@@ -25,7 +24,7 @@ const choice = (on) =>
   `min-h-[40px] px-4 rounded-full text-[13px] font-medium transition-colors ${on ? "bg-neutral-900 text-white" : "bg-white border border-black/[0.12] text-neutral-700 hover:border-black/30"}`;
 const textBtn = "min-h-[40px] px-3 rounded-full text-[13px] font-medium transition-colors";
 
-/** 빌려주기 창: 종류 고르기 → 번호 고르기(범위·전부·하나씩) → 빌리는 사람 → 반납 날짜 → 메모 */
+/** 빌려주기 창: 종류 고르기 → 번호 고르기(범위·전부·하나씩) → 빌리는 사람 → 빌린 날 → 메모 */
 export default function LendModal({ kinds, states, loans, today, onClose }) {
   const { toast } = useDialog();
   const [kindId, setKindId] = useState(() => (kinds.find((k) => k.items.length > 0) || kinds[0])?.id ?? null);
@@ -33,7 +32,7 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [borrower, setBorrower] = useState("");
-  const [dueDate, setDueDate] = useState(today);
+  const [outDate, setOutDate] = useState(today);
   const [memo, setMemo] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -41,7 +40,6 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
   const stateOf = (id) => states.get(id)?.state; // 지워진 기자재는 undefined
   const isFree = (it) => stateOf(it.id) === "stock";
   const recent = useMemo(() => recentBorrowers(loans), [loans]);
-  const choices = dueChoices(today);
 
   // 창을 연 사이 다른 기기에서 빌려줬거나 지운 기자재는 고른 것에서 뺀다
   const validPicked = new Set([...picked].filter((id) => stateOf(id) === "stock"));
@@ -73,7 +71,7 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
 
   const submit = async (e) => {
     e.preventDefault();
-    const problem = validateLoan({ itemCount: pickedItems.length, borrower, dueDate, memo }, today);
+    const problem = validateLoan({ itemCount: pickedItems.length, borrower, outDate, memo }, today);
     if (problem) return toast(problem, "info");
     if (validPicked.size !== picked.size) {
       setPicked(validPicked);
@@ -81,7 +79,7 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
     }
     setSaving(true);
     try {
-      await createLoan({ items: pickedItems, borrower: borrower.trim(), outDate: today, dueDate, memo: memo.trim() });
+      await createLoan({ items: pickedItems, borrower: borrower.trim(), outDate, memo: memo.trim() });
       toast(`${describeItems(pickedItems, kinds)} 빌려줬어요.`, "success");
       onClose();
     } catch (err) {
@@ -213,18 +211,26 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
         </div>
 
         <div>
-          <span className={stepLabel}>3. 언제까지 돌려받나요?</span>
+          <span className={stepLabel}>3. 언제 빌려 가나요?</span>
           <div className="flex flex-wrap items-center gap-1.5">
-            {choices.map((c) => (
-              <button key={c.id} type="button" aria-pressed={dueDate === c.date} onClick={() => setDueDate(c.date)} className={choice(dueDate === c.date)}>
-                {c.label} ({shortDate(c.date)})
-              </button>
-            ))}
+            <button type="button" aria-pressed={outDate === today} onClick={() => setOutDate(today)} className={choice(outDate === today)}>
+              오늘 ({shortDate(today)})
+            </button>
             <label className="flex items-center gap-2 text-[13px] text-neutral-600 ml-1">
               다른 날
-              <input type="date" value={dueDate} min={today} onChange={(e) => setDueDate(e.target.value)} className="h-10 px-2 bg-white border border-neutral-300 rounded-lg font-mono text-[13px] outline-none focus:border-accent" />
+              <input
+                type="date"
+                value={outDate}
+                max={today}
+                onChange={(e) => setOutDate(e.target.value)}
+                aria-label="빌린 날"
+                className="h-10 px-2 bg-white border border-neutral-300 rounded-lg font-mono text-[13px] outline-none focus:border-accent"
+              />
             </label>
           </div>
+          <p className="mt-2 text-[12px] text-neutral-500 break-keep">
+            반납 날짜는 정하지 않아요. 돌려받을 때 "반납 처리"를 누르면 그 날짜와 시각이 기록돼요. 예전에 빌려 간 것을 옮겨 적을 때는 "다른 날"에서 빌린 날을 골라요.
+          </p>
         </div>
 
         <div>
@@ -237,7 +243,7 @@ export default function LendModal({ kinds, states, loans, today, onClose }) {
             value={memo}
             maxLength={MEMO_MAX}
             onChange={(e) => setMemo(e.target.value)}
-            placeholder="예: 충전기 함께 / 6교시 끝나고 반납"
+            placeholder="예: 충전기 · 마우스 함께"
             className={fieldBox}
           />
         </div>

@@ -7,19 +7,18 @@ import {
   STATE_LABELS,
   countStates,
   describeItems,
-  dueBadge,
   formatDay,
+  formatStamp,
   itemMatches,
   itemName,
   itemStates,
   loanMatches,
-  returnedText,
-  saveErrorText,
+  returnGroups,
   sortOpenLoans,
   stateMatchesFilter,
   unreturnedItems,
 } from "@/lib/equipment";
-import { returnItems, watchHistory, watchInventory, watchOpenLoans } from "@/lib/equipmentApi";
+import { watchHistory, watchInventory, watchOpenLoans } from "@/lib/equipmentApi";
 import ItemChip from "./ItemChip";
 import ItemModal from "./ItemModal";
 import LendModal from "./LendModal";
@@ -33,14 +32,8 @@ const TILES = [
   { id: "all", key: "total", label: "TOTAL (전체)", cap: "text-neutral-500", num: "text-neutral-900", on: "border-neutral-800 shadow-[0_4px_12px_rgba(0,0,0,0.1)]", off: "border-black/[0.06] hover:border-black/[0.15]" },
   { id: "stock", key: "stock", label: "IN STOCK (보관 중)", cap: "text-neutral-500", num: "text-neutral-600", on: "border-neutral-400 shadow-[0_4px_12px_rgba(0,0,0,0.08)]", off: "border-black/[0.06] hover:border-black/[0.15]" },
   { id: "loan", key: "loan", label: "ON LOAN (대여 중)", cap: "text-accent", num: "text-accent", on: "border-accent shadow-[0_4px_16px_rgba(0,102,255,0.2)]", off: "border-black/[0.06] hover:border-accent/40" },
-  { id: "over", key: "over", label: "OVERDUE (반납 지남)", cap: "text-red-600", num: "text-red-600", on: "border-red-500 shadow-[0_4px_16px_rgba(220,38,38,0.18)]", off: "border-black/[0.06] hover:border-red-400/50" },
+  { id: "repair", key: "repair", label: "REPAIR (수리 중)", cap: "text-neutral-500", num: "text-neutral-600", on: "border-neutral-500 border-dashed shadow-[0_4px_12px_rgba(0,0,0,0.08)]", off: "border-black/[0.06] hover:border-black/[0.15]" },
 ];
-
-const BADGE = {
-  over: "bg-red-50 text-red-700 border-red-200 font-bold",
-  today: "bg-amber-50 text-amber-800 border-amber-300 font-bold",
-  normal: "bg-accent/[0.08] text-accent-strong border-accent/20 font-medium",
-};
 
 const pill = "flex items-center justify-center gap-1.5 min-h-[44px] px-4 rounded-full text-[13px] font-medium transition-all active:scale-95 shrink-0";
 const ghostPill = `${pill} text-neutral-600 hover:text-neutral-900 hover:bg-black/[0.04]`;
@@ -63,13 +56,11 @@ function SectionHead({ title, note }) {
   );
 }
 
-function LoanRow({ loan, kinds, today, index, onReturn, onEdit }) {
+function LoanRow({ loan, kinds, index, onReturn, onEdit }) {
   const left = unreturnedItems(loan);
   const back = (loan.items || []).length - left.length;
-  const badge = dueBadge(loan.dueDate, today);
   return (
     <li style={{ "--i": Math.min(index, 8) }} className="ui-enter flex flex-wrap items-center gap-x-4 gap-y-3 px-5 py-4 rounded-panel bg-white border border-black/[0.08]">
-      <span className={`shrink-0 min-w-[80px] text-center px-2.5 py-1 rounded-full border text-[12px] ${BADGE[badge.tone]}`}>{badge.label}</span>
       <div className="min-w-0 flex-[999_1_280px] space-y-1">
         <p className="text-[16px] font-semibold text-neutral-900 break-keep">
           {describeItems(left, kinds)}
@@ -79,12 +70,10 @@ function LoanRow({ loan, kinds, today, index, onReturn, onEdit }) {
           {loan.borrower}
           {loan.memo && <span className="text-neutral-500"> · {loan.memo}</span>}
         </p>
-        <p className="font-mono text-[12px] text-neutral-500">
-          {formatDay(loan.outDate)} 빌림 → {loan.dueDate === today ? "오늘" : formatDay(loan.dueDate)}까지
-        </p>
+        <p className="font-mono text-[12px] text-neutral-500">{formatDay(loan.outDate)}에 빌려 감</p>
       </div>
       <div className="flex gap-1 shrink-0">
-        <button type="button" onClick={onEdit} className={ghostPill} title="빌린 사람·반납 날짜·메모 고치기, 잘못 넣은 기록 지우기">
+        <button type="button" onClick={onEdit} className={ghostPill} title="빌린 사람·빌린 날·메모 고치기, 잘못 넣은 기록 지우기">
           <Pencil className="w-3.5 h-3.5" /> 고치기
         </button>
         <button type="button" onClick={onReturn} className={whitePill}>
@@ -101,7 +90,6 @@ function Legend() {
     <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-neutral-600">
       <span className="flex items-center gap-1.5"><span className={`${box} bg-white border border-black/20`} />보관 중</span>
       <span className="flex items-center gap-1.5"><span className={`${box} bg-accent`} />대여 중</span>
-      <span className="flex items-center gap-1.5"><span className={`${box} bg-white border-2 border-red-600`} />반납 지남</span>
       <span className="flex items-center gap-1.5"><span className={`${box} bg-neutral-200 border border-dashed border-neutral-500`} />수리 중</span>
     </div>
   );
@@ -109,7 +97,7 @@ function Legend() {
 
 /** 정보 업무 › 기자재 대여. 정보 업무 권한이 있는 사람에게만 보인다 (TabWork 가 걸러 준다). */
 export default function EquipmentLedger() {
-  const { confirm, toast } = useDialog();
+  const { toast } = useDialog();
   const [today] = useState(() => dateKey(new Date()));
   const [kinds, setKinds] = useState([]);
   const [kindsLoaded, setKindsLoaded] = useState(false);
@@ -140,12 +128,12 @@ export default function EquipmentLedger() {
     [historyMax]
   );
 
-  const states = useMemo(() => itemStates(kinds, openLoans, today), [kinds, openLoans, today]);
+  const states = useMemo(() => itemStates(kinds, openLoans), [kinds, openLoans]);
   const counts = useMemo(() => countStates(kinds, states), [kinds, states]);
   const sortedLoans = useMemo(() => sortOpenLoans(openLoans), [openLoans]);
 
   const q = keyword.trim().toLowerCase();
-  const visibleLoans = sortedLoans.filter((l) => (filter !== "over" || dueBadge(l.dueDate, today).tone === "over") && loanMatches(l, q, kinds));
+  const visibleLoans = sortedLoans.filter((l) => loanMatches(l, q, kinds));
   const visibleOut = visibleLoans.reduce((sum, l) => sum + unreturnedItems(l).length, 0);
   const groups = kinds
     .map((kind) => ({ kind, items: kind.items.filter((it) => stateMatchesFilter(states.get(it.id)?.state, filter) && itemMatches(kind, it, q)) }))
@@ -154,7 +142,7 @@ export default function EquipmentLedger() {
 
   const loaded = kindsLoaded && loansLoaded;
   const returning = openLoans.find((l) => l.id === returningId) || null;
-  const editing = openLoans.find((l) => l.id === editingId) || null;
+  const editing = openLoans.find((l) => l.id === editingId) || history.find((l) => l.id === editingId) || null;
   const detailKind = detail ? kinds.find((k) => k.id === detail.kindId) : null;
   const detailItem = detailKind?.items.find((it) => it.id === detail.itemId) || null;
 
@@ -165,25 +153,10 @@ export default function EquipmentLedger() {
     for (const it of kind.items) {
       const s = states.get(it.id)?.state;
       if (s === "repair") repair++;
-      else if (s === "loan" || s === "over") out++;
+      else if (s === "loan") out++;
       else stock++;
     }
     return [`${kind.items.length}대`, `보관 ${stock}`, out && `대여 ${out}`, repair && `수리 ${repair}`].filter(Boolean).join(" · ");
-  };
-
-  // 한 대만 남았으면 바로 확인창, 여러 대면 돌아온 것을 고르는 창
-  const startReturn = async (loan) => {
-    const left = unreturnedItems(loan);
-    if (left.length > 1) return setReturningId(loan.id);
-    const name = describeItems(left, kinds);
-    if (!(await confirm(`${name} 반납 처리할까요?`, { confirmText: "반납" }))) return;
-    try {
-      await returnItems(loan.id, left.map((it) => it.id), today);
-      toast(`${name} 반납했어요.`, "success");
-    } catch (err) {
-      console.error("equipment return:", err);
-      toast(saveErrorText(err), "error");
-    }
   };
 
   return (
@@ -269,7 +242,7 @@ export default function EquipmentLedger() {
       ) : (
         <>
           <section className="space-y-4">
-            <SectionHead title="지금 빌려 간 것" note={loansLoaded ? `${visibleLoans.length}건 · ${visibleOut}대 · 반납 날짜가 이른 것이 위로` : ""} />
+            <SectionHead title="지금 빌려 간 것" note={loansLoaded ? `${visibleLoans.length}건 · ${visibleOut}대 · 최근에 빌려 간 것이 위로` : ""} />
             {!loansLoaded ? (
               <SkeletonGroup label="빌려 간 기자재를 불러오는 중" className="space-y-3">
                 {[0, 1].map((i) => (
@@ -284,7 +257,7 @@ export default function EquipmentLedger() {
               </SkeletonGroup>
             ) : visibleLoans.length === 0 ? (
               <p className="py-8 text-center text-[13px] text-neutral-500">
-                {q || filter === "over" ? "조건에 맞는 대여 기록이 없어요." : "지금 빌려 간 기자재가 없어요."}
+                {q ? "조건에 맞는 대여 기록이 없어요." : "지금 빌려 간 기자재가 없어요."}
               </p>
             ) : (
               <ul className="space-y-3">
@@ -293,9 +266,8 @@ export default function EquipmentLedger() {
                     key={loan.id}
                     loan={loan}
                     kinds={kinds}
-                    today={today}
                     index={i}
-                    onReturn={() => startReturn(loan)}
+                    onReturn={() => setReturningId(loan.id)}
                     onEdit={() => setEditingId(loan.id)}
                   />
                 ))}
@@ -331,7 +303,7 @@ export default function EquipmentLedger() {
                       {items.map((it) => {
                         const info = states.get(it.id);
                         const st = info?.state || "stock";
-                        const who = info?.loan ? ` · ${info.loan.borrower} · ${formatDay(info.loan.dueDate)}까지` : "";
+                        const who = info?.loan ? ` · ${info.loan.borrower} · ${formatDay(info.loan.outDate)}부터` : "";
                         return (
                           <ItemChip
                             key={it.id}
@@ -354,7 +326,7 @@ export default function EquipmentLedger() {
           </section>
 
           <section className="space-y-4">
-            <SectionHead title="지난 기록" note="반납까지 끝난 것, 최근 것부터" />
+            <SectionHead title="지난 기록" note="반납까지 끝난 것, 최근에 반납한 것부터 · 줄을 누르면 고치거나 지울 수 있어요" />
             {!historyLoaded ? (
               <SkeletonGroup label="지난 기록을 불러오는 중" className="rounded-panel border border-black/[0.08] bg-white p-4 space-y-3">
                 <Skeleton className="h-4 w-full" />
@@ -363,27 +335,55 @@ export default function EquipmentLedger() {
             ) : visibleHistory.length === 0 ? (
               <p className="py-8 text-center text-[13px] text-neutral-500">{q ? "조건에 맞는 지난 기록이 없어요." : "아직 반납까지 끝난 기록이 없어요."}</p>
             ) : (
-              <div className="overflow-x-auto rounded-panel border border-black/[0.08] bg-white">
-                <table className="w-full min-w-[720px] border-collapse text-[13px]">
+              <div className="relative overflow-x-auto rounded-panel border border-black/[0.08] bg-white">
+                <table className="w-full min-w-[800px] border-collapse text-[13px]">
                   <thead>
                     <tr className="bg-well text-left font-mono text-[11px] text-neutral-600">
                       <th scope="col" className="px-4 py-3 font-bold">기자재</th>
                       <th scope="col" className="px-4 py-3 font-bold">빌린 사람</th>
                       <th scope="col" className="px-4 py-3 font-bold">빌린 날</th>
-                      <th scope="col" className="px-4 py-3 font-bold">반납한 날</th>
-                      <th scope="col" className="px-4 py-3 font-bold">메모</th>
+                      <th scope="col" className="px-4 py-3 font-bold">반납 일시</th>
+                      <th scope="col" className="px-4 py-3 font-bold">메모 (비고)</th>
+                      <th scope="col" className="px-2 py-3">
+                        <span className="sr-only">고치기</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {visibleHistory.map((l) => (
-                      <tr key={l.id} className="border-t border-black/[0.06] align-top">
-                        <td className="px-4 py-3 font-semibold text-neutral-900 break-keep">{describeItems(l.items || [], kinds)}</td>
-                        <td className="px-4 py-3 text-neutral-700 break-keep">{l.borrower}</td>
-                        <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{formatDay(l.outDate)}</td>
-                        <td className="px-4 py-3 text-neutral-700">{returnedText(l)}</td>
-                        <td className="px-4 py-3 text-neutral-500 break-keep">{l.memo}</td>
-                      </tr>
-                    ))}
+                    {visibleHistory.map((l) => {
+                      const name = describeItems(l.items || [], kinds);
+                      const groups = returnGroups(l);
+                      return (
+                        <tr key={l.id} onClick={() => setEditingId(l.id)} className="border-t border-black/[0.06] align-top cursor-pointer hover:bg-accent/[0.03] transition-colors">
+                          <td className="px-4 py-3 font-semibold text-neutral-900 break-keep">{name}</td>
+                          <td className="px-4 py-3 text-neutral-700 break-keep">{l.borrower}</td>
+                          <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">{formatDay(l.outDate)}</td>
+                          <td className="px-4 py-3 text-neutral-700 whitespace-nowrap">
+                            {groups.length <= 1
+                              ? formatStamp(groups[0]?.stamp)
+                              : groups.map((g) => (
+                                  <span key={g.stamp} className="block">
+                                    {formatStamp(g.stamp)} · {g.items.length}대
+                                  </span>
+                                ))}
+                          </td>
+                          <td className="px-4 py-3 min-w-[180px] text-neutral-600 break-keep whitespace-pre-line">{l.memo || <span className="text-neutral-300">–</span>}</td>
+                          <td className="px-2 py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(l.id);
+                              }}
+                              aria-label={`${name} 기록 고치기`}
+                              className="inline-flex items-center gap-1 min-h-[36px] px-3 rounded-full text-[12px] text-neutral-600 hover:text-neutral-900 hover:bg-black/[0.05] whitespace-nowrap"
+                            >
+                              <Pencil className="w-3.5 h-3.5" /> 고치기
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -399,18 +399,17 @@ export default function EquipmentLedger() {
 
       {lendOpen && <LendModal kinds={kinds} states={states} loans={[...openLoans, ...history]} today={today} onClose={() => setLendOpen(false)} />}
       {setupOpen && <SetupModal kinds={kinds} states={states} onClose={() => setSetupOpen(false)} />}
-      {returning && <ReturnModal loan={returning} kinds={kinds} today={today} onClose={() => setReturningId(null)} />}
-      {editing && <LoanEditModal loan={editing} kinds={kinds} today={today} onClose={() => setEditingId(null)} />}
+      {returning && <ReturnModal loan={returning} kinds={kinds} onClose={() => setReturningId(null)} />}
+      {editing && <LoanEditModal key={editing.id} loan={editing} kinds={kinds} today={today} onClose={() => setEditingId(null)} />}
       {detailItem && (
         <ItemModal
           kind={detailKind}
           item={detailItem}
           info={states.get(detailItem.id)}
-          today={today}
           onClose={() => setDetail(null)}
           onReturn={(loan) => {
             setDetail(null);
-            startReturn(loan);
+            setReturningId(loan.id);
           }}
         />
       )}

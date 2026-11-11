@@ -2,7 +2,6 @@
 const TONES = {
   stock: "bg-white text-neutral-900 border border-black/[0.14] hover:border-black/40",
   loan: "bg-accent text-white border border-accent hover:bg-accent-strong",
-  over: "bg-white text-red-700 border-2 border-red-600 font-bold hover:bg-red-50",
   repair: "bg-neutral-200 text-neutral-600 border border-dashed border-neutral-500 line-through hover:bg-neutral-300",
   picked: "bg-accent text-white border border-accent font-bold hover:bg-accent-strong",
   disabled: "bg-neutral-100 text-neutral-500 border border-dashed border-neutral-300 line-through cursor-not-allowed",

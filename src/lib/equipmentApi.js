@@ -9,11 +9,10 @@ import {
   query,
   runTransaction,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { normalizeKinds } from "@/lib/equipment";
+import { applyReturnEdits, normalizeKinds } from "@/lib/equipment";
 
 // 기자재 대여 장부의 Firestore 읽기·쓰기. 데이터 모양은 src/lib/equipment.js 머리말 참고.
 // 권한은 정보 업무와 같다 (firestore.rules 의 equipment, equipment_loans).
@@ -72,13 +71,12 @@ export function deleteItem(kindId, itemId) {
   return editInventory((kinds) => kinds.map((k) => (k.id !== kindId ? k : { ...k, items: k.items.filter((it) => it.id !== itemId) })));
 }
 
-/** 빌려주기. data = { items: [{ id, kindId, kindName, label }], borrower, outDate, dueDate, memo } */
+/** 빌려주기. data = { items: [{ id, kindId, kindName, label }], borrower, outDate, memo } */
 export async function createLoan(data) {
   const ref = await addDoc(loansCol(), {
     items: data.items,
     borrower: data.borrower,
     outDate: data.outDate,
-    dueDate: data.dueDate,
     memo: data.memo,
     returned: {},
     open: true,
@@ -87,29 +85,39 @@ export async function createLoan(data) {
   return ref.id;
 }
 
-/** 빌린 사람·반납 날짜·메모 고치기 */
-export function updateLoan(id, { borrower, dueDate, memo }) {
-  return updateDoc(doc(db, "equipment_loans", id), { borrower, dueDate, memo });
+const loanRef = (id) => doc(db, "equipment_loans", id);
+const notFound = () => Object.assign(new Error("대여 기록이 없습니다"), { code: "not-found" });
+
+/**
+ * 빌린 사람·빌린 날·메모 고치기 (지금 빌려 간 것, 지난 기록 둘 다).
+ * returnChanges: 반납 일시 묶음마다 { from, to } — 고치는 사이 다른 기기에서 반납한 것은 건드리지 않도록 트랜잭션으로 바꾼다.
+ */
+export function updateLoan(id, { borrower, outDate, memo, returnChanges = [] }) {
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(loanRef(id));
+    if (!snap.exists()) throw notFound();
+    tx.update(loanRef(id), { borrower, outDate, memo, returned: applyReturnEdits(snap.data().returned, returnChanges) });
+  });
 }
 
 export function deleteLoan(id) {
-  return deleteDoc(doc(db, "equipment_loans", id));
+  return deleteDoc(loanRef(id));
 }
 
 /**
- * 반납 처리. itemIds 만 오늘 날짜로 돌아온 것으로 적고, 전부 돌아왔으면 기록을 닫는다(지난 기록으로).
- * 반환: { allBack, left } (left = 아직 안 돌아온 대수)
+ * 반납 처리. itemIds 를 stamp("YYYY-MM-DD HH:MM")에 돌아온 것으로 적고 메모를 바꾼다.
+ * 전부 돌아왔으면 기록을 닫는다(지난 기록으로). 반환: { allBack, left } (left = 아직 안 돌아온 대수)
  */
-export function returnItems(loanId, itemIds, today) {
-  const ref = doc(db, "equipment_loans", loanId);
+export function returnItems(loanId, itemIds, stamp, memo) {
   return runTransaction(db, async (tx) => {
-    const snap = await tx.get(ref);
-    if (!snap.exists()) throw Object.assign(new Error("대여 기록이 없습니다"), { code: "not-found" });
+    const snap = await tx.get(loanRef(loanId));
+    if (!snap.exists()) throw notFound();
     const loan = snap.data();
     const returned = { ...(loan.returned || {}) };
-    for (const id of itemIds) if (!returned[id]) returned[id] = today;
+    for (const id of itemIds) if (!returned[id]) returned[id] = stamp;
     const left = (loan.items || []).filter((it) => !returned[it.id]).length;
-    tx.update(ref, left === 0 ? { returned, open: false, closedAt: serverTimestamp() } : { returned });
+    const patch = { returned, memo: typeof memo === "string" ? memo : loan.memo || "" };
+    tx.update(loanRef(loanId), left === 0 ? { ...patch, open: false, closedAt: serverTimestamp() } : patch);
     return { allBack: left === 0, left };
   });
 }

@@ -2,15 +2,19 @@
 //
 // 저장 모양 (바꾸면 firestore.rules 의 equipment 규칙도 같이 바꿀 것)
 //   equipment/inventory   { kinds: [{ id, name, items: [{ id, label, repair }] }], updatedAt }
-//   equipment_loans/{id}  { items: [{ id, kindId, kindName, label }], borrower, outDate, dueDate, memo,
-//                           returned: { [itemId]: "YYYY-MM-DD" }, open, createdAt, closedAt? }
+//   equipment_loans/{id}  { items: [{ id, kindId, kindName, label }], borrower, outDate, memo,
+//                           returned: { [itemId]: "YYYY-MM-DD HH:MM" }, open, createdAt, closedAt? }
 // - 번호(label)는 선생님이 직접 넣는 글자다. 숫자가 아니어도 되고, 한 종류 안에서만 겹치지 않으면 된다.
 // - 기자재는 번호가 아니라 id 로 구분한다. 그래서 번호를 고쳐도 빌려준 기록이 그대로 따라간다.
 // - 빌려준 기록에는 그때의 종류 이름·번호를 복사해 둔다. 나중에 기자재를 지워도 기록은 읽힌다.
-// - 여러 대를 한 번에 빌려주면 기록 한 건이다. 일부만 돌아오면 returned 에 그 대만 날짜가 찍힌다.
-// - 날짜는 workCalendar 와 같이 "YYYY-MM-DD" 문자열이다.
+// - 여러 대를 한 번에 빌려주면 기록 한 건이다. 일부만 돌아오면 returned 에 그 대만 반납 일시가 찍힌다.
+// - 반납 날짜(언제까지)는 없다. 학교를 옮기거나 본인이 원할 때 돌려주므로, 돌려준 일시만 남긴다.
+//   (처음 판에는 dueDate 가 있었다. 그때 넣은 기록에 남아 있어도 쓰지 않는다.)
+// - 날짜는 workCalendar 와 같이 "YYYY-MM-DD" 문자열이다. 반납 일시는 "YYYY-MM-DD HH:MM"이고,
+//   처음 판에서 반납한 기록은 시각 없이 "YYYY-MM-DD"만 있다.
+// - memo 는 빌려줄 때 쓰고, 반납할 때(키보드·마우스 다 있는지 등)와 지난 기록에서 이어서 고친다.
 
-import { addDays, diffDays, formatPeriod, isDateKey, weekdayOf } from "./workCalendar";
+import { formatPeriod, isDateKey } from "./workCalendar";
 
 export const KINDS_MAX = 20;
 export const KIND_NAME_MAX = 20;
@@ -20,7 +24,7 @@ export const BORROWER_MAX = 40;
 export const MEMO_MAX = 200;
 export const LOAN_ITEMS_MAX = 300; // 한 번에 빌려줄 수 있는 대수
 
-export const STATE_LABELS = { stock: "보관 중", loan: "대여 중", over: "반납 지남", repair: "수리 중" };
+export const STATE_LABELS = { stock: "보관 중", loan: "대여 중", repair: "수리 중" };
 
 /** 저장 실패 알림 문구 */
 export function saveErrorText(err) {
@@ -158,29 +162,28 @@ export function validateLabel(label, kind, selfId) {
 }
 
 // ---------------------------------------------------------------------------
-// 상태 (보관 중 · 대여 중 · 반납 지남 · 수리 중)
+// 상태 (보관 중 · 대여 중 · 수리 중)
 // ---------------------------------------------------------------------------
 
 /**
  * 기자재마다 지금 상태. Map<itemId, { state, loan }>
- *   state: "stock"(보관 중) | "loan"(대여 중) | "over"(반납 날짜 지남) | "repair"(수리 중)
+ *   state: "stock"(보관 중) | "loan"(대여 중) | "repair"(수리 중)
  * 빌려 가 있으면 수리 중 표시보다 대여 상태가 앞선다.
  */
-export function itemStates(kinds, openLoans, today) {
+export function itemStates(kinds, openLoans) {
   const map = new Map();
   for (const k of kinds) for (const it of k.items) map.set(it.id, { state: it.repair ? "repair" : "stock", loan: null });
   for (const loan of openLoans) {
     if (!loan || !loan.open) continue;
-    const over = isDateKey(loan.dueDate) && loan.dueDate < today;
     for (const it of loan.items || []) {
       if (loan.returned?.[it.id] || !map.has(it.id)) continue;
-      map.set(it.id, { state: over ? "over" : "loan", loan });
+      map.set(it.id, { state: "loan", loan });
     }
   }
   return map;
 }
 
-export const isBusy = (info) => !!info && (info.state === "loan" || info.state === "over");
+export const isBusy = (info) => info?.state === "loan";
 
 /** 빌려 가 있는 기자재 id */
 export function busyIds(states) {
@@ -189,29 +192,22 @@ export function busyIds(states) {
   return ids;
 }
 
-/** 머리 카드의 숫자들. loan 은 반납 지남(over)을 포함한다 */
+/** 머리 카드의 숫자들 */
 export function countStates(kinds, states) {
-  const c = { total: 0, stock: 0, loan: 0, over: 0, repair: 0 };
+  const c = { total: 0, stock: 0, loan: 0, repair: 0 };
   for (const k of kinds) {
     for (const it of k.items) {
       const s = states.get(it.id)?.state || "stock";
       c.total++;
-      if (s === "stock") c.stock++;
-      else if (s === "repair") c.repair++;
-      else {
-        c.loan++;
-        if (s === "over") c.over++;
-      }
+      c[s] = (c[s] || 0) + 1;
     }
   }
   return c;
 }
 
-/** 상태 칸(전체·보관 중·대여 중·반납 지남)으로 거를 때 이 기자재가 보이나 */
+/** 상태 칸(전체·보관 중·대여 중·수리 중)으로 거를 때 이 기자재가 보이나 */
 export function stateMatchesFilter(state, filter) {
-  if (filter === "stock") return state === "stock";
-  if (filter === "loan") return state === "loan" || state === "over";
-  if (filter === "over") return state === "over";
+  if (filter === "stock" || filter === "loan" || filter === "repair") return state === filter;
   return true;
 }
 
@@ -273,49 +269,77 @@ export function formatDay(key) {
   return isDateKey(key) ? formatPeriod(key, key) : "";
 }
 
-/** 반납 날짜 표시: { tone: "over" | "today" | "normal", label } */
-export function dueBadge(dueDate, today) {
-  if (!isDateKey(dueDate)) return { tone: "normal", label: "대여 중" };
-  const d = diffDays(today, dueDate);
-  if (d < 0) return { tone: "over", label: `${-d}일 지남` };
-  if (d === 0) return { tone: "today", label: "오늘까지" };
-  if (d === 1) return { tone: "normal", label: "내일까지" };
-  return { tone: "normal", label: `${d}일 남음` };
-}
+const createdMs = (l) => (typeof l.createdAt?.toMillis === "function" ? l.createdAt.toMillis() : Number.MAX_SAFE_INTEGER);
 
-/** 지금 빌려 간 것: 반납 날짜가 이른 것(지난 것)이 위로 */
+/** 지금 빌려 간 것: 최근에 빌려 간 것이 위로 (학교 옮길 때까지 빌려 간 것은 아래로 내려간다) */
 export function sortOpenLoans(loans) {
   return [...loans].sort((a, b) => {
-    if (a.dueDate !== b.dueDate) return String(a.dueDate) < String(b.dueDate) ? -1 : 1;
-    if (a.outDate !== b.outDate) return String(a.outDate) < String(b.outDate) ? -1 : 1;
-    return String(a.id).localeCompare(String(b.id));
+    if (a.outDate !== b.outDate) return String(a.outDate) > String(b.outDate) ? -1 : 1;
+    return createdMs(b) - createdMs(a) || String(a.id).localeCompare(String(b.id));
   });
 }
 
-/** 지난 기록의 "반납한 날": 하루에 다 왔으면 그 날, 나눠 왔으면 "11/9(월) 29대 · 11/10(화) 1대" */
-export function returnedText(loan) {
-  const counts = new Map();
-  for (const it of loan.items || []) {
-    const d = loan.returned?.[it.id];
-    if (d) counts.set(d, (counts.get(d) || 0) + 1);
-  }
-  const dates = [...counts.keys()].sort();
-  if (dates.length === 0) return "";
-  if (dates.length === 1) return formatDay(dates[0]);
-  return dates.map((d) => `${formatDay(d)} ${counts.get(d)}대`).join(" · ");
+// ---------------------------------------------------------------------------
+// 반납 일시
+// ---------------------------------------------------------------------------
+
+/** "HH:MM" 인가 */
+export function isTimeKey(value) {
+  return typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 }
 
-/** 반납 날짜 빠른 선택: 오늘 · 내일 · (이번 주|다음 주) 금요일 */
-export function dueChoices(today) {
-  const wd = weekdayOf(today); // 0(일) ~ 6(토)
-  const toFri = (5 - wd + 7) % 7;
-  const thisWeek = wd >= 1 && wd <= 3; // 월~수면 이번 주 금요일이 모레 이후
-  const friDays = thisWeek ? toFri : toFri <= 1 ? toFri + 7 : toFri;
-  return [
-    { id: "today", label: "오늘", date: today },
-    { id: "tomorrow", label: "내일", date: addDays(today, 1) },
-    { id: "friday", label: thisWeek ? "이번 주 금요일" : "다음 주 금요일", date: addDays(today, friDays) },
-  ];
+/** Date → "HH:MM" (이 기기 시각) */
+export function timeKey(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 저장할 반납 일시: "YYYY-MM-DD HH:MM" (시각을 비우면 날짜만) */
+export function returnStamp(date, time) {
+  return isTimeKey(time) ? `${date} ${time}` : date;
+}
+
+/** "YYYY-MM-DD HH:MM" → { date, time }. 처음 판의 "YYYY-MM-DD" 는 time 이 "" */
+export function parseStamp(stamp) {
+  const [date = "", time = ""] = String(stamp || "").split(" ");
+  return { date, time: isTimeKey(time) ? time : "" };
+}
+
+/** "11/12(목) 14:20" (시각이 없으면 날짜만) */
+export function formatStamp(stamp) {
+  const { date, time } = parseStamp(stamp);
+  return [formatDay(date), time].filter(Boolean).join(" ");
+}
+
+/**
+ * 반납을 한 번에 했으면 한 묶음, 나눠 했으면 여러 묶음 (이른 것부터).
+ * [{ stamp, date, time, items }]
+ */
+export function returnGroups(loan) {
+  const map = new Map();
+  for (const it of loan.items || []) {
+    const stamp = loan.returned?.[it.id];
+    if (!stamp) continue;
+    if (!map.has(stamp)) map.set(stamp, []);
+    map.get(stamp).push(it);
+  }
+  return [...map.keys()].sort().map((stamp) => ({ stamp, ...parseStamp(stamp), items: map.get(stamp) }));
+}
+
+/** 지난 기록에서 반납 일시를 고칠 때: 묶음마다 { from: 원래 stamp, to: 새 stamp } 를 받아 returned 를 바꾼다 */
+export function applyReturnEdits(returned, changes) {
+  const map = new Map(changes.filter((c) => c.from && c.to && c.from !== c.to).map((c) => [c.from, c.to]));
+  const next = { ...(returned || {}) };
+  for (const [id, stamp] of Object.entries(next)) if (map.has(stamp)) next[id] = map.get(stamp);
+  return next;
+}
+
+/** 반납 일시 점검. outDate: 빌린 날, today: 오늘 (둘 다 넘기면 그 사이여야 한다) */
+export function validateReturnAt(date, time, outDate, today) {
+  if (!isDateKey(date)) return "반납한 날짜를 골라 주세요.";
+  if (time && !isTimeKey(time)) return "반납 시각을 다시 확인해 주세요.";
+  if (isDateKey(outDate) && date < outDate) return "반납한 날이 빌린 날보다 앞일 수 없어요.";
+  if (isDateKey(today) && date > today) return "반납한 날은 오늘보다 뒤일 수 없어요.";
+  return null;
 }
 
 /** "11/11" */
@@ -323,24 +347,26 @@ export function shortDate(key) {
   return isDateKey(key) ? `${Number(key.slice(5, 7))}/${Number(key.slice(8, 10))}` : "";
 }
 
-/** 빌려주기·고치기 저장 전 점검. minDue: 반납 날짜가 이보다 앞이면 안 된다 (새로 빌려줄 때는 오늘) */
-export function validateLoan({ itemCount, borrower, dueDate, memo }, minDue) {
+/** 빌려주기·고치기 저장 전 점검. 빌린 날은 오늘보다 뒤일 수 없다 (예전에 빌려 간 것을 옮겨 적을 때는 앞 날짜) */
+export function validateLoan({ itemCount, borrower, outDate, memo }, today) {
   if (itemCount !== undefined && itemCount < 1) return "빌려줄 기자재를 골라 주세요.";
   if (itemCount > LOAN_ITEMS_MAX) return `한 번에 ${LOAN_ITEMS_MAX}대까지 빌려줄 수 있어요.`;
   const who = String(borrower || "").trim();
   if (!who) return "누가 빌려 가는지 적어 주세요.";
   if (who.length > BORROWER_MAX) return `빌리는 사람은 ${BORROWER_MAX}자까지 쓸 수 있어요.`;
-  if (!isDateKey(dueDate)) return "언제까지 돌려받을지 골라 주세요.";
-  if (minDue && dueDate < minDue) return "반납 날짜가 빌린 날보다 앞일 수 없어요.";
-  if (String(memo || "").length > MEMO_MAX) return `메모는 ${MEMO_MAX}자까지 쓸 수 있어요.`;
-  return null;
+  if (!isDateKey(outDate)) return "빌린 날을 골라 주세요.";
+  if (isDateKey(today) && outDate > today) return "빌린 날은 오늘보다 뒤일 수 없어요.";
+  return validateMemo(memo);
+}
+
+export function validateMemo(memo) {
+  return String(memo || "").trim().length > MEMO_MAX ? `메모는 ${MEMO_MAX}자까지 쓸 수 있어요.` : null;
 }
 
 /** 최근에 쓴 빌리는 사람 이름 (최근 것부터, 겹치지 않게) */
 export function recentBorrowers(loans, limit = 5) {
-  const ms = (l) => (typeof l.createdAt?.toMillis === "function" ? l.createdAt.toMillis() : Number.MAX_SAFE_INTEGER);
   const out = [];
-  for (const l of [...loans].sort((a, b) => ms(b) - ms(a))) {
+  for (const l of [...loans].sort((a, b) => createdMs(b) - createdMs(a))) {
     const who = String(l.borrower || "").trim();
     if (who && !out.includes(who)) out.push(who);
     if (out.length >= limit) break;

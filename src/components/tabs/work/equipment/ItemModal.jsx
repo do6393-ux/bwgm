@@ -1,19 +1,18 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
-import { LABEL_MAX, STATE_LABELS, describeItems, dueBadge, formatDay, isBusy, itemName, saveErrorText, unreturnedItems, validateLabel } from "@/lib/equipment";
+import { LABEL_MAX, STATE_LABELS, describeItems, formatDay, isBusy, itemName, saveErrorText, unreturnedItems, validateLabel } from "@/lib/equipment";
 import { deleteItem, updateItem } from "@/lib/equipmentApi";
 import EquipModal from "./EquipModal";
 
 const STATE_TONE = {
   stock: "bg-white text-neutral-800 border-black/[0.14]",
   loan: "bg-accent text-white border-accent",
-  over: "bg-white text-red-700 border-red-600 border-2 font-bold",
   repair: "bg-neutral-200 text-neutral-700 border-dashed border-neutral-500",
 };
 
 /** 번호 한 대: 지금 상태(누가 빌려 갔는지), 번호 바꾸기, 수리 중 표시, 지우기 */
-export default function ItemModal({ kind, item, info, today, onClose, onReturn }) {
+export default function ItemModal({ kind, item, info, onClose, onReturn }) {
   const { confirm, toast } = useDialog();
   const [label, setLabel] = useState(item.label);
   const [busyAction, setBusyAction] = useState(false);
@@ -62,9 +61,7 @@ export default function ItemModal({ kind, item, info, today, onClose, onReturn }
           {loan && (
             <div className="p-4 rounded-panel bg-well border border-black/[0.06] text-[13px] text-neutral-700 space-y-1">
               <p className="font-semibold text-neutral-900 break-keep">{loan.borrower}</p>
-              <p className="font-mono text-[12px]">
-                {formatDay(loan.outDate)} 빌림 → {formatDay(loan.dueDate)}까지 · {dueBadge(loan.dueDate, today).label}
-              </p>
+              <p className="font-mono text-[12px]">{formatDay(loan.outDate)}에 빌려 감</p>
               {unreturnedItems(loan).length > 1 && <p className="text-[12px] text-neutral-500 break-keep">함께 빌려 간 것: {describeItems(unreturnedItems(loan), [kind])}</p>}
               {loan.memo && <p className="text-[12px] text-neutral-500">메모: {loan.memo}</p>}
               <button
