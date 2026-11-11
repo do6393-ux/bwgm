@@ -197,6 +197,8 @@
   .ui-scrim {
     overflow-y: auto;
     overscroll-behavior: contain;
+    /* 모달이 space-y-* 목록 안에 놓이면 위 여백(margin-top)을 받아 뒷배경이 아래로 밀린다 (정보 업무 탭 창들이 그랬다) */
+    margin: 0 !important;
   }
   .ui-scrim > * {
     margin-block: auto;

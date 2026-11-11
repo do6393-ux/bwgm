@@ -9,10 +9,12 @@ import { deleteTaskFiles } from "@/lib/taskAttachments";
 import { DEFAULT_PART, PARTS, findPart } from "@/lib/workParts";
 import WorkCalendar from "./work/WorkCalendar";
 import EventModal from "./work/EventModal";
+import EquipmentLedger from "./work/equipment/EquipmentLedger";
 
 const VIEWS = [
   { id: "cards", label: "업무 카드" },
   { id: "calendar", label: "달력" },
+  { id: "equipment", label: "기자재 대여" },
 ];
 
 const PART_FILTERS = [{ id: "all", label: "전체 업무" }, ...PARTS];
@@ -167,6 +169,8 @@ function TabWork({ currentUser }) {
 
       {view === "calendar" ? (
         <WorkCalendar tasks={tasks} canEdit={canEdit} />
+      ) : view === "equipment" ? (
+        <EquipmentLedger />
       ) : (
         <>
           <section className="border border-black/[0.08] bg-well rounded-card p-5 md:p-8 shadow-sm">
