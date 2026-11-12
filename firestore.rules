@@ -251,6 +251,32 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // 바로가기 · 연락처 (정보 업무 › 바로가기·연락처). 2026-11-12. 권한은 정보 업무와 같다.
+    //   work_links/{id}: 사이트 { kind: 'site', part, name, url, memo, pinned }
+    //                    연락처 { kind: 'contact', part, name, role, phone, email, memo, pinned }  (+ createdAt, updatedAt)
+    // 글자 수는 src/lib/workLinks.js 의 LINK_MAX 와 같게 둘 것. 주소는 http(s) 만 (javascript: 같은 링크 막기).
+    function strOk(data, field, max) {
+      return data.get(field, '') is string && data.get(field, '').size() <= max;
+    }
+
+    match /work_links/{id} {
+      allow read, delete: if hasWorkAccess();
+      allow create, update: if hasWorkAccess()
+                            && request.resource.data.keys().hasOnly(['kind', 'part', 'name', 'url', 'role', 'phone', 'email', 'memo', 'pinned', 'createdAt', 'updatedAt'])
+                            && request.resource.data.kind in ['site', 'contact']
+                            && request.resource.data.part in ['common', 'head', 'plan', 'device', 'nais']
+                            && request.resource.data.name is string
+                            && request.resource.data.name.size() > 0
+                            && request.resource.data.name.size() <= 60
+                            && strOk(request.resource.data, 'url', 500)
+                            && (request.resource.data.get('url', '') == '' || request.resource.data.url.matches('https?://.+'))
+                            && strOk(request.resource.data, 'role', 80)
+                            && strOk(request.resource.data, 'phone', 40)
+                            && strOk(request.resource.data, 'email', 100)
+                            && strOk(request.resource.data, 'memo', 300)
+                            && request.resource.data.get('pinned', false) is bool;
+    }
+
     // ---------- 교사 공용 ----------
     match /base_timetables/{id} {
       allow read, write: if isTeacher();

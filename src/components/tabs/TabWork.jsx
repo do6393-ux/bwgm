@@ -9,6 +9,7 @@ import { watchDuties } from "@/lib/workDutiesApi";
 import WorkCalendar from "./work/WorkCalendar";
 import EventModal from "./work/EventModal";
 import RolePanel from "./work/duty/RolePanel";
+import LinksPanel from "./work/links/LinksPanel";
 
 const NEXT_STATUS = { todo: "doing", doing: "done", done: "todo" };
 const VIEW_KEY = "work_view"; // 마지막으로 본 작은 탭 (이 브라우저에만)
@@ -32,7 +33,7 @@ const EMPTY_FORM = { part: DEFAULT_PART, duty: "", status: "todo", title: "", su
 
 /**
  * 정보 업무 탭.
- * 작은 탭 = 보직 탭(부장 · 정보기획 · 기기·소모품 · 나이스·공시) + 달력.
+ * 작은 탭 = 보직 탭(부장 · 정보기획 · 기기·소모품 · 나이스·공시) + 달력 + 바로가기·연락처.
  * 관리자 · 부장 · 보직 미정은 보직 탭 4개가 다 보이고, 다른 선생님은 자기 보직 탭 하나만 보인다
  * (teachers/{이메일}.workRole, 관리자가 teachers 화면에서 고른다).
  * ⚠️ 보이는 탭만 나누는 것이고, 데이터 접근은 firestore.rules 의 hasWorkAccess() 그대로다.
@@ -43,7 +44,8 @@ function TabWork({ currentUser, admin, workRole }) {
   // 이 탭은 정보 업무 권한자(관리자 + 허용된 교사)에게만 렌더링되므로 등록·수정·삭제도 모두 가능.
   const canEdit = !!currentUser;
   const parts = visibleParts({ admin, workRole });
-  const views = [...parts, "calendar"];
+  const views = [...parts, "calendar", "links"];
+  const EXTRA_VIEWS = { calendar: "달력", links: "바로가기·연락처" };
   const canEditDuties = admin || workRole === "head"; // firestore.rules 의 isWorkHead() 와 같다
 
   const [tasks, setTasks] = useState([]);
@@ -152,7 +154,7 @@ function TabWork({ currentUser, admin, workRole }) {
       <div role="tablist" aria-label="보직" className="flex flex-wrap w-fit max-w-full gap-1 rounded-full bg-black/[0.06] p-1">
         {views.map((v) => {
           const active = view === v;
-          const part = v === "calendar" ? null : findPart(v);
+          const part = EXTRA_VIEWS[v] ? null : findPart(v);
           return (
             <button
               key={v}
@@ -165,7 +167,7 @@ function TabWork({ currentUser, admin, workRole }) {
               }`}
             >
               {part && <span className={`w-2 h-2 rounded-full ${part.dot}`} aria-hidden="true" />}
-              {part ? ROLE_META[v].tab : "달력"}
+              {part ? ROLE_META[v].tab : EXTRA_VIEWS[v]}
             </button>
           );
         })}
@@ -173,6 +175,8 @@ function TabWork({ currentUser, admin, workRole }) {
 
       {view === "calendar" ? (
         <WorkCalendar tasks={tasks} canEdit={canEdit} />
+      ) : view === "links" ? (
+        <LinksPanel canEdit={canEdit} defaultPart={parts.length === 1 ? parts[0] : "common"} />
       ) : (
         <RolePanel
           key={view}
