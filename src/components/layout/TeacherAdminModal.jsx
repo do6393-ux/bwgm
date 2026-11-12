@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { createUserWithEmailAndPassword, updateProfile, signOut, sendPasswordResetEmail } from "firebase/auth";
-import { collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, updateDoc, deleteDoc, deleteField, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { auth, db, getSecondaryAuth } from "@/lib/firebase";
 import { useDialog } from "@/components/ui/dialogContext";
+import { ROLE_PARTS } from "@/lib/workDuties";
+import { findPart } from "@/lib/workParts";
 
 // 헷갈리는 문자(0/O, 1/l/I)를 뺀 임시 비밀번호 생성
 function generatePassword(length = 10) {
@@ -10,6 +12,18 @@ function generatePassword(length = 10) {
   const bytes = new Uint32Array(length);
   crypto.getRandomValues(bytes);
   return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
+
+// 정보 업무 칸의 고르기 목록 (값 → teachers 문서는 handleWorkRole 참고)
+const WORK_ROLE_OPTIONS = [
+  { value: "none", label: "안 보임" },
+  { value: "all", label: "보직 미정 (4개 다)" },
+  ...ROLE_PARTS.map((id) => ({ value: id, label: findPart(id).label })),
+];
+
+function workRoleValue(t) {
+  if (!t.canWork) return "none";
+  return ROLE_PARTS.includes(t.workRole) ? t.workRole : "all";
 }
 
 function explainError(err) {
@@ -131,13 +145,23 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
     }
   };
 
-  // 정보 업무 접근(열람·수정) 허용/해제 (teachers/{이메일}.canWork)
-  const handleToggleWork = async (t) => {
+  // 정보 업무 접근(열람·수정) + 보직 (teachers/{이메일}.canWork, workRole)
+  //  - "none": 안 보임 (canWork false)
+  //  - "all" : 보직 미정 → 보직 탭 4개 다 보임
+  //  - 보직 id: 그 보직 탭만 보임 (부장은 4개 다)
+  const handleWorkRole = async (t, value) => {
     setError("");
     setNotice("");
+    const patch =
+      value === "none"
+        ? { canWork: false }
+        : value === "all"
+          ? { canWork: true, workRole: deleteField() }
+          : { canWork: true, workRole: value };
     try {
-      await updateDoc(doc(db, "teachers", t.id), { canWork: !t.canWork });
-      setNotice(`${t.email || t.id} 의 정보 업무 권한을 ${t.canWork ? "해제" : "허용"}했습니다.`);
+      await updateDoc(doc(db, "teachers", t.id), patch);
+      const label = WORK_ROLE_OPTIONS.find((o) => o.value === value)?.label;
+      setNotice(`${t.email || t.id} 의 정보 업무를 "${label}"(으)로 바꿨습니다.`);
     } catch (err) {
       setError(explainError(err));
     }
@@ -272,13 +296,21 @@ export default function TeacherAdminModal({ isOpen, onClose, currentUser }) {
                     <p className="text-[12px] text-neutral-500 font-mono truncate">{t.email || t.id}</p>
                   </div>
                   <div className="flex flex-wrap gap-3 shrink-0 text-[11px] font-mono">
-                    <button
-                      onClick={() => handleToggleWork(t)}
-                      title="켜면 이 교사가 정보 업무 탭을 열람·수정할 수 있습니다"
-                      className={t.canWork ? "text-emerald-700 hover:text-emerald-900 font-bold" : "text-neutral-400 hover:text-black"}
+                    <label
+                      title="정보 업무 탭을 볼 수 있는지와, 어느 보직 탭이 보일지 고릅니다"
+                      className={`flex items-center gap-1.5 ${t.canWork ? "text-emerald-700 font-bold" : "text-neutral-500"}`}
                     >
-                      [ 정보 업무: {t.canWork ? "허용" : "차단"} ]
-                    </button>
+                      정보 업무
+                      <select
+                        value={workRoleValue(t)}
+                        onChange={(e) => handleWorkRole(t, e.target.value)}
+                        className="border border-neutral-300 rounded-md bg-white px-1.5 py-1 text-[12px] font-sans font-normal text-neutral-900"
+                      >
+                        {WORK_ROLE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
+                      </select>
+                    </label>
                     <button onClick={() => handleResetMail(t)} className="text-neutral-500 hover:text-black">
                       [ 재설정 메일 ]
                     </button>

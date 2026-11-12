@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useWorkAccess } from "@/lib/useWorkAccess";
+import { isAdmin } from "@/lib/admin";
 import { isClassSubtabHash } from "@/lib/classSubtabs";
 
 import Header from "@/components/layout/Header";
@@ -56,7 +57,7 @@ export default function App() {
   }, []);
 
   // 정보 업무는 관리자 + 관리자가 허용한 교사(teachers/{이메일}.canWork)만 열람 가능
-  const { canWork, ready: workAccessReady } = useWorkAccess(currentUser);
+  const { canWork, ready: workAccessReady, workRole } = useWorkAccess(currentUser);
 
   // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
   // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
@@ -151,7 +152,7 @@ export default function App() {
         <div hidden={visibleTab !== "class"}>
           <TabClass currentUser={currentUser} currentTheme={THEMES.class} isVisible={visibleTab === "class"} />
         </div>
-        {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} />}
+        {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} admin={isAdmin(currentUser)} workRole={workRole} />}
         {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} canWork={canWork} onOpenTab={setActiveTab} />}
         {currentUser && visibleTab === "homeroom" && <TabHomeroom currentUser={currentUser} currentTheme={currentTheme} />}
       </main>
