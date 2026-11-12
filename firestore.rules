@@ -222,6 +222,35 @@ service cloud.firestore {
                             && request.resource.data.createdAt is timestamp;
     }
 
+    // 업무분장 목록 (정보 업무 › 보직 탭 › 업무분장 고치기). 2026-11-12
+    //   work_config/duties: { parts: { head|plan|device|nais: [{ key, title, tool? }] }, updatedAt, updatedBy }
+    //   문서가 없으면 화면은 src/lib/workDuties.js 의 DUTIES(업무분장(정보부).hwp)를 쓴다.
+    // 읽기 = 정보 업무 접근 권한, 고치기 = 관리자 · 부장(teachers/{이메일}.workRole == 'head').
+    // 보직마다 40개까지 (src/lib/workDuties.js 의 DUTIES_PER_PART_MAX 와 같게 둘 것).
+    function isWorkHead() {
+      return isAdmin()
+        || (hasWorkAccess()
+            && get(/databases/$(database)/documents/teachers/$(myEmail())).data.get('workRole', '') == 'head');
+    }
+
+    function dutyListOk(parts, part) {
+      return parts.get(part, []) is list && parts.get(part, []).size() <= 40;
+    }
+
+    match /work_config/{docId} {
+      allow read: if hasWorkAccess();
+      allow create, update: if isWorkHead()
+                            && docId == 'duties'
+                            && request.resource.data.keys().hasOnly(['parts', 'updatedAt', 'updatedBy'])
+                            && request.resource.data.parts is map
+                            && request.resource.data.parts.keys().hasOnly(['head', 'plan', 'device', 'nais'])
+                            && dutyListOk(request.resource.data.parts, 'head')
+                            && dutyListOk(request.resource.data.parts, 'plan')
+                            && dutyListOk(request.resource.data.parts, 'device')
+                            && dutyListOk(request.resource.data.parts, 'nais');
+      allow delete: if isAdmin();
+    }
+
     // ---------- 교사 공용 ----------
     match /base_timetables/{id} {
       allow read, write: if isTeacher();

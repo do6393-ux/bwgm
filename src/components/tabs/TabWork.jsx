@@ -4,7 +4,8 @@ import { collection, addDoc, deleteDoc, deleteField, updateDoc, doc, onSnapshot,
 import { useDialog } from "@/components/ui/dialogContext";
 import { deleteTaskFiles } from "@/lib/taskAttachments";
 import { DEFAULT_PART, PARTS, findPart } from "@/lib/workParts";
-import { DUTIES, ROLE_META, takenDutyKeys, visibleParts } from "@/lib/workDuties";
+import { DUTIES, ROLE_META, findDuty, takenDutyKeys, visibleParts } from "@/lib/workDuties";
+import { watchDuties } from "@/lib/workDutiesApi";
 import WorkCalendar from "./work/WorkCalendar";
 import EventModal from "./work/EventModal";
 import RolePanel from "./work/duty/RolePanel";
@@ -35,6 +36,7 @@ const EMPTY_FORM = { part: DEFAULT_PART, duty: "", status: "todo", title: "", su
  * 관리자 · 부장 · 보직 미정은 보직 탭 4개가 다 보이고, 다른 선생님은 자기 보직 탭 하나만 보인다
  * (teachers/{이메일}.workRole, 관리자가 teachers 화면에서 고른다).
  * ⚠️ 보이는 탭만 나누는 것이고, 데이터 접근은 firestore.rules 의 hasWorkAccess() 그대로다.
+ * 업무분장 목록은 work_config/duties (없으면 workDuties.js 의 DUTIES). 관리자 · 부장만 고칠 수 있다.
  */
 function TabWork({ currentUser, admin, workRole }) {
   const { confirm, toast } = useDialog();
@@ -42,6 +44,7 @@ function TabWork({ currentUser, admin, workRole }) {
   const canEdit = !!currentUser;
   const parts = visibleParts({ admin, workRole });
   const views = [...parts, "calendar"];
+  const canEditDuties = admin || workRole === "head"; // firestore.rules 의 isWorkHead() 와 같다
 
   const [tasks, setTasks] = useState([]);
   const [tasksLoaded, setTasksLoaded] = useState(false); // 첫 응답 전에는 "할 일 없음" 대신 불러오는 중을 보여 준다
@@ -51,6 +54,18 @@ function TabWork({ currentUser, admin, workRole }) {
   const [editingTaskId, setEditingTaskId] = useState(null);
   const [eventDraft, setEventDraft] = useState(null); // [ + 일정 ] · 할 일의 달력 버튼으로 열리는 일정 창의 초기값
   const [taskForm, setTaskForm] = useState(EMPTY_FORM);
+  const [savedDuties, setSavedDuties] = useState(null);
+  const [dutiesLoaded, setDutiesLoaded] = useState(false);
+  const duties = savedDuties || DUTIES;
+
+  useEffect(
+    () =>
+      watchDuties((list) => {
+        setSavedDuties(list);
+        setDutiesLoaded(true);
+      }),
+    []
+  );
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -83,7 +98,7 @@ function TabWork({ currentUser, admin, workRole }) {
     setEditingTaskId(task.id);
     setTaskForm({
       part: findPart(task.part).id,
-      duty: task.duty || "",
+      duty: findDuty(task.duty, duties) ? task.duty : "", // 목록에서 뺀 항목이면 비운다
       status: task.status || "todo",
       title: task.title || "",
       summary: task.summary || "",
@@ -129,8 +144,8 @@ function TabWork({ currentUser, admin, workRole }) {
     }
   };
 
-  const dutyChoices = DUTIES[taskForm.part] || [];
-  const taken = takenDutyKeys(tasks, editingTaskId);
+  const dutyChoices = duties[taskForm.part] || [];
+  const taken = takenDutyKeys(tasks, editingTaskId, duties);
 
   return (
     <div className="space-y-12 ui-enter pb-20">
@@ -162,9 +177,12 @@ function TabWork({ currentUser, admin, workRole }) {
         <RolePanel
           key={view}
           part={view}
+          duties={duties}
           tasks={tasks}
-          tasksLoaded={tasksLoaded}
+          tasksLoaded={tasksLoaded && dutiesLoaded}
           canEdit={canEdit}
+          canEditDuties={canEditDuties}
+          email={currentUser?.email?.toLowerCase() || ""}
           onAddTask={handleOpenAddModal}
           onEditTask={handleOpenEditModal}
           onDeleteTask={handleDeleteTask}
@@ -199,7 +217,7 @@ function TabWork({ currentUser, admin, workRole }) {
                     onChange={(e) => {
                       const part = e.target.value;
                       // 다른 보직으로 옮기면 그 보직에 없는 업무분장 항목은 비운다
-                      const keep = (DUTIES[part] || []).some((x) => x.key === taskForm.duty);
+                      const keep = (duties[part] || []).some((x) => x.key === taskForm.duty);
                       setTaskForm({ ...taskForm, part, duty: keep ? taskForm.duty : "" });
                     }}
                     className="w-full bg-neutral-50 border border-neutral-200 rounded-field p-3 text-[14px] outline-none focus:border-accent transition-colors"

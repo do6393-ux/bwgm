@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
-import { Plus, Search, X } from "lucide-react";
+import { Pencil, Plus, Search, X } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import EquipmentLedger from "../equipment/EquipmentLedger";
 import TaskCard from "../TaskCard";
 import DutyCard from "./DutyCard";
 import DutyModal from "./DutyModal";
+import DutiesEditor from "./DutiesEditor";
 import { findPart } from "@/lib/workParts";
-import { ROLE_META, ROLE_TOOLS, TOOLS, groupCards, matchesQuery, monthTodos, patchTodo, todoProgress } from "@/lib/workDuties";
+import { ROLE_META, TOOLS, groupCards, matchesQuery, monthTodos, panelTools, patchTodo, todoProgress } from "@/lib/workDuties";
 import { ensureDutyTask, saveTodos } from "@/lib/workDutiesApi";
 
 const pill = (active) =>
@@ -19,19 +20,23 @@ const gridCls = "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5";
 /**
  * 보직 탭 하나 (부장 · 정보기획 · 기기·소모품 · 나이스·공시).
  * 머리 카드(이번 달에 할 일) + 작은 탭(업무분장 | 그 보직 도구) + 업무분장 카드 · 그 밖의 카드 · 부서 공통 카드.
+ * duties = 지금 업무분장 목록 (TabWork 가 work_config/duties 에서 받아 온다). 관리자 · 부장은 "업무분장 고치기"로 고친다.
  */
-export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask, onEditTask, onDeleteTask, onToggleStatus, onSchedule }) {
+export default function RolePanel({ part, duties, tasks, tasksLoaded, canEdit, canEditDuties, email, onAddTask, onEditTask, onDeleteTask, onToggleStatus, onSchedule }) {
   const { toast } = useDialog();
   const [month] = useState(() => new Date().getMonth() + 1);
   const [tool, setTool] = useState("duties");
   const [query, setQuery] = useState("");
   const [openKey, setOpenKey] = useState(null);
   const [opening, setOpening] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
 
   const meta = ROLE_META[part];
   const p = findPart(part);
-  const tools = ROLE_TOOLS[part];
-  const groups = useMemo(() => groupCards(tasks, part), [tasks, part]);
+  const tools = panelTools(part, duties);
+  const groups = useMemo(() => groupCards(tasks, part, duties), [tasks, part, duties]);
+  // 업무분장을 고쳐서 이 보직에서 도구가 빠졌으면 업무분장 탭으로 돌아온다
+  const activeTool = tools.includes(tool) ? tool : "duties";
 
   const allTodos = groups.duties.flatMap((x) => x.task?.todos || []);
   const progress = todoProgress(allTodos);
@@ -40,7 +45,7 @@ export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask
     month
   );
 
-  const duties = groups.duties.filter((x) => matchesQuery(x.task, x.title, query));
+  const shownDuties = groups.duties.filter((x) => matchesQuery(x.task, x.title, query));
   const others = groups.others.filter((t) => matchesQuery(t, t.title, query));
   const common = groups.common.filter((t) => matchesQuery(t, t.title, query));
   const openDuty = groups.duties.find((x) => x.key === openKey) || null;
@@ -97,11 +102,11 @@ export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask
           </div>
           {tools.length > 0 && (
             <div role="tablist" aria-label={`${meta.tab} 작은 탭`} className="flex flex-wrap gap-1 rounded-full bg-black/[0.06] p-1">
-              <button type="button" role="tab" aria-selected={tool === "duties"} onClick={() => setTool("duties")} className={pill(tool === "duties")}>
+              <button type="button" role="tab" aria-selected={activeTool === "duties"} onClick={() => setTool("duties")} className={pill(activeTool === "duties")}>
                 업무분장
               </button>
               {tools.map((id) => (
-                <button key={id} type="button" role="tab" aria-selected={tool === id} onClick={() => setTool(id)} className={pill(tool === id)}>
+                <button key={id} type="button" role="tab" aria-selected={activeTool === id} onClick={() => setTool(id)} className={pill(activeTool === id)}>
                   {TOOLS[id].label}
                 </button>
               ))}
@@ -109,7 +114,7 @@ export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask
           )}
         </div>
 
-        {tool === "duties" && (
+        {activeTool === "duties" && (
           <>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-black/[0.06] pt-6">
               <div className="relative flex items-center">
@@ -177,20 +182,38 @@ export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask
         )}
       </section>
 
-      {tool === "equipment" ? (
+      {activeTool === "equipment" ? (
         <EquipmentLedger />
       ) : (
         <>
           <section className="space-y-5">
-            <div className="flex flex-wrap justify-between items-baseline gap-2 border-b border-black/[0.06] pb-3">
+            <div className="flex flex-wrap justify-between items-center gap-x-3 gap-y-2 border-b border-black/[0.06] pb-3">
               <h3 className="text-[20px] font-semibold text-neutral-900">업무분장</h3>
-              <span className="text-[12px] text-neutral-500">누르면 해야 할 일 · 매뉴얼 · 서식</span>
+              <span className="flex flex-wrap items-center gap-3">
+                <span className="text-[12px] text-neutral-500">누르면 해야 할 일 · 매뉴얼 · 서식</span>
+                {canEditDuties && (
+                  <button
+                    type="button"
+                    onClick={() => setEditorOpen(true)}
+                    disabled={!tasksLoaded}
+                    title="업무를 넣고 빼고, 이름을 바꾸고, 다른 보직으로 옮긴다 (관리자 · 부장)"
+                    className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full border border-accent/40 bg-accent/[0.06] text-accent-strong text-[13px] font-semibold hover:bg-accent/[0.12] transition-colors disabled:opacity-50"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    업무분장 고치기
+                  </button>
+                )}
+              </span>
             </div>
-            {duties.length === 0 ? (
-              <p className="py-10 text-center text-[13px] text-neutral-400">"{query}"에 맞는 업무분장 카드가 없습니다.</p>
+            {shownDuties.length === 0 ? (
+              <p className="py-10 text-center text-[13px] text-neutral-400">
+                {groups.duties.length === 0
+                  ? `이 보직에 업무분장 항목이 없어요.${canEditDuties ? ` "업무분장 고치기"에서 넣을 수 있어요.` : ""}`
+                  : `"${query}"에 맞는 업무분장 카드가 없습니다.`}
+              </p>
             ) : (
               <div className={gridCls}>
-                {duties.map((duty, i) => (
+                {shownDuties.map((duty, i) => (
                   <DutyCard key={duty.key} duty={duty} month={month} loaded={tasksLoaded && !opening} index={i} onOpen={open} />
                 ))}
               </div>
@@ -225,6 +248,10 @@ export default function RolePanel({ part, tasks, tasksLoaded, canEdit, onAddTask
             </section>
           )}
         </>
+      )}
+
+      {editorOpen && (
+        <DutiesEditor duties={duties} tasks={tasks} initialPart={part} email={email} onClose={() => setEditorOpen(false)} />
       )}
 
       {openDuty && (

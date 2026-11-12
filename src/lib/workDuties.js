@@ -5,6 +5,10 @@
 // duty 필드에 key 가 들어간다. 예전 카드도 "업무분장 항목"을 고르면 duty 필드가 생겨 그 자리에 들어간다.
 // ⚠️ key 는 바꾸지 않는다 (문서 ID 와 duty 필드가 이 값을 가리킨다). title 은 고쳐도 된다.
 //
+// 아래 DUTIES 는 처음 목록(2026-11 파일)이다. 관리자 · 부장이 "업무분장 고치기" 창에서 고치면
+// work_config/duties 문서에 저장되고, 그 뒤로는 그 문서가 목록이 된다 (문서가 없을 때만 DUTIES).
+// 그래서 목록을 쓰는 함수는 목록(duties)을 마지막 인자로 받는다 (안 주면 DUTIES).
+//
 // 해야 할 일(todos): [{ id, when: "3월"…"2월" | "수시", text, done }]
 // Firebase 를 부르지 않는 순수 함수만 둔다 (저장은 workDutiesApi.js).
 
@@ -75,13 +79,19 @@ export const DUTIES = {
 };
 
 /** key 로 업무분장 항목을 찾는다 → { key, title, tool?, part } | null */
-export function findDuty(key) {
+export function findDuty(key, duties = DUTIES) {
   if (!key) return null;
   for (const part of ROLE_PARTS) {
-    const duty = DUTIES[part].find((x) => x.key === key);
+    const duty = (duties[part] || []).find((x) => x.key === key);
     if (duty) return { ...duty, part };
   }
   return null;
+}
+
+/** 보직 탭 안의 작은 탭(도구): 기본 도구 + 그 보직으로 옮겨 온 업무에 딸린 도구 */
+export function panelTools(part, duties = DUTIES) {
+  const fromDuties = (duties[part] || []).map((x) => x.tool).filter((t) => t && TOOLS[t]);
+  return [...new Set([...(ROLE_TOOLS[part] || []), ...fromDuties])];
 }
 
 export const dutyDocId = (key) => `duty_${key}`;
@@ -182,25 +192,25 @@ export function validateTodo({ when, text }, count = 0) {
 // ---------- 카드 나누기 ----------
 
 /**
- * 보직 탭 하나에 보일 카드를 나눈다.
+ * 보직 탭 하나에 보일 카드를 나눈다. duties = 지금 업무분장 목록.
  *  - duties: 업무분장 항목마다 { ...duty, part, task|null }  (task 가 없으면 아직 한 번도 안 연 카드)
  *  - others: 이 보직 카드 중 업무분장 항목이 아닌 것 (예전 카드, 새로 등록한 카드)
  *  - common: "공통" 카드 (모든 보직 탭에 보인다)
  * 한 항목을 두 카드가 가리키면: 내용이 있는 카드 → duty_<key> 문서 → 먼저 만든 카드 순으로 하나를 쓰고
- * 나머지는 others 로 간다. 다만 열어 보기만 해서 비어 있는 duty_<key> 문서는 숨긴다
- * (예전 카드에 그 항목을 골라 넣었을 때 빈 카드가 "그 밖의 카드"에 생기지 않게).
+ * 나머지는 others 로 간다. 다만 열어 보기만 해서 비어 있는 duty_<key> 문서는 자리를 못 받으면 늘 숨긴다
+ * (예전 카드에 그 항목을 골라 넣었을 때, 목록에서 그 항목을 뺐을 때 빈 카드가 "그 밖의 카드"에 생기지 않게).
+ * 자리는 카드에 적힌 part 가 아니라 목록의 보직으로 정한다 (업무를 다른 보직으로 옮기면 카드가 따라간다).
  * tasks 는 createdAt 내림차순(최근 것이 앞)으로 들어온다.
  */
-export function groupCards(tasks, part) {
+export function groupCards(tasks, part, duties = DUTIES) {
   const byKey = new Map();
   [...tasks].reverse().forEach((t, age) => {
-    const duty = findDuty(t.duty);
-    if (!duty || duty.part !== part) return;
+    const duty = findDuty(t.duty, duties);
+    if (!duty) return;
     if (!byKey.has(duty.key)) byKey.set(duty.key, []);
     byKey.get(duty.key).push({ t, age });
   });
   const claimed = new Map();
-  const hidden = new Set();
   for (const [key, list] of byKey) {
     const rank = ({ t, age }) => [isBlankDutyDoc(t) ? 1 : 0, t.id === dutyDocId(key) ? 0 : 1, age];
     list.sort((a, b) => {
@@ -209,12 +219,11 @@ export function groupCards(tasks, part) {
       return ra[0] - rb[0] || ra[1] - rb[1] || ra[2] - rb[2];
     });
     claimed.set(key, list[0].t);
-    for (const { t } of list.slice(1)) if (isBlankDutyDoc(t)) hidden.add(t.id);
   }
   const used = new Set([...claimed.values()].map((t) => t.id));
-  const rest = tasks.filter((t) => !used.has(t.id) && !hidden.has(t.id));
+  const rest = tasks.filter((t) => !used.has(t.id) && !isBlankDutyDoc(t));
   return {
-    duties: DUTIES[part].map((duty) => ({ ...duty, part, task: claimed.get(duty.key) || null })),
+    duties: (duties[part] || []).map((duty) => ({ ...duty, part, task: claimed.get(duty.key) || null })),
     others: rest.filter((t) => findPart(t.part).id === part),
     common: rest.filter((t) => findPart(t.part).id === "common"),
   };
@@ -236,10 +245,10 @@ export function isBlankDutyDoc(t) {
  * 업무분장 항목을 이미 다른 카드가 쓰고 있나 (예전 카드에 항목을 고를 때 겹치지 않게).
  * 비어 있는 duty_<key> 문서만 있는 항목은 비어 있는 것으로 본다.
  */
-export function takenDutyKeys(tasks, exceptId) {
+export function takenDutyKeys(tasks, exceptId, duties = DUTIES) {
   const keys = new Set();
   for (const part of ROLE_PARTS) {
-    for (const { key, task } of groupCards(tasks, part).duties) {
+    for (const { key, task } of groupCards(tasks, part, duties).duties) {
       if (task && task.id !== exceptId && !isBlankDutyDoc(task)) keys.add(key);
     }
   }
@@ -260,4 +269,114 @@ export function matchesQuery(task, title, query) {
     ...(task?.todos || []).map((t) => t.text),
   ];
   return hay.some((s) => (s || "").toLowerCase().includes(q));
+}
+
+// ---------- 업무분장 고치기 (work_config/duties) ----------
+
+export const DUTIES_PER_PART_MAX = 40; // firestore.rules 의 dutyListOk 와 같게
+export const DUTY_TITLE_MAX = 100;
+const KEY_RE = /^[a-z0-9-]+$/;
+
+/**
+ * work_config/duties 문서의 parts 를 점검해서 쓸 수 있는 목록으로 만든다.
+ * 이상한 줄(key · 이름이 없거나 key 가 겹침)은 빼고, 모르는 도구 이름은 버린다. parts 가 아예 없으면 null.
+ */
+export function normalizeDuties(parts) {
+  if (!parts || typeof parts !== "object") return null;
+  const seen = new Set();
+  const out = {};
+  for (const part of ROLE_PARTS) {
+    out[part] = [];
+    for (const x of Array.isArray(parts[part]) ? parts[part] : []) {
+      const key = typeof x?.key === "string" ? x.key : "";
+      const title = typeof x?.title === "string" ? x.title.trim() : "";
+      if (!KEY_RE.test(key) || !title || seen.has(key)) continue;
+      seen.add(key);
+      out[part].push(x.tool && TOOLS[x.tool] ? { key, title, tool: x.tool } : { key, title });
+    }
+  }
+  return out;
+}
+
+/** 새로 넣는 업무의 key (문서 ID 에 쓸 수 있는 글자만) */
+export function newDutyKey() {
+  return `x-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * 붙여 넣은 글 → 업무 이름 목록. 한 줄에 하나, 앞의 점 · 번호는 떼고 빈 줄 · 같은 이름은 뺀다.
+ * (한글 표에서 칸을 여러 개 복사하면 탭이 섞여 들어와서 띄어쓰기로 바꾼다)
+ */
+export function parsePastedDuties(text) {
+  const seen = new Set();
+  const out = [];
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const title = line
+      .replace(/\t/g, " ")
+      .replace(/^[\s•·∙◦○●▪■□◆◇※*\-–—]+/, "")
+      .replace(/^\(?\d{1,2}[.)]\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, DUTY_TITLE_MAX);
+    if (!title || seen.has(title)) continue;
+    seen.add(title);
+    out.push(title);
+  }
+  return out;
+}
+
+const CHANGE_ORDER = { moved: 0, added: 1, renamed: 2, removed: 3, reordered: 4 };
+
+/**
+ * 고치기 전 목록과 고친 목록을 비교한다 → 바뀐 것 목록 (저장 전에 확인 창에 보여 준다).
+ *  moved {key, title, from, to} · added {key, title, part} · renamed {key, title, oldTitle, part}
+ *  removed {key, title, part} · reordered {part} (그 보직에 원래 있던 업무끼리 순서만 바뀜)
+ */
+export function diffDuties(before, after) {
+  const index = (duties) => {
+    const m = new Map();
+    for (const part of ROLE_PARTS) (duties[part] || []).forEach((x) => m.set(x.key, { ...x, part }));
+    return m;
+  };
+  const prev = index(before);
+  const next = index(after);
+  const changes = [];
+  for (const [key, x] of next) {
+    const p = prev.get(key);
+    if (!p) {
+      changes.push({ type: "added", key, title: x.title, part: x.part });
+      continue;
+    }
+    if (p.part !== x.part) changes.push({ type: "moved", key, title: x.title, from: p.part, to: x.part });
+    if (p.title !== x.title) changes.push({ type: "renamed", key, title: x.title, oldTitle: p.title, part: x.part });
+  }
+  for (const [key, p] of prev) if (!next.has(key)) changes.push({ type: "removed", key, title: p.title, part: p.part });
+  for (const part of ROLE_PARTS) {
+    const stay = (duties, other) => (duties[part] || []).map((x) => x.key).filter((k) => other.get(k)?.part === part);
+    if (stay(before, next).join() !== stay(after, prev).join()) changes.push({ type: "reordered", part });
+  }
+  return changes.sort((a, b) => CHANGE_ORDER[a.type] - CHANGE_ORDER[b.type]);
+}
+
+/**
+ * 업무를 다른 보직으로 옮기면 그 카드 문서의 part 도 맞춘다 (?task= 상세 창 · 일정 창의 보직 표시가 맞게).
+ * → [{ id, part }]
+ */
+export function partFixes(tasks, duties) {
+  const fixes = [];
+  for (const t of tasks) {
+    const duty = findDuty(t.duty, duties);
+    if (duty && t.part !== duty.part) fixes.push({ id: t.id, part: duty.part });
+  }
+  return fixes;
+}
+
+/** 카드에 적힌 것 한 줄 요약 ("할 일 3 · 매뉴얼 · 서식 1") → 적힌 게 없으면 "" */
+export function cardSummary(task) {
+  if (!task || isBlankDutyDoc(task)) return "";
+  const bits = [];
+  if (task.todos?.length) bits.push(`할 일 ${task.todos.length}`);
+  if ((task.content || "").replace(/<[^>]*>/g, "").trim() || /<img/i.test(task.content || "")) bits.push("매뉴얼");
+  if (task.attachments?.length) bits.push(`서식 ${task.attachments.length}`);
+  return bits.join(" · ");
 }

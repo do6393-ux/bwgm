@@ -5,6 +5,8 @@ import {
   ROLE_TOOLS,
   TOOLS,
   WHEN_OPTIONS,
+  cardSummary,
+  diffDuties,
   dutyDocId,
   findDuty,
   groupCards,
@@ -12,7 +14,12 @@ import {
   isLate,
   matchesQuery,
   monthTodos,
+  newDutyKey,
   nextTodo,
+  normalizeDuties,
+  panelTools,
+  parsePastedDuties,
+  partFixes,
   patchTodo,
   sortTodos,
   takenDutyKeys,
@@ -206,5 +213,113 @@ describe("카드 나누기", () => {
     expect(matchesQuery(task, "", "할 일 a")).toBe(true);
     expect(matchesQuery(task, "", "없는말")).toBe(false);
     expect(matchesQuery(null, "홈페이지 관리", "홈페이지")).toBe(true);
+  });
+});
+
+describe("업무분장 고치기", () => {
+  // 처음 목록에서: 학생 노트북(device-laptop)을 정보기획으로, 교원안심번호(plan-safenum)를 빼고,
+  // 전자칠판 이름을 바꾸고, 새 업무 하나를 넣은 목록
+  const edited = {
+    ...DUTIES,
+    plan: [
+      ...DUTIES.plan.filter((x) => x.key !== "plan-safenum").map((x) => (x.key === "plan-board" ? { ...x, title: "전자칠판 · 스마트TV 관리" } : x)),
+      DUTIES.device.find((x) => x.key === "device-laptop"),
+      { key: "x-new1", title: "원격수업 플랫폼 관리" },
+    ],
+    device: DUTIES.device.filter((x) => x.key !== "device-laptop"),
+  };
+
+  it("저장된 목록 점검: 이상한 줄은 빼고, 모르는 도구는 버린다", () => {
+    expect(normalizeDuties(undefined)).toBeNull();
+    const got = normalizeDuties({
+      head: [
+        { key: "head-lend", title: " 교사 대여 ", tool: "equipment" },
+        { key: "head-x", title: "모르는 도구", tool: "nope" },
+        { key: "Bad Key", title: "글자" },
+        { key: "head-lend", title: "같은 key" },
+        { key: "head-y", title: "  " },
+      ],
+      plan: "목록 아님",
+    });
+    expect(got.head).toEqual([
+      { key: "head-lend", title: "교사 대여", tool: "equipment" },
+      { key: "head-x", title: "모르는 도구" },
+    ]);
+    expect(got.plan).toEqual([]);
+    expect(Object.keys(got)).toEqual(ROLE_PARTS);
+    expect(normalizeDuties(DUTIES)).toEqual(DUTIES);
+  });
+
+  it("새 key 는 문서 ID 로 쓸 수 있고 겹치지 않는다", () => {
+    const keys = Array.from({ length: 50 }, newDutyKey);
+    expect(new Set(keys).size).toBe(50);
+    for (const key of keys) expect(dutyDocId(key)).toMatch(/^duty_[a-z0-9-]+$/);
+  });
+
+  it("다른 보직으로 옮긴 업무는 카드가 따라간다 (카드에 적힌 part 가 예전 값이어도)", () => {
+    const tasks = [{ id: dutyDocId("device-laptop"), part: "device", duty: "device-laptop", todos: [todo("a", "3월")] }];
+    expect(groupCards(tasks, "plan", edited).duties.find((x) => x.key === "device-laptop").task.id).toBe(dutyDocId("device-laptop"));
+    const device = groupCards(tasks, "device", edited);
+    expect(device.duties.some((x) => x.key === "device-laptop")).toBe(false);
+    expect(device.others).toEqual([]); // 예전 보직 탭에 두 번 나오지 않는다
+    expect(findDuty("device-laptop", edited).part).toBe("plan");
+  });
+
+  it("목록에서 뺀 업무: 적힌 게 있는 카드는 그 밖의 카드로, 빈 duty_ 카드는 숨긴다", () => {
+    const tasks = [
+      { id: dutyDocId("plan-safenum"), part: "plan", duty: "plan-safenum", todos: [todo("a", "3월")] },
+      { id: dutyDocId("plan-contest"), part: "plan", duty: "plan-contest", todos: [] },
+    ];
+    const withBlank = (key) => [{ id: dutyDocId(key), part: "plan", duty: key, todos: [] }];
+    expect(groupCards(tasks, "plan", edited).others.map((t) => t.id)).toEqual([dutyDocId("plan-safenum")]);
+    const removedContest = { ...edited, plan: edited.plan.filter((x) => x.key !== "plan-contest") };
+    expect(groupCards(withBlank("plan-contest"), "plan", removedContest).others).toEqual([]);
+  });
+
+  it("도구가 딸린 업무를 옮기면 그 보직에도 도구 탭이 생긴다", () => {
+    expect(panelTools("plan")).toEqual([]);
+    const moved = { ...DUTIES, plan: [...DUTIES.plan, DUTIES.device.find((x) => x.key === "device-lend")] };
+    expect(panelTools("plan", moved)).toEqual(["equipment"]);
+    expect(panelTools("head", moved)).toEqual(["equipment"]); // 기본 도구는 그대로
+  });
+
+  it("바뀐 것: 옮김 · 새 업무 · 이름 바꿈 · 뺌 순서로", () => {
+    expect(diffDuties(DUTIES, DUTIES)).toEqual([]);
+    expect(diffDuties(DUTIES, edited)).toEqual([
+      { type: "moved", key: "device-laptop", title: "학생 노트북 보급 및 관리", from: "device", to: "plan" },
+      { type: "added", key: "x-new1", title: "원격수업 플랫폼 관리", part: "plan" },
+      { type: "renamed", key: "plan-board", title: "전자칠판 · 스마트TV 관리", oldTitle: "전자칠판 관리", part: "plan" },
+      { type: "removed", key: "plan-safenum", title: "교원안심번호 서비스", part: "plan" },
+    ]);
+  });
+
+  it("원래 있던 업무끼리 순서만 바꿔도 바뀐 것으로 본다", () => {
+    const swapped = { ...DUTIES, nais: [DUTIES.nais[1], DUTIES.nais[0], ...DUTIES.nais.slice(2)] };
+    expect(diffDuties(DUTIES, swapped)).toEqual([{ type: "reordered", part: "nais" }]);
+  });
+
+  it("옮긴 업무의 카드 part 를 맞춘다", () => {
+    const tasks = [
+      { id: "a", part: "device", duty: "device-laptop" },
+      { id: "b", part: "device", duty: "device-ip" },
+      { id: "c", part: "plan", duty: "plan-safenum" }, // 뺀 업무는 그대로
+      { id: "d", part: "device" },
+    ];
+    expect(partFixes(tasks, edited)).toEqual([{ id: "a", part: "plan" }]);
+  });
+
+  it("붙여 넣기: 한 줄에 하나, 앞의 점 · 번호 떼기", () => {
+    expect(parsePastedDuties("• 홈페이지 관리\r\n\n2. AIEP 및 MS 계정 관리\n - 홈페이지 관리\n정보기획\t전자칠판   관리\n")).toEqual([
+      "홈페이지 관리",
+      "AIEP 및 MS 계정 관리",
+      "정보기획 전자칠판 관리",
+    ]);
+    expect(parsePastedDuties("")).toEqual([]);
+  });
+
+  it("카드 한 줄 요약", () => {
+    expect(cardSummary(null)).toBe("");
+    expect(cardSummary({ id: dutyDocId("head-nac"), todos: [] })).toBe("");
+    expect(cardSummary({ id: "old", todos: [todo("a", "3월")], content: "<p>순서</p>", attachments: [{}, {}] })).toBe("할 일 1 · 매뉴얼 · 서식 2");
   });
 });
