@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { CalendarPlus, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { CalendarPlus, Check, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { useDialog } from "@/components/ui/dialogContext";
 import { setWorkEventDone } from "@/lib/workEvents";
 import { PARTS, findPart } from "@/lib/workParts";
+import { fetchSchoolSchedule, isOffDay, scheduleRangeFor, scheduleTag, scheduleWhen } from "@/lib/neisSchedule";
 import {
   WEEKDAYS,
   dDay,
@@ -20,6 +21,63 @@ import {
 import EventModal from "./EventModal";
 
 const UPCOMING_LIMIT = 6;
+const SCHOOL_PREF_KEY = "work_calendar_school"; // 학사일정 켜고 끄기 (이 기기에서만 기억)
+const NO_EVENTS = [];
+
+function readSchoolPref() {
+  try {
+    return localStorage.getItem(SCHOOL_PREF_KEY) !== "0";
+  } catch {
+    return true;
+  }
+}
+
+function writeSchoolPref(on) {
+  try {
+    localStorage.setItem(SCHOOL_PREF_KEY, on ? "1" : "0");
+  } catch {
+    // 저장이 막힌 브라우저면 이번에만 적용된다
+  }
+}
+
+/** 달력에 보이는 범위의 나이스 학사일정 */
+function useSchoolSchedule(weeks, enabled) {
+  const { from, to } = scheduleRangeFor(weeks);
+  const rangeKey = `${from}|${to}`;
+  const [state, setState] = useState({ key: null, status: "ok", events: [] });
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let cancelled = false;
+    fetchSchoolSchedule(from, to).then((r) => !cancelled && setState({ key: rangeKey, ...r }));
+    return () => {
+      cancelled = true;
+    };
+    // from·to 는 rangeKey 에 들어 있다
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey, enabled]);
+  return { loaded: state.key === rangeKey, status: state.status, events: state.key === rangeKey ? state.events : NO_EVENTS };
+}
+
+/** 그 달 학사일정 목록 한 줄 */
+function SchoolRow({ event, today }) {
+  const tag = scheduleTag(event);
+  const when = scheduleWhen(event, today);
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 border-b border-black/[0.05] last:border-b-0">
+      <span
+        aria-hidden="true"
+        className={`w-2.5 h-2.5 shrink-0 rounded-[3px] border border-dashed ${event.off ? "border-red-400" : "border-neutral-400"}`}
+      />
+      <span className="md:w-[11.5rem] shrink-0 font-mono text-[12px] text-neutral-500">{formatPeriod(event.start, event.end)}</span>
+      <span className="min-w-0 text-[14px] text-neutral-900">{event.title}</span>
+      {tag && (
+        <span className={`shrink-0 px-2 py-px rounded-md text-[11px] ${event.off ? "bg-red-50 text-red-700" : "bg-neutral-100 text-neutral-600"}`}>{tag}</span>
+      )}
+      {event.note && <span className="min-w-0 truncate text-[12px] text-neutral-500">{event.note}</span>}
+      {when.label && <span className="ml-auto shrink-0 font-mono text-[11px] text-neutral-500">{when.label}</span>}
+    </li>
+  );
+}
 
 function dDayTone(days) {
   if (days < 0) return "text-red-600 bg-red-50 border-red-200";
@@ -82,6 +140,7 @@ export default function WorkCalendar({ tasks, canEdit }) {
   const [loaded, setLoaded] = useState(false);
   const [cursor, setCursor] = useState(() => ({ year: Number(today.slice(0, 4)), month: Number(today.slice(5, 7)) }));
   const [partFilter, setPartFilter] = useState("all");
+  const [showSchool, setShowSchool] = useState(readSchoolPref);
   const [editor, setEditor] = useState(null); // 열려 있는 일정 창의 초기값
 
   useEffect(
@@ -106,6 +165,13 @@ export default function WorkCalendar({ tasks, canEdit }) {
     [events, partFilter]
   );
   const weeks = useMemo(() => monthWeeks(cursor.year, cursor.month), [cursor]);
+  const school = useSchoolSchedule(weeks, showSchool);
+  const schoolEvents = showSchool ? school.events : NO_EVENTS;
+  const schoolMonth = useMemo(() => eventsInMonth(schoolEvents, cursor.year, cursor.month), [schoolEvents, cursor]);
+  const toggleSchool = () => {
+    writeSchoolPref(!showSchool);
+    setShowSchool(!showSchool);
+  };
   const monthList = useMemo(() => eventsInMonth(visible, cursor.year, cursor.month), [visible, cursor]);
   const pending = useMemo(() => pendingEvents(visible), [visible]);
   const isThisMonth = cursor.year === Number(today.slice(0, 4)) && cursor.month === Number(today.slice(5, 7));
@@ -163,6 +229,19 @@ export default function WorkCalendar({ tasks, canEdit }) {
               {p.label}
             </button>
           ))}
+          <span aria-hidden="true" className="w-px h-5 mx-1 bg-black/[0.15]" />
+          <button
+            type="button"
+            onClick={toggleSchool}
+            aria-pressed={showSchool}
+            title="나이스에 학교가 넣은 학사일정 (공휴일·방학·휴업일·행사)"
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[12px] border border-dashed transition-all ${
+              showSchool ? "bg-white border-neutral-500 text-neutral-800 font-bold shadow-sm" : "border-neutral-300 text-neutral-400 hover:text-neutral-600"
+            }`}
+          >
+            {showSchool && <Check className="w-3.5 h-3.5" strokeWidth={2.5} />}
+            학사일정
+          </button>
         </div>
       </section>
 
@@ -231,7 +310,10 @@ export default function WorkCalendar({ tasks, canEdit }) {
           </div>
 
           {weeks.map((week) => {
+            // 학사일정(점선)이 맨 위 줄을 쓰고, 우리 업무 막대는 그 아래로 내려간다
+            const schoolLayout = layoutWeek(week, schoolEvents);
             const { bars } = layoutWeek(week, visible);
+            const laneOffset = schoolLayout.laneCount;
             return (
               <div key={week[0]} className="relative border-b border-black/[0.06] last:border-b-0">
                 {/* 날짜 칸 (뒤). 비어 있는 곳을 누르면 그 날을 마감일로 일정 창이 열린다 */}
@@ -239,6 +321,7 @@ export default function WorkCalendar({ tasks, canEdit }) {
                   {week.map((day, i) => {
                     const inMonth = Number(day.slice(5, 7)) === cursor.month;
                     const isToday = day === today;
+                    const isOff = isOffDay(schoolEvents, day); // 공휴일·휴업일
                     return (
                       <button
                         key={day}
@@ -256,7 +339,9 @@ export default function WorkCalendar({ tasks, canEdit }) {
                               ? "bg-accent text-white font-bold"
                               : !inMonth
                                 ? "text-neutral-300"
-                                : i === 0
+                                : isOff
+                                  ? "text-red-500 font-bold"
+                                  : i === 0
                                   ? "text-red-500"
                                   : i === 6
                                     ? "text-blue-500"
@@ -272,6 +357,18 @@ export default function WorkCalendar({ tasks, canEdit }) {
 
                 {/* 일정 막대 (앞). 빈 곳 클릭은 뒤의 날짜 칸으로 통과시킨다 */}
                 <div className="relative grid grid-cols-7 auto-rows-[20px] gap-y-[3px] pt-8 pb-2 min-h-[84px] md:min-h-[112px] pointer-events-none">
+                  {schoolLayout.bars.map(({ event, startCol, endCol, lane, clippedStart, clippedEnd }) => (
+                    <span
+                      key={`school-${event.id}`}
+                      title={`${event.title} · ${formatPeriod(event.start, event.end)}${event.note ? ` · ${event.note}` : ""} (나이스 학사일정)`}
+                      style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: lane + 1 }}
+                      className={`pointer-events-auto mx-px min-w-0 truncate border border-dashed px-1 md:px-1.5 text-[10px] md:text-[11px] font-bold leading-[18px] ${
+                        event.off ? "border-red-300 bg-red-50/70 text-red-700" : "border-neutral-400 bg-white text-neutral-600"
+                      } ${clippedStart ? "" : "rounded-l-md"} ${clippedEnd ? "" : "rounded-r-md"}`}
+                    >
+                      {event.title}
+                    </span>
+                  ))}
                   {bars.map(({ event, startCol, endCol, lane, clippedStart, clippedEnd }) => {
                     const part = findPart(event.part);
                     return (
@@ -280,7 +377,7 @@ export default function WorkCalendar({ tasks, canEdit }) {
                         type="button"
                         onClick={() => openEdit(event)}
                         title={`${event.title} · ${formatPeriod(event.start, event.end)}${event.done ? " · 완료" : ""}`}
-                        style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: lane + 1 }}
+                        style={{ gridColumn: `${startCol + 1} / ${endCol + 2}`, gridRow: lane + 1 + laneOffset }}
                         className={`pointer-events-auto mx-px min-w-0 truncate border px-1 md:px-1.5 text-left text-[10px] md:text-[11px] leading-[18px] transition-opacity hover:opacity-80 ${part.bar} ${
                           clippedStart ? "" : "rounded-l-md"
                         } ${clippedEnd ? "" : "rounded-r-md"} ${event.done ? "opacity-50 line-through" : ""}`}
@@ -295,6 +392,37 @@ export default function WorkCalendar({ tasks, canEdit }) {
           })}
         </div>
       </section>
+
+      {showSchool && (
+        <section aria-label={`${cursor.month}월 학사일정`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
+            <h3 className="font-mono text-[12px] uppercase tracking-widest text-neutral-600">
+              {cursor.month}월 학사일정 · 나이스 {school.loaded ? schoolMonth.length : "–"}
+            </h3>
+            <span className="text-[11px] text-neutral-400">토요휴업일은 빼고, 방학처럼 이어지는 날은 하나로 묶었습니다</span>
+          </div>
+          {!school.loaded ? (
+            <div className="h-12 rounded-panel bg-black/[0.04] animate-pulse" />
+          ) : school.status === "error" ? (
+            <p className="border border-dashed border-black/[0.12] rounded-panel py-5 text-center text-[13px] text-neutral-400">
+              나이스 학사일정을 불러오지 못했습니다. 잠시 뒤 다시 열어 보세요.
+            </p>
+          ) : schoolMonth.length === 0 ? (
+            <p className="border border-dashed border-black/[0.12] rounded-panel py-5 text-center text-[13px] text-neutral-400">
+              {cursor.month}월에 나이스에 올라온 학사일정이 없습니다.
+            </p>
+          ) : (
+            <ul className="border border-black/[0.08] bg-white rounded-panel overflow-hidden">
+              {schoolMonth.map((e) => (
+                <SchoolRow key={e.id} event={e} today={today} />
+              ))}
+            </ul>
+          )}
+          {school.loaded && school.status === "partial" && (
+            <p className="mt-2 text-[11px] text-orange-600">나이스 인증키가 없어 일부만 받아 왔습니다. 관리자에게 알려 주세요.</p>
+          )}
+        </section>
+      )}
 
       <section aria-label={`${cursor.month}월 일정`}>
         <h3 className="mb-3 font-mono text-[12px] uppercase tracking-widest text-neutral-600">

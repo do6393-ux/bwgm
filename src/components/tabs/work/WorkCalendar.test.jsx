@@ -37,6 +37,8 @@ describe("WorkCalendar", () => {
     expect(html).toContain("일정 추가");
     for (const label of ["전체", "부장", "정보기획", "정보화기기·소모품", "나이스·정보공시", "공통"]) expect(html).toContain(label);
     expect(html).toContain("마감 임박"); // 첫 응답 전에는 숫자 대신 자리 표시
+    expect(html).toMatch(/aria-pressed="true" title="나이스에 학교가 넣은 학사일정/); // 학사일정은 처음에 켜져 있다
+    expect(html).toContain("학사일정 · 나이스"); // 그달 학사일정 목록 (받기 전에는 자리 표시)
   });
 
   it("권한이 없으면 일정 추가 버튼이 없고 날짜 칸이 눌리지 않는다", () => {
