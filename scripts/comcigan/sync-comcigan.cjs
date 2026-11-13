@@ -119,10 +119,12 @@ async function runSync() {
             const teacherNameRaw = item.teacher.replace(/\*/g, '');
             const type = item.changed ? 'red' : 'normal';
 
-            // 1. 학급 시간표
+            // 1. 학급 시간표 (subject·teacher 는 교실 화면이 과목과 선생님을 나눠 보여 줄 때 쓴다)
             scheduleMap[`${period}_${day}`] = {
               text: teacherNameRaw ? `${item.subject}${teacherNameRaw}` : item.subject,
               type,
+              subject: item.subject || '',
+              teacher: teacherNameRaw,
             };
 
             // 2. 교사 시간표 (이름 앞 2글자를 키로, 1학년 10반 → 110)

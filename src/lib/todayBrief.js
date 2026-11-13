@@ -69,6 +69,22 @@ export function pickWeekKey(targetDate, sameWeekAsToday, thisUpdatedAt, nextUpda
   return null; // 문서는 있지만 그 주의 것이 아니다 (동기화가 오래 멈춘 경우)
 }
 
+/**
+ * 이번 주·다음 주 시간표 문서({ schedule, updatedAt, failed }) 중 보여 줄 날(day)의 것을 고른다.
+ * 반환 { schedule | null, status: "ok" | "error"(읽기 실패) | "empty"(그 주 문서에 없음) | "stale"(동기화 멈춤) }
+ */
+export function pickDaySchedule(day, thisWeek, nextWeek) {
+  const weekKey = pickWeekKey(
+    day.date,
+    mondayOf(day.date) === mondayOf(day.today),
+    thisWeek.schedule ? thisWeek.updatedAt : null,
+    nextWeek.schedule ? nextWeek.updatedAt : null
+  );
+  const picked = weekKey === "this" ? thisWeek : weekKey === "next" ? nextWeek : null;
+  const status = picked?.schedule ? "ok" : thisWeek.failed || nextWeek.failed ? "error" : weekKey ? "empty" : "stale";
+  return { schedule: picked?.schedule || null, status };
+}
+
 /** 교사 시간표 칸 글자 "205정보" → { classLabel: "2-5", subject: "정보" } */
 export function parseTeacherCell(text) {
   const clean = String(text || "").trim();

@@ -7,31 +7,20 @@ import { ArrowRight, ChevronDown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { fetchPeriodTimes, fetchTeacherSchedule } from "@/lib/timetable";
 import { fetchLunch } from "@/lib/neisMeal";
-import { eventsOn, fetchSchoolSchedule, isNoClassDay, scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
-import { WEEKDAYS, addDays, dateKey, formatPeriod } from "@/lib/workCalendar";
+import { eventsOn, scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
+import { useSchoolDay } from "@/lib/useSchoolDay";
+import { WEEKDAYS, formatPeriod } from "@/lib/workCalendar";
 import { findPart } from "@/lib/workParts";
 import { buildClassGrid, targetClasses } from "@/lib/homework";
 import { hashOfSubtab } from "@/lib/classSubtabs";
 import { useAllRosters, useClassSettings, useHomeworkList } from "@/lib/homeworkApi";
-import {
-  dayLessons,
-  isBeyondNextWeek,
-  mondayOf,
-  periodState,
-  pickWeekKey,
-  targetSchoolDay,
-  upcomingHomework,
-  withIra,
-  workDigest,
-} from "@/lib/todayBrief";
+import { dayLessons, isBeyondNextWeek, periodState, pickDaySchedule, upcomingHomework, withIra, workDigest } from "@/lib/todayBrief";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
 
 const WORK_LIMIT = 5;
 const SCHOOL_LIMIT = 3;
 const SCHOOL_SOON_DAYS = 7; // 이 안에 다가오는 학사일정은 포인트 색으로
 const WORK_VIEW_KEY = "work_view"; // TabWork.jsx 의 VIEW_KEY 와 같게 (정보 업무 탭이 처음 열 작은 탭)
-const SCHOOL_WAIT_MS = 4000; // 나이스 학사일정을 이만큼 기다린 뒤에는 없이 진행
-const NO_EVENTS = [];
 
 function useNow() {
   const [now, setNow] = useState(() => new Date());
@@ -79,34 +68,10 @@ function Loading({ rows = 4, label }) {
 
 export default function TodayBrief({ teacherName, teacherCode, teacherBase, canWork, onOpenTab }) {
   const now = useNow();
-  const today = dateKey(now);
   const [open, setOpen] = useState(false);
 
-  // ── 학사일정 (나이스). 쉬는 날을 알아야 보여 줄 날을 고를 수 있어서 시간표·급식보다 먼저 받는다.
-  //    진행 중인 방학도 잡히게 두 달 앞부터 넉 달 뒤까지. 나이스가 늦으면 잠시 뒤 학사일정 없이(주말만 건너뛰고) 진행한다 ──
-  const [school, setSchool] = useState({ key: null, status: "ok", events: [] });
-  useEffect(() => {
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      if (!cancelled) setSchool((s) => (s.key === today ? s : { key: today, status: "slow", events: [] }));
-    }, SCHOOL_WAIT_MS);
-    fetchSchoolSchedule(addDays(today, -62), addDays(today, 120)).then((r) => {
-      clearTimeout(timer);
-      if (!cancelled) setSchool({ key: today, ...r });
-    });
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [today]);
-  const schoolReady = school.key === today;
-  const schoolEvents = schoolReady ? school.events : NO_EVENTS;
-
-  // 보여 줄 날: 오늘 수업이 없으면(주말·공휴일·휴업일·방학) 다음 수업일
-  const day = targetSchoolDay(now, (d) => isNoClassDay(schoolEvents, d));
-  const todayOff = eventsOn(schoolEvents, today).filter((e) => e.kind === "공휴일" || e.kind === "휴업일");
-  const todayWd = now.getDay();
-  const skipReason = day.isToday ? "" : todayOff[0]?.title || (todayWd >= 1 && todayWd <= 5 ? "공휴일" : "주말");
+  // ── 보여 줄 날: 학사일정(나이스)을 먼저 받아서, 오늘 수업이 없으면(주말·공휴일·휴업일·방학) 다음 수업일 ──
+  const { today, day, ready: schoolReady, status: schoolStatus, events: schoolEvents, skipReason } = useSchoolDay(now);
 
   // ── 시간표: 이번 주·다음 주 문서를 둘 다 읽고, 보여 줄 날이 들어 있는 쪽을 고른다 ──
   const ttKey = schoolReady ? `${teacherName}|${teacherCode}|${day.date}` : null;
@@ -129,15 +94,7 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
         fetchPeriodTimes(),
       ]);
       if (cancelled) return;
-      const weekKey = pickWeekKey(
-        day.date,
-        mondayOf(day.date) === mondayOf(day.today),
-        thisWeek.schedule ? thisWeek.updatedAt : null,
-        nextWeek.schedule ? nextWeek.updatedAt : null
-      );
-      const picked = weekKey === "this" ? thisWeek : weekKey === "next" ? nextWeek : null;
-      const status = picked?.schedule ? "ok" : thisWeek.failed || nextWeek.failed ? "error" : weekKey ? "empty" : "stale";
-      setTt({ key: ttKey, schedule: picked?.schedule || null, times, status });
+      setTt({ key: ttKey, times, ...pickDaySchedule(day, thisWeek, nextWeek) });
     })();
     return () => { cancelled = true; };
     // day.date 는 ttKey 에, day.today 는 day.date 를 고를 때 들어 있다
@@ -164,7 +121,7 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
   const mealLoading = !mealDate || meal.date !== mealDate;
 
   // ── 학사 줄 ──
-  const schoolLoading = !schoolReady || school.status === "slow";
+  const schoolLoading = !schoolReady || schoolStatus === "slow";
   const schoolItems = upcomingSchool(schoolEvents, today, SCHOOL_LIMIT);
   const dayEvents = eventsOn(schoolEvents, day.date);
   const dayEventLabel = dayEvents
@@ -354,7 +311,7 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
             <Loading rows={1} label="학사일정을 불러오는 중" />
           ) : schoolItems.length === 0 ? (
             <span className="text-ink-faint">
-              {school.status === "error" ? "학사일정을 불러오지 못했습니다." : "다가오는 학사일정이 없습니다."}
+              {schoolStatus === "error" ? "학사일정을 불러오지 못했습니다." : "다가오는 학사일정이 없습니다."}
             </span>
           ) : (
             <ul className="flex flex-col md:flex-row gap-1.5 md:gap-6 min-w-0">

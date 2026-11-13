@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { loadSynced } from "@/lib/syncedStorage";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { Users, PhoneCall, Grid, Sparkles, RefreshCw } from "lucide-react";
+import { Users, PhoneCall, Grid, Sparkles, RefreshCw, Monitor } from "lucide-react";
 
 import { DEFAULT_BEHAVIOR_PRESETS } from "./defaultPresets";
 
@@ -10,12 +10,14 @@ import SubtabContacts from "./SubtabContacts";
 import SubtabCleaning from "./SubtabCleaning";
 import SubtabSeating from "./SubtabSeating";
 import SubtabRecords from "./SubtabRecords";
+import SubtabClassroom from "./SubtabClassroom";
 
 const SUBTABS = [
   { id: "contacts", label: "비상연락망", icon: PhoneCall, color: "text-rose-400" },
   { id: "seating", label: "자리배치", icon: Grid, color: "text-indigo-400" },
   { id: "cleaning", label: "청소구역", icon: Sparkles, color: "text-emerald-400" },
   { id: "records", label: "행발세특 조립기", shortLabel: "행발세특", icon: RefreshCw, color: "text-purple-400" }, // shortLabel: 폰에서 쓰는 짧은 이름
+  { id: "classroom", label: "교실 화면", shortLabel: "교실화면", icon: Monitor, color: "text-emerald-400" }, // 교실 TV·전자칠판용
 ];
 
 export default function TabHomeroom({ currentUser }) {
@@ -113,7 +115,7 @@ export default function TabHomeroom({ currentUser }) {
           </button>
         </div>
 
-        <div className="grid grid-cols-4 md:flex md:flex-wrap gap-1.5 md:gap-2.5">
+        <div className="grid grid-cols-5 md:flex md:flex-wrap gap-1.5 md:gap-2.5">
           {SUBTABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeSubtab === tab.id;
@@ -140,6 +142,7 @@ export default function TabHomeroom({ currentUser }) {
         {activeSubtab === "seating" && <SubtabSeating userId={userId} grade={grade} classNum={classNum} contacts={contacts} excludedStudentNums={excludedStudentNums} setExcludedStudentNums={setExcludedStudentNums} contactsLoading={contactsLoading} currentUser={currentUser} />}
         {activeSubtab === "cleaning" && <SubtabCleaning userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
         {activeSubtab === "records" && <SubtabRecords userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
+        {activeSubtab === "classroom" && <SubtabClassroom grade={grade} classNum={classNum} />}
       </section>
 
       {isClassModalOpen && (
