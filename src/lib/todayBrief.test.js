@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   dayLessons,
+  isBeyondNextWeek,
   mondayOf,
   parseTeacherCell,
   periodState,
   pickWeekKey,
   targetSchoolDay,
   upcomingHomework,
+  withIra,
   workDigest,
 } from "./todayBrief";
+import { isNoClassDay, mergeScheduleRows } from "./neisSchedule";
 
 // 2026-11-09 는 월요일
 const at = (key, hh = 12, mm = 0) => {
@@ -16,13 +19,66 @@ const at = (key, hh = 12, mm = 0) => {
   return new Date(y, m - 1, d, hh, mm);
 };
 
+// 나이스 학사일정 (실제 2026학년도 줄 일부)
+const row = (ymd, name, sbtr) => ({ AA_YMD: ymd, EVENT_NM: name, SBTR_DD_SC_NM: sbtr });
+const school = mergeScheduleRows([
+  row("20261119", "수능시험일", "휴업일"),
+  row("20261225", "성탄절", "공휴일"),
+  row("20261009", "한글날", "공휴일"),
+  row("20261010", "토요휴업일", "휴업일"),
+  row("20260910", "학교공개의 날", "해당없음"),
+  ...Array.from({ length: 26 }, (_, i) => row(`202701${String(i + 6).padStart(2, "0")}`, "겨울방학", "휴업일")),
+  ...Array.from({ length: 28 }, (_, i) => row(`202702${String(i + 1).padStart(2, "0")}`, "겨울방학", "휴업일")),
+  row("20270301", "3·1절", "공휴일"),
+]);
+const noClass = (d) => isNoClassDay(school, d);
+
 describe("targetSchoolDay", () => {
   it("평일은 오늘", () => {
-    expect(targetSchoolDay(at("2026-11-11"))).toEqual({ date: "2026-11-11", today: "2026-11-11", isToday: true, dayIdx: 2 });
+    expect(targetSchoolDay(at("2026-11-11"))).toEqual({ date: "2026-11-11", today: "2026-11-11", isToday: true, dayIdx: 2, daysAhead: 0 });
   });
   it("토·일은 다음 월요일", () => {
-    expect(targetSchoolDay(at("2026-11-14"))).toMatchObject({ date: "2026-11-16", isToday: false, dayIdx: 0 });
-    expect(targetSchoolDay(at("2026-11-15"))).toMatchObject({ date: "2026-11-16", isToday: false, dayIdx: 0 });
+    expect(targetSchoolDay(at("2026-11-14"))).toMatchObject({ date: "2026-11-16", isToday: false, dayIdx: 0, daysAhead: 2 });
+    expect(targetSchoolDay(at("2026-11-15"))).toMatchObject({ date: "2026-11-16", isToday: false, dayIdx: 0, daysAhead: 1 });
+  });
+  it("휴업일·공휴일이면 다음 수업일 (수능날 → 금요일, 성탄절 금요일 → 월요일)", () => {
+    expect(targetSchoolDay(at("2026-11-19"), noClass)).toMatchObject({ date: "2026-11-20", isToday: false, dayIdx: 4 });
+    expect(targetSchoolDay(at("2026-12-25"), noClass)).toMatchObject({ date: "2026-12-28", daysAhead: 3 });
+    expect(targetSchoolDay(at("2026-10-09"), noClass).date).toBe("2026-10-12"); // 한글날(금) → 월
+  });
+  it("수업일의 행사는 건너뛰지 않는다", () => {
+    expect(targetSchoolDay(at("2026-09-10"), noClass)).toMatchObject({ date: "2026-09-10", isToday: true });
+  });
+  it("방학 중이면 개학하는 날까지 건너뛴다 (3·1절 다음 날)", () => {
+    expect(targetSchoolDay(at("2027-01-20"), noClass)).toMatchObject({ date: "2027-03-02", daysAhead: 41 });
+  });
+  it("다음 학년도 학사일정이 아직 없어도 정해진 공휴일(3/1)은 건너뛴다", () => {
+    const withoutMarch = school.filter((e) => e.title !== "3·1절");
+    expect(targetSchoolDay(at("2027-01-20"), (d) => isNoClassDay(withoutMarch, d)).date).toBe("2027-03-02");
+    expect(targetSchoolDay(at("2026-12-25")).date).toBe("2026-12-28"); // 학사일정을 몰라도 성탄절은 쉰다
+  });
+  it("수업일을 못 찾을 만큼 이상한 학사일정이면 주말만 건너뛴다", () => {
+    expect(targetSchoolDay(at("2026-11-14"), () => true)).toMatchObject({ date: "2026-11-16" });
+    expect(targetSchoolDay(at("2026-11-11"), () => true)).toMatchObject({ date: "2026-11-11", isToday: true });
+  });
+});
+
+describe("withIra", () => {
+  it("받침에 따라 이라 / 라", () => {
+    expect(withIra("주말")).toBe("주말이라");
+    expect(withIra("수능시험일")).toBe("수능시험일이라");
+    expect(withIra("지방선거")).toBe("지방선거라");
+    expect(withIra("3·1절")).toBe("3·1절이라");
+    expect(withIra("ABC")).toBe("ABC(이)라");
+  });
+});
+
+describe("isBeyondNextWeek", () => {
+  it("다음 주까지는 시간표가 있고 그 뒤는 없다", () => {
+    expect(isBeyondNextWeek("2026-11-20", "2026-11-13")).toBe(false);
+    expect(isBeyondNextWeek("2026-11-16", "2026-11-14")).toBe(false);
+    expect(isBeyondNextWeek("2026-11-23", "2026-11-13")).toBe(true);
+    expect(isBeyondNextWeek("2027-03-02", "2027-01-20")).toBe(true);
   });
 });
 

@@ -1,4 +1,4 @@
-// 교무실 "오늘 한눈에" 카드: 오늘(주말이면 다음 월요일) 내 수업 · 급식 · 정보 업무 마감 · 학사일정 · 과제 마감.
+// 교무실 "오늘 한눈에" 카드: 오늘(수업이 없는 날이면 다음 수업일) 내 수업 · 급식 · 정보 업무 마감 · 학사일정 · 과제 마감.
 // PC 에서는 늘 펼쳐 두고, 휴대폰에서는 한 줄 요약만 보이다가 누르면 펼친다 (교사 시간표가 첫 화면에 다 보이게).
 // 정보 업무·과제 칸은 정보 업무 권한(canWork)이 있을 때만 보인다.
 import { useEffect, useMemo, useState } from "react";
@@ -7,19 +7,31 @@ import { ArrowRight, ChevronDown } from "lucide-react";
 import { db } from "@/lib/firebase";
 import { fetchPeriodTimes, fetchTeacherSchedule } from "@/lib/timetable";
 import { fetchLunch } from "@/lib/neisMeal";
-import { eventsOn, fetchSchoolSchedule, scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
-import { WEEKDAYS, addDays, formatPeriod } from "@/lib/workCalendar";
+import { eventsOn, fetchSchoolSchedule, isNoClassDay, scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
+import { WEEKDAYS, addDays, dateKey, formatPeriod } from "@/lib/workCalendar";
 import { findPart } from "@/lib/workParts";
 import { buildClassGrid, targetClasses } from "@/lib/homework";
 import { hashOfSubtab } from "@/lib/classSubtabs";
 import { useAllRosters, useClassSettings, useHomeworkList } from "@/lib/homeworkApi";
-import { dayLessons, periodState, pickWeekKey, targetSchoolDay, upcomingHomework, workDigest } from "@/lib/todayBrief";
+import {
+  dayLessons,
+  isBeyondNextWeek,
+  mondayOf,
+  periodState,
+  pickWeekKey,
+  targetSchoolDay,
+  upcomingHomework,
+  withIra,
+  workDigest,
+} from "@/lib/todayBrief";
 import { Skeleton, SkeletonGroup } from "@/components/ui/Skeleton";
 
 const WORK_LIMIT = 5;
 const SCHOOL_LIMIT = 3;
 const SCHOOL_SOON_DAYS = 7; // 이 안에 다가오는 학사일정은 포인트 색으로
 const WORK_VIEW_KEY = "work_view"; // TabWork.jsx 의 VIEW_KEY 와 같게 (정보 업무 탭이 처음 열 작은 탭)
+const SCHOOL_WAIT_MS = 4000; // 나이스 학사일정을 이만큼 기다린 뒤에는 없이 진행
+const NO_EVENTS = [];
 
 function useNow() {
   const [now, setNow] = useState(() => new Date());
@@ -67,17 +79,48 @@ function Loading({ rows = 4, label }) {
 
 export default function TodayBrief({ teacherName, teacherCode, teacherBase, canWork, onOpenTab }) {
   const now = useNow();
-  const day = targetSchoolDay(now);
+  const today = dateKey(now);
   const [open, setOpen] = useState(false);
 
+  // ── 학사일정 (나이스). 쉬는 날을 알아야 보여 줄 날을 고를 수 있어서 시간표·급식보다 먼저 받는다.
+  //    진행 중인 방학도 잡히게 두 달 앞부터 넉 달 뒤까지. 나이스가 늦으면 잠시 뒤 학사일정 없이(주말만 건너뛰고) 진행한다 ──
+  const [school, setSchool] = useState({ key: null, status: "ok", events: [] });
+  useEffect(() => {
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) setSchool((s) => (s.key === today ? s : { key: today, status: "slow", events: [] }));
+    }, SCHOOL_WAIT_MS);
+    fetchSchoolSchedule(addDays(today, -62), addDays(today, 120)).then((r) => {
+      clearTimeout(timer);
+      if (!cancelled) setSchool({ key: today, ...r });
+    });
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [today]);
+  const schoolReady = school.key === today;
+  const schoolEvents = schoolReady ? school.events : NO_EVENTS;
+
+  // 보여 줄 날: 오늘 수업이 없으면(주말·공휴일·휴업일·방학) 다음 수업일
+  const day = targetSchoolDay(now, (d) => isNoClassDay(schoolEvents, d));
+  const todayOff = eventsOn(schoolEvents, today).filter((e) => e.kind === "공휴일" || e.kind === "휴업일");
+  const todayWd = now.getDay();
+  const skipReason = day.isToday ? "" : todayOff[0]?.title || (todayWd >= 1 && todayWd <= 5 ? "공휴일" : "주말");
+
   // ── 시간표: 이번 주·다음 주 문서를 둘 다 읽고, 보여 줄 날이 들어 있는 쪽을 고른다 ──
-  const ttKey = `${teacherName}|${teacherCode}|${day.date}`;
+  const ttKey = schoolReady ? `${teacherName}|${teacherCode}|${day.date}` : null;
   const [tt, setTt] = useState({ key: null, schedule: null, times: [], status: "loading" });
   useEffect(() => {
+    if (!ttKey) return undefined;
     let cancelled = false;
     (async () => {
       if (!teacherName && !teacherCode) {
         setTt({ key: ttKey, schedule: null, times: [], status: "noTeacher" });
+        return;
+      }
+      if (isBeyondNextWeek(day.date, day.today)) {
+        setTt({ key: ttKey, schedule: null, times: [], status: "far" });
         return;
       }
       const [thisWeek, nextWeek, times] = await Promise.all([
@@ -88,7 +131,7 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
       if (cancelled) return;
       const weekKey = pickWeekKey(
         day.date,
-        day.isToday,
+        mondayOf(day.date) === mondayOf(day.today),
         thisWeek.schedule ? thisWeek.updatedAt : null,
         nextWeek.schedule ? nextWeek.updatedAt : null
       );
@@ -97,10 +140,10 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
       setTt({ key: ttKey, schedule: picked?.schedule || null, times, status });
     })();
     return () => { cancelled = true; };
-    // day.date / day.isToday 는 ttKey 에 들어 있다
+    // day.date 는 ttKey 에, day.today 는 day.date 를 고를 때 들어 있다
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ttKey]);
-  const ttLoading = tt.key !== ttKey;
+  const ttLoading = !ttKey || tt.key !== ttKey;
 
   const lessons = useMemo(
     () => (tt.schedule ? dayLessons(tt.schedule, day.dayIdx, teacherBase) : []),
@@ -109,27 +152,21 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
   const lessonCount = lessons.filter((l) => l.text).length;
   const { current, next } = day.isToday ? periodState(tt.times, now) : { current: null, next: null };
 
-  // ── 급식 ──
+  // ── 급식 (보여 줄 날이 정해진 뒤에 받는다) ──
+  const mealDate = schoolReady ? day.date : null;
   const [meal, setMeal] = useState({ date: null, status: "ok", list: [], kcal: "" });
   useEffect(() => {
+    if (!mealDate) return undefined;
     let cancelled = false;
-    fetchLunch(day.date).then((r) => !cancelled && setMeal({ date: day.date, ...r }));
+    fetchLunch(mealDate).then((r) => !cancelled && setMeal({ date: mealDate, ...r }));
     return () => { cancelled = true; };
-  }, [day.date]);
-  const mealLoading = meal.date !== day.date;
+  }, [mealDate]);
+  const mealLoading = !mealDate || meal.date !== mealDate;
 
-  // ── 학사일정 (나이스). 진행 중인 방학도 잡히게 두 달 앞부터 넉 달 뒤까지 받는다 ──
-  const [school, setSchool] = useState({ key: null, status: "ok", events: [] });
-  useEffect(() => {
-    let cancelled = false;
-    fetchSchoolSchedule(addDays(day.today, -62), addDays(day.today, 120)).then(
-      (r) => !cancelled && setSchool({ key: day.today, ...r })
-    );
-    return () => { cancelled = true; };
-  }, [day.today]);
-  const schoolLoading = school.key !== day.today;
-  const schoolItems = upcomingSchool(school.events, day.today, SCHOOL_LIMIT);
-  const dayEvents = schoolLoading ? [] : eventsOn(school.events, day.date);
+  // ── 학사 줄 ──
+  const schoolLoading = !schoolReady || school.status === "slow";
+  const schoolItems = upcomingSchool(schoolEvents, today, SCHOOL_LIMIT);
+  const dayEvents = eventsOn(schoolEvents, day.date);
   const dayEventLabel = dayEvents
     .map((e) => {
       const tag = scheduleTag(e);
@@ -177,6 +214,7 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
     noTeacher: "조회 교사를 먼저 설정하세요 (아래 '조회 교사' 칸).",
     empty: "이 날 시간표가 아직 없습니다.",
     stale: "시간표 동기화가 오래 멈춰 있습니다. GitHub Actions 를 확인하세요.",
+    far: "이 날 시간표는 아직 없습니다. 컴시간은 이번 주와 다음 주 시간표만 알려 줍니다.",
     error: "시간표를 불러오지 못했습니다.",
   }[tt.status];
 
@@ -204,7 +242,11 @@ export default function TodayBrief({ teacherName, teacherCode, teacherBase, canW
           <span className="text-accent">// 오늘 한눈에</span>
           <span className="text-ink">{dateLabel}</span>
           {dayEventLabel && <span className="px-1.5 border border-accent/50 text-accent normal-case tracking-normal font-bold">{dayEventLabel}</span>}
-          {!day.isToday && <span className="text-ink-faint normal-case tracking-normal">주말이라 다음 수업일을 보여 줍니다</span>}
+          {!day.isToday && (
+            <span className="text-ink-faint normal-case tracking-normal">
+              {withIra(skipReason)} 다음 수업일을 보여 줍니다{day.daysAhead > 3 ? ` · D-${day.daysAhead}` : ""}
+            </span>
+          )}
         </div>
 
         <div className={`grid grid-cols-1 ${canWork ? "md:grid-cols-3" : "md:grid-cols-2"} divide-y md:divide-y-0 md:divide-x divide-line`}>

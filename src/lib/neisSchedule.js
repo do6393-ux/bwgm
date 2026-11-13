@@ -75,6 +75,11 @@ export function eventsOn(events, date) {
   return events.filter((e) => e.start <= date && date <= e.end);
 }
 
+/** date 에 수업이 없는지 (공휴일·휴업일·방학). 주말은 따로 본다 */
+export function isNoClassDay(events, date) {
+  return events.some((e) => (e.kind === "공휴일" || e.kind === "휴업일") && e.start <= date && date <= e.end);
+}
+
 /** date 가 빨갛게 칠할 날(공휴일·휴업일)인지 */
 export function isOffDay(events, date) {
   return events.some((e) => e.off && e.start <= date && date <= e.end);
