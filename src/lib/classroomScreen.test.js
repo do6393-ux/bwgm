@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMinutes, classroomRows, classroomStatus, longDate, splitClassCell } from "./classroomScreen";
+import { addMinutes, classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor, splitClassCell } from "./classroomScreen";
 
 const TIMES = ["09:00", "09:55", "10:50", "11:45", "13:30", "14:25", "15:20"];
 const at = (hh, mm) => new Date(2026, 10, 13, hh, mm); // 11/13(금)
@@ -64,5 +64,19 @@ describe("classroomRows", () => {
 
   it("시간표가 없으면 빈 목록", () => {
     expect(classroomRows(null, 4, TIMES, at(10, 12), true)).toEqual([]);
+  });
+});
+
+describe("오른쪽 칸", () => {
+  it("monthDay", () => {
+    expect(monthDay("2026-11-19")).toBe("11월 19일");
+    expect(monthDay("2027-01-06")).toBe("1월 6일");
+  });
+
+  it("schoolLimitFor: 반찬이 많으면 학사일정을 줄인다", () => {
+    expect(schoolLimitFor(0)).toBe(3);
+    expect(schoolLimitFor(6)).toBe(3);
+    expect(schoolLimitFor(7)).toBe(2);
+    expect(schoolLimitFor(9)).toBe(1);
   });
 });

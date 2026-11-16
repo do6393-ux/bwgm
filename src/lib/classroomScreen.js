@@ -26,6 +26,22 @@ export function longDate(key) {
   return `${m}월 ${d}일 ${WEEKDAYS[wd]}요일`;
 }
 
+/** "2026-11-19" → "11월 19일" */
+export function monthDay(key) {
+  const [, m, d] = key.split("-").map(Number);
+  return `${m}월 ${d}일`;
+}
+
+/**
+ * 오른쪽 칸에 학사일정을 몇 개 보여 줄지. 급식·학사일정·채팅 단추가 한 칸에 들어가서
+ * 급식 반찬이 많은 날은 학사일정을 줄인다 (1280×720 기준으로 잰 값).
+ */
+export function schoolLimitFor(dishCount) {
+  if (dishCount >= 8) return 1;
+  if (dishCount >= 7) return 2;
+  return 3;
+}
+
 /**
  * 학급 시간표 칸 → { subject, teacher }.
  * 동기화가 과목·선생님을 따로 저장해 두었으면 나눠 쓰고, 예전 문서처럼 글자만 있으면 통째로 과목 자리에 둔다.

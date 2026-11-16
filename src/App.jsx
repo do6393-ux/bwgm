@@ -15,6 +15,9 @@ import LessonDetailView from "@/components/editor/LessonDetailView";
 import TaskDetailView from "@/components/editor/TaskDetailView";
 import HomeworkView from "@/components/homework/HomeworkView";
 import HomeworkManager from "@/components/homework/HomeworkManager";
+import ClassroomKiosk from "@/components/tabs/homeroom/ClassroomKiosk";
+import ClassroomInboxToast from "@/components/layout/ClassroomInboxToast";
+import { useClassroomInbox } from "@/lib/useClassroomInbox";
 
 // 탭별 색은 src/index.css 의 [data-theme] 블록에 있고, 여기서는 그 색 이름(page, ink, line …)만 쓴다.
 const THEME_CLASSES = {
@@ -39,6 +42,7 @@ export default function App() {
   const activeTaskId = urlParams.get("task");
   const activeHomeworkId = urlParams.get("assignment"); // 과제 화면 (학생 공개)
   const isHomeworkManager = urlParams.get("manage") === "assignments"; // 과제 관리 (교사 전용)
+  const classroomScreenId = urlParams.get("classroom"); // 로그인 없이 교실 컴퓨터에 띄우는 교실 화면 (내 학급 › 교실 화면에서 만든 주소)
 
   const [currentUser, setCurrentUser] = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -59,6 +63,30 @@ export default function App() {
   // 정보 업무는 관리자 + 관리자가 허용한 교사(teachers/{이메일}.canWork)만 열람 가능
   const { canWork, ready: workAccessReady, workRole } = useWorkAccess(currentUser);
 
+  // 교실 채팅 알림 (교실 화면 주소로 들어온 창에서는 하지 않는다)
+  const inbox = useClassroomInbox(classroomScreenId === null ? currentUser?.uid || null : null);
+  useEffect(() => {
+    const strip = (t) => t.replace(/^\(\d+\) /, "");
+    document.title = inbox.count > 0 ? `(${inbox.count}) ${strip(document.title)}` : strip(document.title);
+  }, [inbox.count]);
+
+  // 내 학급을 특정 작은 탭으로 열기 (알림의 "보고 답장하기"). n 이 바뀌면 내 학급을 새로 연다
+  const [homeroomEntry, setHomeroomEntry] = useState({ n: 0, subtab: undefined });
+  const goTab = (tab) => {
+    setHomeroomEntry((e) => ({ ...e, subtab: undefined }));
+    setActiveTab(tab);
+  };
+  const openClassroomChat = (screen) => {
+    try {
+      localStorage.setItem("homeroom_grade", screen.grade);
+      localStorage.setItem("homeroom_class", screen.classNum);
+    } catch {
+      // 저장소를 못 쓰면 지금 설정한 학급으로 연다
+    }
+    setHomeroomEntry((e) => ({ n: e.n + 1, subtab: "classroom" }));
+    setActiveTab("homeroom");
+  };
+
   // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
   // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
   const canView = activeTab === "class" || (activeTab === "work" ? canWork : !!currentUser);
@@ -66,7 +94,8 @@ export default function App() {
 
   // 지금 화면의 색 테마를 <html data-theme> 으로 알린다 (알림창·모달·페이지 배경까지 같은 색을 쓰도록).
   // 업무 상세는 work, 수업 자료 상세는 class 테마.
-  const themeKey = activeTaskId ? "work" : activeLessonId || activeHomeworkId || isHomeworkManager ? "class" : authReady ? visibleTab : "class";
+  const themeKey =
+    classroomScreenId !== null ? "homeroom" : activeTaskId ? "work" : activeLessonId || activeHomeworkId || isHomeworkManager ? "class" : authReady ? visibleTab : "class";
   useLayoutEffect(() => {
     document.documentElement.dataset.theme = themeKey;
     let meta = document.querySelector('meta[name="theme-color"]');
@@ -77,6 +106,9 @@ export default function App() {
     }
     meta.content = THEME_COLORS[themeKey];
   }, [themeKey]);
+
+  // 교실 화면은 로그인 없이 연다 (주소의 무작위 글자를 아는 교실 컴퓨터만)
+  if (classroomScreenId !== null) return <ClassroomKiosk screenId={classroomScreenId} />;
 
   // 업무 상세 페이지는 교사 전용 (?task=ID 로 직접 접근해도 로그인 필요)
   if (activeTaskId) {
@@ -145,7 +177,7 @@ export default function App() {
   return (
     <div className={`min-h-screen ${currentTheme.bg} ${currentTheme.text} font-sans font-light selection:bg-accent selection:text-white pb-32 transition-colors duration-500 antialiased tracking-tight`}>
 
-      <Header activeTab={visibleTab} setActiveTab={setActiveTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} canWork={canWork} />
+      <Header activeTab={visibleTab} setActiveTab={goTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} canWork={canWork} />
 
       <main className="max-w-[1360px] mx-auto px-4 md:px-10 pt-6 md:pt-16 w-full">
         {/* 정보 수업은 다른 탭을 볼 때도 숨겨 둔 채 띄워 둔다: 돌던 수업 타이머가 멈추지 않고 끝나면 울린다 */}
@@ -153,11 +185,14 @@ export default function App() {
           <TabClass currentUser={currentUser} currentTheme={THEMES.class} isVisible={visibleTab === "class"} />
         </div>
         {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} admin={isAdmin(currentUser)} workRole={workRole} />}
-        {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} canWork={canWork} onOpenTab={setActiveTab} />}
-        {currentUser && visibleTab === "homeroom" && <TabHomeroom currentUser={currentUser} currentTheme={currentTheme} />}
+        {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} canWork={canWork} onOpenTab={goTab} />}
+        {currentUser && visibleTab === "homeroom" && (
+          <TabHomeroom key={homeroomEntry.n} currentUser={currentUser} currentTheme={currentTheme} initialSubtab={homeroomEntry.subtab} />
+        )}
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      {currentUser && <ClassroomInboxToast latest={inbox.latest} count={inbox.count} onOpen={openClassroomChat} />}
     </div>
   );
 }

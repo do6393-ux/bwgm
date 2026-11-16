@@ -20,10 +20,11 @@ const SUBTABS = [
   { id: "classroom", label: "교실 화면", shortLabel: "교실화면", icon: Monitor, color: "text-emerald-400" }, // 교실 TV·전자칠판용
 ];
 
-export default function TabHomeroom({ currentUser }) {
+// initialSubtab: 처음 열 작은 탭 (교실 채팅 알림의 "보고 답장하기"는 "classroom")
+export default function TabHomeroom({ currentUser, initialSubtab }) {
   const userId = currentUser?.uid || "default_teacher";
 
-  const [activeSubtab, setActiveSubtab] = useState("contacts");
+  const [activeSubtab, setActiveSubtab] = useState(() => (SUBTABS.some((t) => t.id === initialSubtab) ? initialSubtab : "contacts"));
   const [grade, setGrade] = useState(() => Number(localStorage.getItem("homeroom_grade")) || 1);
   const [classNum, setClassNum] = useState(() => Number(localStorage.getItem("homeroom_class")) || 7);
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
@@ -142,7 +143,7 @@ export default function TabHomeroom({ currentUser }) {
         {activeSubtab === "seating" && <SubtabSeating userId={userId} grade={grade} classNum={classNum} contacts={contacts} excludedStudentNums={excludedStudentNums} setExcludedStudentNums={setExcludedStudentNums} contactsLoading={contactsLoading} currentUser={currentUser} />}
         {activeSubtab === "cleaning" && <SubtabCleaning userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
         {activeSubtab === "records" && <SubtabRecords userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
-        {activeSubtab === "classroom" && <SubtabClassroom grade={grade} classNum={classNum} />}
+        {activeSubtab === "classroom" && <SubtabClassroom grade={grade} classNum={classNum} currentUser={currentUser} />}
       </section>
 
       {isClassModalOpen && (
