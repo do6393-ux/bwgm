@@ -7,7 +7,7 @@
 // messages: 그 교실의 대화 (없으면 null)
 // chatMode: "live" 채팅 단추가 눌린다 | "preview" 단추 모양만 (선생님 탭 미리보기)
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare } from "lucide-react";
+import { MessageSquare, ZoomIn } from "lucide-react";
 import { fetchClassSchedule, fetchPeriodTimes } from "@/lib/timetable";
 import { fetchLunch } from "@/lib/neisMeal";
 import { scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
@@ -15,13 +15,15 @@ import { useSchoolDay } from "@/lib/useSchoolDay";
 import { useNow } from "@/lib/useScreenAwake";
 import { isBeyondNextWeek, pickDaySchedule } from "@/lib/todayBrief";
 import { classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor } from "@/lib/classroomScreen";
-import { clockLabel, newReplies, noticeToday, todayMessages } from "@/lib/classroomChat";
+import { clockLabel, drawingToday, newReplies, noticeToday, todayMessages } from "@/lib/classroomChat";
 import ClassroomChatPanel from "./ClassroomChatPanel";
+import DrawingView from "./DrawingView";
 
 const W = 1280;
 const H = 720;
 const SOON_DAYS = 7;
 const RELOAD_MINUTES = 30; // 아침 동기화가 늦게 끝나도 따라가게 시간표를 이만큼마다 다시 읽는다
+const DRAWING_BIG_MS = 60 * 1000; // 선생님 그림이 새로 오면(또는 작은 그림을 누르면) 이만큼 크게 보여 준다
 
 /** 담는 칸에 1280×720 을 꽉 맞추는 배율 */
 function useFitScale() {
@@ -118,6 +120,23 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
   const notice = noticeToday(screen, today);
   const noticeTime = clockLabel(screen?.noticeAt);
 
+  // ── 선생님 그림: 새로 오면 1분 동안 가운데 크게, 그 뒤에는 메시지 칸에 작게 ──
+  // drawKey: 띄운 시각으로 그림을 구분한다. null 은 아직 교실 화면 문서를 모르는 것 (처음 열 때 이미 있던 그림은 작게 둔다)
+  const drawing = drawingToday(screen, today);
+  const drawKey = screen ? (drawing ? String(screen.noticeAt?.getTime() ?? "draw") : "") : null;
+  const [seenDrawKey, setSeenDrawKey] = useState(drawKey);
+  const [bigOpen, setBigOpen] = useState(false);
+  if (drawKey !== seenDrawKey) {
+    setSeenDrawKey(drawKey);
+    setBigOpen(seenDrawKey !== null && !!drawKey);
+  }
+  useEffect(() => {
+    if (!bigOpen) return undefined;
+    const t = setTimeout(() => setBigOpen(false), DRAWING_BIG_MS);
+    return () => clearTimeout(t);
+  }, [bigOpen, seenDrawKey]);
+  const showBig = bigOpen && !!drawing;
+
   // ── 채팅 ──
   const live = chatMode === "live";
   const chatList = todayMessages(messages, now);
@@ -141,7 +160,7 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
       <div style={{ width: W * scale, height: H * scale }} className="shrink-0">
         <div
           style={{ width: W, height: H, transform: `scale(${scale})`, transformOrigin: "0 0" }}
-          className="box-border px-11 py-9 bg-[#2b2b2b] text-[#f5f5f5] font-sans flex flex-col gap-6 select-none"
+          className="relative box-border px-11 py-9 bg-[#2b2b2b] text-[#f5f5f5] font-sans flex flex-col gap-6 select-none"
         >
           <header className="flex items-end justify-between gap-6">
             <div className="flex flex-col gap-1.5 min-w-0 shrink-0">
@@ -153,15 +172,37 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
                 {!day.isToday && <span className="text-[#34d399]"> · 다음 수업일</span>}
               </span>
             </div>
-            {notice && (
+            {(notice || drawing) && (
               <section
                 aria-label="선생님 메시지"
-                className="flex-1 min-w-0 self-stretch box-border bg-[#3a3324] border-2 border-[#fbbf24] rounded-[22px] px-5 py-2.5 flex flex-col justify-center gap-1"
+                className={`flex-1 min-w-0 self-stretch box-border bg-[#3a3324] border-2 border-[#fbbf24] rounded-[22px] py-2.5 pl-5 flex items-center gap-3.5 ${
+                  drawing ? "pr-2.5" : "pr-5"
+                }`}
               >
-                <span className="text-[14px] font-bold text-[#fbbf24] tracking-[0.06em]">
-                  선생님 메시지{noticeTime && ` · ${noticeTime}`}
-                </span>
-                <p className="text-[26px] font-bold leading-[1.3] text-[#fff7e0] line-clamp-2 break-keep">{notice}</p>
+                <div className="flex-1 min-w-0 flex flex-col justify-center gap-1">
+                  <span className="text-[14px] font-bold text-[#fbbf24] tracking-[0.06em]">
+                    선생님 메시지{noticeTime && ` · ${noticeTime}`}
+                  </span>
+                  {notice ? (
+                    <p className={`${drawing ? "text-[24px]" : "text-[26px]"} font-bold leading-[1.3] text-[#fff7e0] line-clamp-2 break-keep`}>{notice}</p>
+                  ) : (
+                    <p className="text-[22px] font-bold leading-[1.3] text-[#fff7e0]">선생님 그림이 왔어요. 그림을 누르면 크게 보여요.</p>
+                  )}
+                </div>
+                {drawing && (
+                  <button
+                    type="button"
+                    onClick={() => setBigOpen(true)}
+                    aria-label="선생님 그림 크게 보기"
+                    className="relative shrink-0 w-[156px] h-[88px] rounded-[14px] border-2 border-[#fbbf24] overflow-hidden bg-[#2b2b2b]"
+                  >
+                    <DrawingView strokes={drawing} />
+                    <span className="absolute right-1 bottom-1 flex items-center gap-[3px] px-[7px] py-0.5 rounded-full bg-black/75 text-[#fbbf24] text-[12px] font-bold">
+                      <ZoomIn className="w-3 h-3" strokeWidth={3} />
+                      크게
+                    </span>
+                  </button>
+                )}
               </section>
             )}
             <div className="flex flex-col items-end gap-1 shrink-0">
@@ -296,6 +337,37 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
               )}
             </div>
           </div>
+
+          {showBig && (
+            <div className="absolute inset-0 z-10 bg-black/[0.64] flex items-center justify-center">
+              <section
+                aria-label="선생님 그림"
+                className="w-[1180px] h-[650px] box-border bg-[#1f1f1f] border-2 border-[#fbbf24] rounded-[28px] pt-4 px-6 pb-5 flex flex-col gap-3"
+              >
+                <div className="flex items-center justify-between gap-5">
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[15px] font-bold text-[#fbbf24] tracking-[0.06em]">선생님 그림{noticeTime && ` · ${noticeTime}`}</span>
+                    {notice && <span className="text-[22px] font-bold text-[#fff7e0] truncate">{notice}</span>}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-[14px] text-[#bdbdbd]">1분 뒤 저절로 작아져요</span>
+                    <button
+                      type="button"
+                      onClick={() => setBigOpen(false)}
+                      className="h-12 px-5 rounded-2xl bg-[#444444] hover:bg-[#555555] text-[#f5f5f5] text-[17px] font-bold"
+                    >
+                      작게
+                    </button>
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 flex justify-center">
+                  <div className="h-full aspect-video rounded-[18px] overflow-hidden">
+                    <DrawingView strokes={drawing} label="선생님 그림" />
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       </div>
     </div>

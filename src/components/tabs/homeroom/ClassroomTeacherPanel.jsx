@@ -2,27 +2,35 @@
 // 답장도 교실 TV 에 뜨므로 반 친구들이 같이 본다. "읽음"은 선생님이 확인 단추를 누르거나 답장할 때만 바뀐다
 // (교실 컴퓨터에 선생님이 로그인해 둔 채로 자리를 비워도 저절로 읽음이 되지 않게).
 import { useEffect, useRef, useState } from "react";
-import { Megaphone, MessageSquare } from "lucide-react";
+import { Megaphone, MessageSquare, Pencil } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { clearNotice, deleteMessages, markRead, sendMessage, setNotice } from "@/lib/classroomApi";
-import { CHAT_MAX, NOTICE_MAX, cleanText, clockLabel, noticeToday, todayMessages, unreadFromStudents } from "@/lib/classroomChat";
+import { CHAT_MAX, NOTICE_MAX, cleanText, clockLabel, drawingToday, noticeToday, todayMessages, unreadFromStudents } from "@/lib/classroomChat";
+import { encodeDrawing } from "@/lib/drawing";
 import { useNow } from "@/lib/useScreenAwake";
 import { dateKey } from "@/lib/workCalendar";
+import DrawingPad from "./DrawingPad";
+import DrawingView from "./DrawingView";
 
 function NoticeCard({ screen, today }) {
   const { toast } = useDialog();
   const notice = noticeToday(screen, today);
+  const drawing = drawingToday(screen, today);
+  const showing = !!(notice || drawing);
   const [draft, setDraft] = useState("");
+  const [drawDraft, setDrawDraft] = useState(null); // 띄울 그림 (획 목록)
+  const [padOpen, setPadOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const clean = cleanText(draft, NOTICE_MAX);
 
   const post = async () => {
-    if (!clean || saving) return;
+    if ((!clean && !drawDraft) || saving) return;
     setSaving(true);
     try {
-      await setNotice(screen.id, clean, today);
+      await setNotice(screen.id, clean, today, drawDraft ? encodeDrawing(drawDraft) : "");
       setDraft("");
-      toast("교실 화면에 띄웠어요.", "success");
+      setDrawDraft(null);
+      toast(drawDraft ? "교실 화면에 띄웠어요. 그림은 1분 동안 크게 보여요." : "교실 화면에 띄웠어요.", "success");
     } catch {
       toast("띄우지 못했어요. 잠시 뒤 다시 해 주세요.", "error");
     } finally {
@@ -46,26 +54,45 @@ function NoticeCard({ screen, today }) {
         교실에 띄울 메시지
       </h3>
 
-      {notice ? (
+      {showing ? (
         <div className="rounded-field border-2 border-amber-400 bg-[#3a3324] px-4 py-3 flex flex-col gap-1.5">
           <span className="text-[12px] font-bold text-amber-400">
             지금 교실에 떠 있어요{screen.noticeAt ? ` · ${clockLabel(screen.noticeAt)}부터` : ""}
           </span>
-          <span className="text-[15px] font-bold text-[#fff7e0] leading-relaxed break-keep">{notice}</span>
-          <button
-            type="button"
-            onClick={takeDown}
-            className="self-start mt-1 h-9 px-3.5 rounded-[10px] border border-amber-700 text-amber-200 hover:bg-amber-400/10 text-[13px] font-medium"
-          >
-            내리기
-          </button>
+          <div className="flex items-start gap-3">
+            <span className="flex-1 min-w-0 text-[15px] font-bold text-[#fff7e0] leading-relaxed break-keep">{notice || "(그림만)"}</span>
+            {drawing && (
+              <div className="shrink-0 w-[112px] aspect-video rounded-[8px] overflow-hidden border border-amber-400/70">
+                <DrawingView strokes={drawing} label="교실에 떠 있는 그림" />
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2 mt-1">
+            <button
+              type="button"
+              onClick={takeDown}
+              className="h-9 px-3.5 rounded-[10px] border border-amber-700 text-amber-200 hover:bg-amber-400/10 text-[13px] font-medium"
+            >
+              내리기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(notice);
+                setDrawDraft(drawing);
+              }}
+              className="h-9 px-3.5 rounded-[10px] border border-amber-700 text-amber-200 hover:bg-amber-400/10 text-[13px] font-medium"
+            >
+              고쳐서 다시 띄우기
+            </button>
+          </div>
         </div>
       ) : (
         <p className="text-[13px] text-ink-muted">지금 교실에 떠 있는 메시지가 없어요. 교실 화면 맨 위가 비어 있어요.</p>
       )}
 
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] text-ink-muted">{notice ? "새 메시지 (띄우면 지금 것과 바뀌어요)" : "새 메시지"}</span>
+        <span className="text-[13px] text-ink-muted">{showing ? "새 메시지 (띄우면 지금 것과 바뀌어요)" : "새 메시지"}</span>
         <textarea
           rows={3}
           value={draft}
@@ -75,7 +102,38 @@ function NoticeCard({ screen, today }) {
           className="w-full rounded-field border border-line bg-well text-ink px-3.5 py-3 text-[15px] leading-relaxed resize-none placeholder:text-ink-ghost focus:outline-none focus:border-amber-400"
         />
       </label>
-      <div className="flex items-center justify-between gap-3 -mt-1">
+      <div className="flex items-center gap-3">
+        {drawDraft ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setPadOpen(true)}
+              aria-label="띄울 그림 고치기"
+              className="shrink-0 w-[128px] aspect-video rounded-[10px] overflow-hidden border-2 border-amber-400"
+            >
+              <DrawingView strokes={drawDraft} />
+            </button>
+            <div className="flex flex-col gap-1.5">
+              <button type="button" onClick={() => setPadOpen(true)} className="h-9 px-3.5 rounded-[10px] border border-line hover:border-line-hover text-ink text-[13px]">
+                그림 고치기
+              </button>
+              <button type="button" onClick={() => setDrawDraft(null)} className="h-9 px-3.5 rounded-[10px] border border-line hover:border-rose-300 text-rose-300 text-[13px]">
+                그림 빼기
+              </button>
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setPadOpen(true)}
+            className="flex items-center gap-1.5 h-10 px-4 rounded-field border border-amber-400/70 text-amber-200 hover:bg-amber-400/10 text-[13px] font-bold"
+          >
+            <Pencil className="w-4 h-4" strokeWidth={2.4} />
+            그림 그리기
+          </button>
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-3">
         <span className="text-[12px] text-ink-faint leading-relaxed">
           <span className={`font-mono ${clean.length >= NOTICE_MAX ? "text-amber-300" : ""}`}>
             {clean.length} / {NOTICE_MAX}자
@@ -85,12 +143,23 @@ function NoticeCard({ screen, today }) {
         <button
           type="button"
           onClick={post}
-          disabled={!clean || saving}
+          disabled={(!clean && !drawDraft) || saving}
           className="shrink-0 h-11 px-5 rounded-field bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-[#3a2a05] text-[14px] font-bold"
         >
-          {saving ? "띄우는 중…" : notice ? "바꿔 띄우기" : "교실에 띄우기"}
+          {saving ? "띄우는 중…" : showing ? "바꿔 띄우기" : "교실에 띄우기"}
         </button>
       </div>
+
+      {padOpen && (
+        <DrawingPad
+          initial={drawDraft}
+          onCancel={() => setPadOpen(false)}
+          onDone={(strokes) => {
+            setDrawDraft(strokes);
+            setPadOpen(false);
+          }}
+        />
+      )}
     </section>
   );
 }

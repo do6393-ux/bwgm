@@ -1,6 +1,7 @@
 // 교실 화면의 선생님 메시지 · 채팅 계산 (화면·Firebase 와 분리해서 테스트한다).
 // 교실 컴퓨터는 로그인 없이 "?classroom=<아무도 못 맞히는 글자>" 주소로 연다.
 import { dateKey } from "./workCalendar";
+import { parseDrawing } from "./drawing";
 
 // 글자 수는 firestore.rules 의 classroom_screens 규칙과 같게 둘 것
 export const NOTICE_MAX = 50; // TV 맨 위에 두 줄
@@ -50,6 +51,11 @@ export function cleanText(value, max) {
 export function noticeToday(screen, today) {
   const text = typeof screen?.noticeText === "string" ? screen.noticeText.trim() : "";
   return text && screen.noticeDay === today ? text : "";
+}
+
+/** 오늘 보여 줄 선생님 그림 (획 목록, 없으면 null). 글 메시지처럼 띄운 날에만 */
+export function drawingToday(screen, today) {
+  return screen?.noticeDay === today ? parseDrawing(screen.noticeDrawing) : null;
 }
 
 /**

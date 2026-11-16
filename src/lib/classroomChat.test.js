@@ -4,6 +4,7 @@ import {
   SCREEN_ID_LENGTH,
   cleanText,
   clockLabel,
+  drawingToday,
   isScreenId,
   lastStudentRead,
   makeScreenId,
@@ -59,6 +60,16 @@ describe("선생님 메시지", () => {
     expect(noticeToday(screen, "2026-11-17")).toBe("");
     expect(noticeToday({ noticeText: "  ", noticeDay: "2026-11-16" }, "2026-11-16")).toBe("");
     expect(noticeToday(null, "2026-11-16")).toBe("");
+  });
+});
+
+describe("선생님 그림", () => {
+  const drawing = JSON.stringify([{ c: 1, w: 0, p: [10, 10, 40, 40] }]);
+  it("drawingToday: 띄운 날에만, 그린 것이 있을 때만", () => {
+    expect(drawingToday({ noticeDrawing: drawing, noticeDay: "2026-11-16" }, "2026-11-16")).toEqual([{ c: 1, w: 0, p: [10, 10, 40, 40] }]);
+    expect(drawingToday({ noticeDrawing: drawing, noticeDay: "2026-11-16" }, "2026-11-17")).toBe(null);
+    expect(drawingToday({ noticeDrawing: "", noticeDay: "2026-11-16" }, "2026-11-16")).toBe(null);
+    expect(drawingToday(null, "2026-11-16")).toBe(null);
   });
 });
 

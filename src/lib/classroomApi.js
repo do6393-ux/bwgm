@@ -1,5 +1,6 @@
 // 교실 화면 메시지·채팅의 Firestore 읽기·쓰기.
-//   classroom_screens/{id}            { ownerUid, grade, classNum, noticeText, noticeDay, noticeAt, teacherReadAt, createdAt }
+//   classroom_screens/{id}            { ownerUid, grade, classNum, noticeText, noticeDay, noticeAt, noticeDrawing?, teacherReadAt, createdAt }
+//     noticeDrawing: 선생님 그림 (src/lib/drawing.js 의 문자열). 그림이 없으면 필드를 아예 두지 않는다
 //   classroom_screens/{id}/messages   { from: "student"|"teacher", text, name, createdAt }
 // 문서 ID 는 교실 컴퓨터 주소(?classroom=ID)에 들어가는 무작위 글자다. 규칙은 firestore.rules 참고.
 import {
@@ -7,6 +8,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   limit,
@@ -35,6 +37,7 @@ function screenFrom(snap) {
     noticeText: d.noticeText || "",
     noticeDay: d.noticeDay || "",
     noticeAt: toDate(d.noticeAt),
+    noticeDrawing: typeof d.noticeDrawing === "string" ? d.noticeDrawing : "",
     teacherReadAt: toDate(d.teacherReadAt),
   };
 }
@@ -81,6 +84,7 @@ export async function createScreen(uid, grade, classNum, carry = {}) {
     noticeText: carry.noticeText || "",
     noticeDay: carry.noticeDay || "",
     noticeAt: carry.noticeAt ? Timestamp.fromDate(carry.noticeAt) : null,
+    ...(carry.noticeDrawing ? { noticeDrawing: carry.noticeDrawing } : {}),
     teacherReadAt: null,
     createdAt: serverTimestamp(),
   });
@@ -113,12 +117,18 @@ export async function replaceScreen(screen) {
   return id;
 }
 
-export function setNotice(id, text, day) {
-  return updateDoc(doc(db, SCREENS, id), { noticeText: text, noticeDay: day, noticeAt: serverTimestamp() });
+/** 선생님 메시지 띄우기. drawing: 그림 문자열 ("" 이면 그림 없음) */
+export function setNotice(id, text, day, drawing = "") {
+  return updateDoc(doc(db, SCREENS, id), {
+    noticeText: text,
+    noticeDay: day,
+    noticeAt: serverTimestamp(),
+    noticeDrawing: drawing ? drawing : deleteField(),
+  });
 }
 
 export function clearNotice(id) {
-  return updateDoc(doc(db, SCREENS, id), { noticeText: "", noticeDay: "", noticeAt: null });
+  return updateDoc(doc(db, SCREENS, id), { noticeText: "", noticeDay: "", noticeAt: null, noticeDrawing: deleteField() });
 }
 
 /** 선생님이 대화를 확인했다 (교실 화면에 "읽음"이 뜬다) */
