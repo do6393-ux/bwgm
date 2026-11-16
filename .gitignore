@@ -25,3 +25,6 @@ dist-ssr
 
 # 루트에 둔 작업용 양식(*.hwpx)은 올리지 않는다 (앱에서 받게 할 양식은 public/templates/ 에 복사해 둔다)
 /*.hwpx
+
+# 교실 컴퓨터용 프로그램을 만든 결과 (설치 파일은 저장소에 올리지 않는다)
+/classroom-app/release

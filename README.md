@@ -104,6 +104,29 @@ Admin SDK 는 보안 규칙을 거치지 않으므로 규칙과 무관하게 동
 
 포털의 "데이터 연동 상태"는 실제로 읽어 온 결과를 보여줍니다 (정상 / 일부만 수신 / 없음 / 실패).
 
+## 교실 컴퓨터용 프로그램 (classroom-app)
+
+교실 화면을 크롬에 띄워 두면, 다음 시간 선생님이 창을 내려놓았을 때 웹페이지 스스로는 다시 올라올 수 없습니다(브라우저가 막음).
+그래서 교실 컴퓨터에 까는 작은 Windows 프로그램 **부원 교실 화면**([classroom-app/](classroom-app/), Electron)을 둡니다.
+
+- 프로그램은 교실 화면 주소를 전체 화면으로 여는 껍데기입니다. 화면 내용은 웹 그대로라 포털을 고치면 다시 깔 필요가 없습니다.
+- 선생님 메시지(글·그림)가 새로 오면 웹이 `window.bwgmClassroomApp.raise()` 를 부르고, 프로그램이 내려가 있던(최소화·다른 창 뒤) 창을 맨 앞으로 올립니다.
+  메시지 때문에 올라온 화면은 아무도 안 누르면 1분 뒤 다시 내려갑니다. 언제 올리고 얼마 뒤 내릴지는 웹([src/lib/classroomApp.js](src/lib/classroomApp.js))이 정합니다.
+- **Esc**(채팅 입력칸에서 쓰는 중일 때는 빼고), 화면 왼쪽 아래 **화면 내리기**(마우스를 움직이면 보임), Alt+F4 는 끄지 않고 내려놓기만 합니다. 끄기·주소 바꾸기는 알림 영역 아이콘을 오른쪽 클릭.
+- 처음 켜면 교실 주소를 묻습니다(클립보드에 교실 주소가 있으면 미리 채움). 주소를 넣으면 Windows 를 켤 때 저절로 시작합니다.
+
+설치 파일 만들기 (이 폴더의 결과물 `release/` 는 저장소에 올리지 않음):
+
+```bash
+cd classroom-app
+npm install
+node node_modules/electron/install.js   # Electron 본체 받기 (처음 한 번)
+npm run dist                            # → release/bwgm-classroom-setup-<버전>.exe
+```
+
+시험: `BWGM_CLASSROOM_URL=<교실 주소> BWGM_DEBUG=<로그 파일> npm start` (개발할 때만 http://localhost 주소도 받음).
+서명하지 않은 프로그램이라 처음 실행할 때 "Windows의 PC 보호" 창이 뜨면 **추가 정보 › 실행**을 누릅니다.
+
 ## 기기 간 동기화
 
 연락처·자리배치·청소·누적 기록은 **Firestore 를 기준**으로 읽고, 이 기기의 localStorage 는 캐시·오프라인 대비로만

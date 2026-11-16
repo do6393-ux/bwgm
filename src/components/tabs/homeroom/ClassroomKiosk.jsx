@@ -1,8 +1,10 @@
 // 로그인 없이 교실 컴퓨터에 띄우는 교실 화면 (주소 ?classroom=<무작위 글자>).
 // 선생님이 내 학급 › 교실 화면에서 만든 주소다. 그 문서의 학년·반, 선생님 메시지, 채팅을 보여 준다.
+// 교실 컴퓨터에 깐 "부원 교실 화면" 프로그램 안에서 열리면, 선생님 메시지가 올 때 내려가 있던 화면을 올린다.
 import { useEffect, useRef, useState } from "react";
-import { Maximize } from "lucide-react";
+import { Maximize, Minimize2 } from "lucide-react";
 import { watchMessages, watchScreen, sendMessage } from "@/lib/classroomApi";
+import { classroomApp, noticeKey, useEscToLower, useRaiseOnNotice } from "@/lib/classroomApp";
 import { isScreenId } from "@/lib/classroomChat";
 import { useFullscreen, useWakeLock } from "@/lib/useScreenAwake";
 import ClassroomScreen from "./ClassroomScreen";
@@ -74,7 +76,13 @@ export default function ClassroomKiosk({ screenId }) {
   useWakeLock(valid);
   useDailyReload();
 
-  // 전체 화면 단추: 처음과 마우스를 움직였을 때만 잠깐 보인다
+  // 프로그램 안이면: 선생님 메시지가 새로 오면 화면을 올린다 (프로그램 창은 늘 전체 화면이라 전체 화면 단추 대신 "화면 내리기")
+  const [app] = useState(classroomApp);
+  const known = screen || lastGood;
+  useRaiseOnNotice(app, known ? noticeKey(known) : undefined);
+  useEscToLower(app);
+
+  // 전체 화면(프로그램이면 화면 내리기) 단추: 처음과 마우스를 움직였을 때만 잠깐 보인다
   const [showButton, setShowButton] = useState(true);
   useEffect(() => {
     let t = setTimeout(() => setShowButton(false), BUTTON_SHOW_MS * 2);
@@ -102,21 +110,25 @@ export default function ClassroomKiosk({ screenId }) {
   }
 
   const onSend = ({ text, name }) => sendMessage(screenId, { from: "student", text, name });
+  const cornerButton = `fixed left-3 bottom-3 flex items-center gap-2 px-4 py-2.5 rounded-full bg-black/70 hover:bg-black text-white text-[14px] font-bold transition-opacity ${
+    showButton ? "opacity-100" : "opacity-0 pointer-events-none"
+  }`;
 
   return (
     <div ref={boxRef} className="fixed inset-0 bg-[#2b2b2b]">
       <ClassroomScreen grade={shown.grade} classNum={shown.classNum} screen={shown} messages={messages} chatMode="live" onSend={onSend} />
-      {!full && (
-        <button
-          type="button"
-          onClick={() => enterFull().catch(() => {})}
-          className={`fixed left-3 bottom-3 flex items-center gap-2 px-4 py-2.5 rounded-full bg-black/70 hover:bg-black text-white text-[14px] font-bold transition-opacity ${
-            showButton ? "opacity-100" : "opacity-0 pointer-events-none"
-          }`}
-        >
-          <Maximize className="w-4 h-4" strokeWidth={2.4} />
-          전체 화면 (F11 키도 돼요)
+      {app ? (
+        <button type="button" onClick={() => Promise.resolve(app.lower()).catch(() => {})} className={cornerButton}>
+          <Minimize2 className="w-4 h-4" strokeWidth={2.4} />
+          화면 내리기 (Esc 키도 돼요) · 선생님 메시지가 오면 다시 올라와요
         </button>
+      ) : (
+        !full && (
+          <button type="button" onClick={() => enterFull().catch(() => {})} className={cornerButton}>
+            <Maximize className="w-4 h-4" strokeWidth={2.4} />
+            전체 화면 (F11 키도 돼요)
+          </button>
+        )
       )}
     </div>
   );

@@ -1,0 +1,32 @@
+{
+  "name": "bwgm-classroom",
+  "productName": "부원 교실 화면",
+  "version": "1.0.0",
+  "description": "부원여중 포털의 교실 화면을 교실 컴퓨터에 띄우고, 선생님 메시지가 오면 화면을 다시 올리는 프로그램",
+  "author": "부원여자중학교",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "kr.hs.bwgm.classroom",
+    "productName": "부원 교실 화면",
+    "executableName": "bwgm-classroom",
+    "directories": { "output": "release" },
+    "files": ["main.js", "preload.js", "setup-preload.js", "setup.html", "setup.js", "offline.html", "icon.png"],
+    "win": { "target": "nsis", "icon": "icon.png" },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "부원 교실 화면",
+      "artifactName": "bwgm-classroom-setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": true
+    }
+  }
+}

@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self'" />
+    <title>부원 교실 화면 · 교실 주소</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 28px 32px;
+        background: #f6f7f9;
+        color: #1f2328;
+        font-family: "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+        font-size: 15px;
+        line-height: 1.6;
+      }
+      h1 { margin: 0 0 6px; font-size: 21px; }
+      .lead { margin: 0 0 18px; color: #555c66; }
+      ol { margin: 0 0 18px; padding-left: 20px; color: #3a4048; }
+      li { margin-bottom: 4px; }
+      b { color: #1f2328; }
+      label { display: block; font-weight: bold; margin-bottom: 6px; }
+      input {
+        width: 100%;
+        padding: 11px 12px;
+        border: 1px solid #c9ced6;
+        border-radius: 10px;
+        font-size: 14px;
+        font-family: Consolas, "Malgun Gothic", monospace;
+        background: #fff;
+      }
+      input:focus { outline: 2px solid #3b6fd8; border-color: transparent; }
+      .row { display: flex; align-items: center; gap: 12px; margin-top: 16px; }
+      button {
+        padding: 11px 22px;
+        border: 0;
+        border-radius: 10px;
+        background: #3b6fd8;
+        color: #fff;
+        font-size: 15px;
+        font-weight: bold;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      button:hover { background: #2f5cb8; }
+      button:disabled { background: #9aa8c4; cursor: default; }
+      .msg { font-size: 14px; }
+      .msg.bad { color: #c62828; }
+      .msg.good { color: #2e7d32; }
+      .note { margin-top: 22px; font-size: 13px; color: #6b727c; }
+    </style>
+  </head>
+  <body>
+    <h1>교실 화면 주소 넣기</h1>
+    <p class="lead">이 교실에서 띄울 교실 화면 주소를 한 번만 넣으면, 다음부터는 컴퓨터를 켜면 저절로 떠요.</p>
+    <ol>
+      <li>포털 › <b>내 학급 › 교실 화면</b>에서 교실 주소의 <b>복사</b>를 눌러요.</li>
+      <li>아래 칸에 붙여 넣고(Ctrl+V) <b>시작</b>을 눌러요.</li>
+    </ol>
+    <form id="form">
+      <label for="url">교실 화면 주소</label>
+      <input id="url" type="text" spellcheck="false" autocomplete="off" placeholder="https://…/?classroom=…" />
+      <div class="row">
+        <button id="go" type="submit">시작</button>
+        <span id="msg" class="msg"></span>
+      </div>
+    </form>
+    <p class="note">
+      선생님 메시지가 오면 교실 화면이 저절로 앞으로 올라와요. 화면을 내려놓으려면 <b>Esc</b> 키를 누르거나 화면 왼쪽 아래 <b>화면 내리기</b>를 누르세요.
+      주소를 바꾸거나 프로그램을 끄려면 작업 표시줄 오른쪽 알림 영역의 아이콘을 오른쪽 클릭하세요.
+    </p>
+    <script src="setup.js"></script>
+  </body>
+</html>
