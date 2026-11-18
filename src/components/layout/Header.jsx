@@ -57,12 +57,11 @@ export default function Header({
 
   return (
     <>
-      {/* PC 의 위아래 여백은 안쪽 줄(overflow-x-auto)에 둔다: 로고 조각이 그 여백까지 커져도 잘리지 않게.
-          아래 여백은 28px 더 두고 그만큼 App 의 main 위 여백에서 뺐다 (조각이 아래로 조금 더 커진다, src/index.css .logo-bust).
+      {/* PC 의 위아래 여백은 안쪽 줄(overflow-x-auto)에 둔다: 로고 조각이 그 여백까지 커져도 잘리지 않게 (src/index.css .logo-bust).
           머리글 아래 실선은 모든 탭에서 뺐다 (2026-11-18 사용자 요청) */}
       <header className="w-full transition-colors duration-500 px-4 md:px-12 py-3 md:py-0">
         {/* 🎯 부모 컨테이너 간격(gap) 확대 */}
-        <div className="max-w-[1360px] w-full mx-auto flex flex-wrap md:flex-nowrap items-center md:items-start justify-between gap-x-4 gap-y-3 md:gap-[clamp(2rem,4vw,4rem)] md:pt-[clamp(1.5rem,2.2vw,2rem)] md:pb-[calc(clamp(1.5rem,2.2vw,2rem)+28px)] md:overflow-x-auto no-scrollbar">
+        <div className="max-w-[1360px] w-full mx-auto flex flex-wrap md:flex-nowrap items-center md:items-start justify-between gap-x-4 gap-y-3 md:gap-[clamp(2rem,4vw,4rem)] md:py-[clamp(1.5rem,2.2vw,2rem)] md:overflow-x-auto no-scrollbar">
 
           {/* 🎯 로고 영역: min-w-max 추가. PC 에서 로그인하면 글자 대신 3D 조각 (LogoBust) */}
           <div className="order-1 md:order-none flex-shrink-0 min-w-max">
