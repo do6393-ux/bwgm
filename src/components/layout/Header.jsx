@@ -20,7 +20,8 @@ const hasMouseNow = () => window.matchMedia(MOUSE_QUERY).matches;
 // 탭 아이콘 움직임은 useIconMotion: PC 는 마우스를 올린 동안 + 뗀 뒤 3초, 휴대폰은 누르면 3초.
 // 명찰·서류는 움직이는 동안 탭에 붙는 data-moving 으로 group-data-[moving=true]:… 클래스가 움직이고, 끝나면 제자리에서 멈춘다.
 // 정보 수업 바람개비·교무실 시곗바늘은 스크립트로 돌린다(iconMotion.spin): 1초 동안 점점 빨라지고, 3초의 마지막 1초에
-// 점점 느려지며 멈춘다. 분침은 최고 1초에 한 바퀴, 시침은 12초에 한 바퀴
+// 점점 느려지며 멈춘다. 분침은 최고 1초에 한 바퀴, 시침은 12초에 한 바퀴.
+// 단 교무실 시계는 PC 에서 마우스를 떼면 그 자리에서 바로 멈춘다 (lingerAfterMouse: false, 휴대폰은 누르면 3초)
 // (tailwind 가 찾을 수 있게 클래스 이름은 통째로 적는다)
 
 export default function Header({
@@ -174,7 +175,7 @@ export default function Header({
             <div 
               className={`flex flex-col md:flex-row items-center md:items-start flex-shrink-0 cursor-pointer group transition-colors gap-1.5 md:gap-[clamp(0.5rem,1vw,0.85rem)] py-1 md:py-0 ${!currentUser ? 'opacity-30 cursor-not-allowed' : activeTab === 'office' ? currentTheme.activeText : currentTheme.navText}`}
               onClick={() => currentUser && setActiveTab("office")}
-              {...iconMotion.tab("office")}
+              {...iconMotion.tab("office", { lingerAfterMouse: false })}
             >
               <div className="relative md:pt-[clamp(2px,0.25vw,4px)] w-8 h-8 md:w-[clamp(48px,6.5vw,90px)] md:h-[clamp(58px,7.8vw,110px)]">
                 <svg viewBox="0 0 100 100" className="w-full h-full absolute top-0 left-0">

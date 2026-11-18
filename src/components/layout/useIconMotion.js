@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { spinStep, LINGER_S } from "@/lib/iconSpin";
 
 // 머리글 탭 아이콘(바람개비·명찰·서류·시계) 움직임.
-//  - PC: 마우스를 올리면 움직이기 시작하고, 떼면 3초(LINGER_S) 더 움직인다.
+//  - PC: 마우스를 올리면 움직이기 시작하고, 떼면 3초(LINGER_S) 더 움직인다(tab(id, { lingerAfterMouse: false }) 면 바로 멈춤).
 //  - 휴대폰: 누르면 3초 움직인다 (휴대폰에는 "마우스 올리기"가 없다).
 //  - 명찰·서류(CSS 애니메이션): 움직이는 동안 탭에 data-moving="true" 가 붙고, Header 의 group-data-[moving=true]:…
 //    클래스가 움직임을 건다. 멈출 때는 흔들기를 마저 끝내 제자리에서 멈춘다(남은 게 길면 FINISH_MAX_MS 안에).
@@ -104,6 +104,19 @@ export function useIconMotion() {
     });
   };
 
+  // 기다리지 않고 그 자리에서 바로 멈춤 (교무실 시계는 PC 에서 마우스를 떼면 바로 멈춘다, 2026-11-18 사용자 요청)
+  const stopNow = (id) => {
+    clearTimeout(timers.current[id]);
+    tokens.current[id] = (tokens.current[id] ?? 0) + 1;
+    for (const s of spinnersOf(id)) {
+      s.running = false;
+      s.omega = 0;
+      s.leaveAt = null;
+      s.w0 = null;
+    }
+    mark(id, false);
+  };
+
   const finishLater = (id) => {
     clearTimeout(timers.current[id]);
     timers.current[id] = setTimeout(() => finish(id), LINGER_MS);
@@ -115,7 +128,8 @@ export function useIconMotion() {
   };
 
   return {
-    tab: (id) => ({
+    // lingerAfterMouse: false 면 PC 에서 마우스를 떼는 순간 바로 멈춘다 (휴대폰은 그래도 누르면 3초)
+    tab: (id, { lingerAfterMouse = true } = {}) => ({
       ref: (el) => {
         els.current[id] = el;
       },
@@ -124,7 +138,9 @@ export function useIconMotion() {
         if (e.pointerType === "mouse") start(id);
       },
       onPointerLeave: (e) => {
-        if (e.pointerType === "mouse") finishLater(id);
+        if (e.pointerType !== "mouse") return;
+        if (lingerAfterMouse) finishLater(id);
+        else stopNow(id);
       },
       onPointerDown: (e) => {
         if (e.pointerType === "mouse") return;
