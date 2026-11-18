@@ -18,8 +18,9 @@ const subscribeMouse = (onChange) => {
 const hasMouseNow = () => window.matchMedia(MOUSE_QUERY).matches;
 
 // 탭 아이콘 움직임은 useIconMotion: PC 는 마우스를 올린 동안 + 뗀 뒤 3초, 휴대폰은 누르면 3초.
-// 명찰·서류·시계는 움직이는 동안 탭에 붙는 data-moving 으로 group-data-[moving=true]:… 클래스가 움직이고, 끝나면 제자리에서 멈춘다.
-// 정보 수업 바람개비만 스크립트로 돌린다(iconMotion.spin): 1초 동안 점점 빨라지고, 3초의 마지막 1초에 점점 느려지며 멈춘다
+// 명찰·서류는 움직이는 동안 탭에 붙는 data-moving 으로 group-data-[moving=true]:… 클래스가 움직이고, 끝나면 제자리에서 멈춘다.
+// 정보 수업 바람개비·교무실 시곗바늘은 스크립트로 돌린다(iconMotion.spin): 1초 동안 점점 빨라지고, 3초의 마지막 1초에
+// 점점 느려지며 멈춘다. 분침은 최고 1초에 한 바퀴, 시침은 12초에 한 바퀴
 // (tailwind 가 찾을 수 있게 클래스 이름은 통째로 적는다)
 
 export default function Header({
@@ -180,14 +181,14 @@ export default function Header({
                   {isOutline ? (
                     <>
                       <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="5" />
-                      <line x1="50" y1="50" x2="50" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="origin-[50px_50px] transition-transform duration-500 group-data-[moving=true]:animate-[spin_1s_linear_infinite]" />
-                      <line x1="50" y1="50" x2="68" y2="68" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="origin-[50px_50px] transition-transform duration-500 group-data-[moving=true]:animate-[spin_12s_linear_infinite]" />
+                      <line x1="50" y1="50" x2="50" y2="18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" ref={iconMotion.spin("office", "minute", 360)} className="origin-[50px_50px]" />
+                      <line x1="50" y1="50" x2="68" y2="68" stroke="currentColor" strokeWidth="2" strokeLinecap="round" ref={iconMotion.spin("office", "hour", 30)} className="origin-[50px_50px]" />
                     </>
                   ) : (
                     <>
                       <circle cx="50" cy="50" r="48.5" fill="currentColor" />
-                      <line x1="50" y1="50" x2="50" y2="18" stroke={cutoutColor} strokeWidth="3" strokeLinecap="round" className="origin-[50px_50px] transition-transform duration-500 group-data-[moving=true]:animate-[spin_1s_linear_infinite]" />
-                      <line x1="50" y1="50" x2="68" y2="68" stroke={cutoutColor} strokeWidth="3" strokeLinecap="round" className="origin-[50px_50px] transition-transform duration-500 group-data-[moving=true]:animate-[spin_12s_linear_infinite]" />
+                      <line x1="50" y1="50" x2="50" y2="18" stroke={cutoutColor} strokeWidth="3" strokeLinecap="round" ref={iconMotion.spin("office", "minute", 360)} className="origin-[50px_50px]" />
+                      <line x1="50" y1="50" x2="68" y2="68" stroke={cutoutColor} strokeWidth="3" strokeLinecap="round" ref={iconMotion.spin("office", "hour", 30)} className="origin-[50px_50px]" />
                     </>
                   )}
                 </svg>

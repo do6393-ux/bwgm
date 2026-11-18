@@ -61,6 +61,23 @@ describe("정보 수업 바람개비 속도", () => {
     expect(frames.some((f) => f.done)).toBe(false);
   });
 
+  it("시곗바늘: 분침(1초 한 바퀴)과 시침(12초 한 바퀴)이 같은 비율로 빨라지고 느려져 12:1 을 지킨다", () => {
+    const frames = (max) => run({ ...still, max, leaveAt: 1.5 }, 0, 4.6);
+    const minute = frames(360), hour = frames(30);
+    const at = (fs, t) => fs.find((f) => f.now >= t - 1e-9);
+    expect(at(minute, 0.5).omega).toBeCloseTo(180, -1);
+    expect(at(minute, 2).omega).toBe(360);
+    expect(at(hour, 2).omega).toBe(30);
+    for (const t of [0.3, 1, 2, 4, 4.4]) {
+      expect(at(minute, t).omega).toBeCloseTo(at(hour, t).omega * 12, 6);
+    }
+    expect(at(minute, 4.55).done).toBe(true);
+    expect(at(hour, 4.55).done).toBe(true);
+    // 분침이 돈 각도의 1/12 만큼 시침이 돈다 (멈춘 뒤에도 시각이 맞는다)
+    const turned = (fs) => fs.reduce((sum, f) => sum + f.omega * FRAME, 0);
+    expect(turned(minute)).toBeCloseTo(turned(hour) * 12, 6);
+  });
+
   it("각도는 0~360 안에서 돈다", () => {
     const frames = run({ ...still, omega: SPIN_MAX }, 0, 5);
     expect(frames.every((f) => f.angle >= 0 && f.angle < 360)).toBe(true);

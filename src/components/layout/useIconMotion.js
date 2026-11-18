@@ -4,10 +4,11 @@ import { spinStep, LINGER_S } from "@/lib/iconSpin";
 // 머리글 탭 아이콘(바람개비·명찰·서류·시계) 움직임.
 //  - PC: 마우스를 올리면 움직이기 시작하고, 떼면 3초(LINGER_S) 더 움직인다.
 //  - 휴대폰: 누르면 3초 움직인다 (휴대폰에는 "마우스 올리기"가 없다).
-//  - 명찰·서류·시계(CSS 애니메이션): 움직이는 동안 탭에 data-moving="true" 가 붙고, Header 의 group-data-[moving=true]:…
-//    클래스가 움직임을 건다. 멈출 때는 돌던 바퀴·흔들기를 마저 끝내 제자리에서 멈춘다(남은 게 길면 FINISH_MAX_MS 안에).
-//  - 정보 수업 바람개비(spin): 스크립트로 돌린다. 1초 동안 점점 빨라지고, 3초의 마지막 1초에 점점 느려지며 멈춘다
-//    (속도 계산은 src/lib/iconSpin.js). 바람개비는 어느 각도에서 멈춰도 된다.
+//  - 명찰·서류(CSS 애니메이션): 움직이는 동안 탭에 data-moving="true" 가 붙고, Header 의 group-data-[moving=true]:…
+//    클래스가 움직임을 건다. 멈출 때는 흔들기를 마저 끝내 제자리에서 멈춘다(남은 게 길면 FINISH_MAX_MS 안에).
+//  - 정보 수업 바람개비·교무실 시곗바늘(spin): 스크립트로 돌린다. 1초 동안 점점 빨라지고, 3초의 마지막 1초에 점점
+//    느려지며 멈춘다(속도 계산은 src/lib/iconSpin.js). 어느 각도에서 멈춰도 된다. 시곗바늘은 분침·시침이 같은 비율로
+//    빨라지고 느려져서 멈췄을 때도 시각이 맞는다.
 // CSS :hover 를 쓰지 않는 까닭: 일부 휴대폰(삼성 인터넷 등)은 누른 뒤 hover 가 남아 끝없이 돌았다 (2026-11-18).
 // Windows 애니메이션 효과가 꺼진 PC(움직임 줄이기)에서도 움직인다: 사용자가 다 움직이길 원함 (2026-11-18).
 
@@ -20,13 +21,14 @@ const cssAnimations = (el) => (el?.getAnimations?.({ subtree: true }) ?? []).fil
 /**
  * 쓰는 법: const motion = useIconMotion();
  *   <div className="group …" {...motion.tab("class")}>  … <g ref={motion.spin("class")} className="origin-[50px_50px]">
+ *   시계처럼 한 탭에 바늘이 둘이면: ref={motion.spin("office", "minute", 360)} · ref={motion.spin("office", "hour", 30)}
  */
 export function useIconMotion() {
   const [moving, setMoving] = useState(() => new Set());
   const els = useRef({});
   const timers = useRef({});
   const tokens = useRef({}); // 멈추는 중에 다시 움직이면 예전 "멈춤"을 무시하려고
-  const spinners = useRef({}); // id → { el, angle, omega, leaveAt, w0, running }
+  const spinners = useRef({}); // "탭:이름" → { tab, el, angle, omega, max, leaveAt, w0, running }
   const raf = useRef(0);
   const lastT = useRef(0);
 
@@ -62,6 +64,7 @@ export function useIconMotion() {
     }
     raf.current = any ? requestAnimationFrame(tick) : 0;
   }
+  const spinnersOf = (id) => Object.values(spinners.current).filter((s) => s.tab === id);
   const kick = () => {
     if (raf.current) return;
     lastT.current = performance.now() / 1000;
@@ -76,8 +79,7 @@ export function useIconMotion() {
       a.effect.updateTiming({ iterations: Infinity });
       a.playbackRate = 1;
     }
-    const s = spinners.current[id];
-    if (s) {
+    for (const s of spinnersOf(id)) {
       s.running = true;
       s.leaveAt = null;
       s.w0 = null;
@@ -105,9 +107,9 @@ export function useIconMotion() {
   const finishLater = (id) => {
     clearTimeout(timers.current[id]);
     timers.current[id] = setTimeout(() => finish(id), LINGER_MS);
-    const s = spinners.current[id];
-    if (s?.running) {
-      s.leaveAt = performance.now() / 1000; // 바람개비는 tick 이 3초 뒤 스스로 멈춘다
+    for (const s of spinnersOf(id)) {
+      if (!s.running) continue;
+      s.leaveAt = performance.now() / 1000; // 바람개비·시곗바늘은 tick 이 3초 뒤 스스로 멈춘다
       s.w0 = null;
     }
   };
@@ -130,8 +132,9 @@ export function useIconMotion() {
         finishLater(id);
       },
     }),
-    spin: (id) => (el) => {
-      const s = (spinners.current[id] ||= { angle: 0, omega: 0, leaveAt: null, w0: null, running: false });
+    // 탭 id 안에서 스크립트로 돌릴 것. 한 탭에 여럿이면 name 을 다르게, max 는 최고 속도(도/초)
+    spin: (id, name = "main", max = undefined) => (el) => {
+      const s = (spinners.current[`${id}:${name}`] ||= { tab: id, max, angle: 0, omega: 0, leaveAt: null, w0: null, running: false });
       s.el = el;
       if (el) el.style.transform = `rotate(${s.angle}deg)`;
     },
