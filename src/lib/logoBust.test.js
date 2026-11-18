@@ -15,27 +15,28 @@ const brokenStorage = {
 };
 
 describe("조각 모양 순서", () => {
-  it("9가지이고 흰색으로 시작해 연한 핑크로 끝난다", () => {
+  it("9가지이고 흰 대리석으로 시작해 연한 핑크로 끝난다", () => {
     expect(LOOKS).toHaveLength(9);
-    expect(LOOKS[0].id).toBe("white");
+    expect(LOOKS[0].id).toBe("marble");
     expect(LOOKS.at(-1).id).toBe("pink");
     expect(new Set(LOOKS.map((l) => l.id)).size).toBe(9);
   });
 
   it("누르면 다음 모양, 마지막 다음은 처음", () => {
-    expect(nextLook("white")).toBe("marble");
+    expect(nextLook("marble")).toBe("white");
+    expect(nextLook("white")).toBe("black");
     expect(nextLook("orange")).toBe("pink");
-    expect(nextLook("pink")).toBe("white");
+    expect(nextLook("pink")).toBe("marble");
   });
 
   it("모르는 모양에서 누르면 처음 모양", () => {
-    expect(nextLook("verde")).toBe("white");
-    expect(nextLook(undefined)).toBe("white");
+    expect(nextLook("verde")).toBe("marble");
+    expect(nextLook(undefined)).toBe("marble");
   });
 
   it("이름과 순서를 붙여 보여 준다", () => {
     expect(lookLabel("gold")).toBe("금 · 5/9");
-    expect(lookLabel("white")).toBe("흰색 · 1/9");
+    expect(lookLabel("marble")).toBe("흰 대리석 · 1/9");
   });
 
   it("9번을 누르면 한 바퀴 돌아 제자리", () => {
@@ -50,15 +51,19 @@ describe("고른 모양 기억", () => {
     expect(readSavedLook(memoryStorage({ [STORAGE_KEY]: "gold" }))).toBe("gold");
   });
 
-  it("없거나 예전 모양(녹색 대리석 등)이면 흰색", () => {
-    expect(readSavedLook(memoryStorage())).toBe("white");
-    expect(readSavedLook(memoryStorage({ [STORAGE_KEY]: "verde" }))).toBe("white");
+  it("한 번도 안 눌렀거나 예전 모양(녹색 대리석 등)이면 흰 대리석", () => {
+    expect(readSavedLook(memoryStorage())).toBe("marble");
+    expect(readSavedLook(memoryStorage({ [STORAGE_KEY]: "verde" }))).toBe("marble");
+  });
+
+  it("흰색을 골라 두었으면 흰색 그대로", () => {
+    expect(readSavedLook(memoryStorage({ [STORAGE_KEY]: "white" }))).toBe("white");
   });
 
   it("저장소를 못 쓰는 브라우저에서도 멈추지 않는다", () => {
-    expect(readSavedLook(brokenStorage)).toBe("white");
+    expect(readSavedLook(brokenStorage)).toBe("marble");
     expect(() => saveLook("gold", brokenStorage)).not.toThrow();
-    expect(readSavedLook(null)).toBe("white");
+    expect(readSavedLook(null)).toBe("marble");
   });
 
   it("저장한 모양을 다시 읽으면 그대로", () => {

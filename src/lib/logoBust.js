@@ -2,12 +2,13 @@
 // three 를 부르지 않는 부분만 여기에 두어 머리글이 가볍게 쓰고, 테스트도 한다.
 //
 // - 조각을 누를 때마다 LOOKS 순서대로 다음 모양으로 바뀌고, 마지막 다음은 처음으로 돌아간다.
+// - 처음(한 번도 안 눌렀을 때)은 맨 앞의 흰 대리석 (2026-11-18 사용자 요청).
 // - 고른 모양은 이 브라우저(localStorage "logo_bust_look")에만 기억한다 (Firestore 안 씀).
 // - 조각은 화면 어디에 있든 마우스 쪽으로 고개를 돌린다 (headAim).
 
 export const LOOKS = [
-  { id: "white", name: "흰색" },
   { id: "marble", name: "흰 대리석" },
+  { id: "white", name: "흰색" },
   { id: "black", name: "검은 대리석" },
   { id: "bronze", name: "청동" },
   { id: "gold", name: "금" },
@@ -33,7 +34,7 @@ export function lookLabel(id) {
   return `${LOOKS[i].name} · ${i + 1}/${LOOKS.length}`;
 }
 
-/** 이 브라우저에 기억한 모양. 없거나 이상하거나 저장소를 못 쓰면 흰색 */
+/** 이 브라우저에 기억한 모양. 없거나 이상하거나 저장소를 못 쓰면 처음 모양(흰 대리석) */
 export function readSavedLook(storage = globalThis.localStorage) {
   try {
     const v = storage?.getItem(STORAGE_KEY);

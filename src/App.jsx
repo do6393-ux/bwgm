@@ -179,7 +179,8 @@ export default function App() {
 
       <Header activeTab={visibleTab} setActiveTab={goTab} currentUser={currentUser} currentTheme={currentTheme} isOutline={isOutline} cutoutColor={cutoutColor} onOpenLogin={() => setIsLoginOpen(true)} canWork={canWork} />
 
-      <main className="max-w-[1360px] mx-auto px-4 md:px-10 pt-6 md:pt-16 w-full">
+      {/* PC 위 여백 36px + 머리글 아래 여백에 더한 28px = 예전 64px (Header.jsx 참고) */}
+      <main className="max-w-[1360px] mx-auto px-4 md:px-10 pt-6 md:pt-9 w-full">
         {/* 정보 수업은 다른 탭을 볼 때도 숨겨 둔 채 띄워 둔다: 돌던 수업 타이머가 멈추지 않고 끝나면 울린다 */}
         <div hidden={visibleTab !== "class"}>
           <TabClass currentUser={currentUser} currentTheme={THEMES.class} isVisible={visibleTab === "class"} />

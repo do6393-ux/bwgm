@@ -1,4 +1,4 @@
-// 머리글 조각의 3D 장면 (three). LogoBust.jsx 가 늦게 불러오므로 이 파일과 three 는 넓은 PC 화면에서
+// 머리글 조각의 3D 장면 (three). LogoBust.jsx 가 늦게 불러오므로 이 파일과 three 는 마우스가 있는 PC 에서
 // 로그인한 선생님에게만 내려받아진다.
 //
 // 모델(public/models/bust.glb)은 하나이고, 모양 9가지는 재질만 바꾼다.
@@ -110,14 +110,13 @@ export function createBustView(canvas, box) {
   const pivot = new THREE.Group(); // 목 높이에서 돈다
   scene.add(pivot);
 
-  const reduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
   const materials = {};
-  const material = (id) => (materials[id] ||= (MAKE[id] || MAKE.white)());
+  const material = (id) => (materials[id] ||= (MAKE[id] || MAKE.marble)());
   let mesh = null;
   let geometry = null;
   let modelH = 1.9;
   let modelW = 1.8; // 돌아도 들어가게 가로·앞뒤 중 긴 쪽
-  let lookId = "white";
+  let lookId = "marble";
   let disposed = false;
 
   // ---- 크기 ----
@@ -206,7 +205,8 @@ export function createBustView(canvas, box) {
     setLook(id, { hop: bounce = false } = {}) {
       lookId = id;
       if (mesh) mesh.material = material(id);
-      if (bounce && !reduceMotion?.matches) hop = 1;
+      // Windows 애니메이션 효과가 꺼진 PC(움직임 줄이기)에서도 움직인다: 사용자가 다 움직이길 원함 (2026-11-18)
+      if (bounce) hop = 1;
       wake();
     },
     dispose() {
