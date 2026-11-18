@@ -1,9 +1,20 @@
-import { useState } from "react";
+import { lazy, Suspense, useState, useSyncExternalStore } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import SettingsModal from "./SettingsModal";
 import TeacherAdminModal from "./TeacherAdminModal";
 import { isAdmin } from "@/lib/admin";
+
+// 로고 자리의 3D 조각은 넓은 PC 화면(lg 이상)에서 로그인한 선생님에게만. three 와 모델은 그때만 내려받는다.
+// 학생·휴대폰·좁은 창은 지금처럼 "buwon informatics" 글자.
+const LogoBust = lazy(() => import("./LogoBust"));
+const WIDE_QUERY = "(min-width: 1024px)";
+const subscribeWide = (onChange) => {
+  const mq = window.matchMedia(WIDE_QUERY);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+};
+const isWideNow = () => window.matchMedia(WIDE_QUERY).matches;
 
 export default function Header({
   activeTab,
@@ -18,25 +29,34 @@ export default function Header({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTeacherAdminOpen, setIsTeacherAdminOpen] = useState(false);
   const isAdminUser = isAdmin(currentUser);
+  const wide = useSyncExternalStore(subscribeWide, isWideNow, () => false);
+  const [bustReady, setBustReady] = useState(false); // 조각이 다 뜨면 글자를 (화면 읽기 프로그램용으로만) 숨긴다
+  const showBust = !!currentUser && wide;
   const sheet = isOutline
     ? { fill: cutoutColor, stroke: "currentColor", strokeWidth: 2.8 }
     : { fill: "currentColor", stroke: cutoutColor, strokeWidth: 2.2 };
 
   return (
     <>
-      <header className={`w-full border-b transition-colors duration-500 ${currentTheme.border} px-4 md:px-12 py-3 md:py-[clamp(1.5rem,2.2vw,2rem)]`}>
+      {/* PC 의 위아래 여백은 안쪽 줄(overflow-x-auto)에 둔다: 로고 조각이 그 여백까지 커져도 잘리지 않게 */}
+      <header className={`w-full border-b transition-colors duration-500 ${currentTheme.border} px-4 md:px-12 py-3 md:py-0`}>
         {/* 🎯 부모 컨테이너 간격(gap) 확대 */}
-        <div className="max-w-[1360px] w-full mx-auto flex flex-wrap md:flex-nowrap items-center md:items-start justify-between gap-x-4 gap-y-3 md:gap-[clamp(2rem,4vw,4rem)] md:overflow-x-auto no-scrollbar">
-          
-          {/* 🎯 로고 영역: min-w-max 추가 */}
+        <div className="max-w-[1360px] w-full mx-auto flex flex-wrap md:flex-nowrap items-center md:items-start justify-between gap-x-4 gap-y-3 md:gap-[clamp(2rem,4vw,4rem)] md:py-[clamp(1.5rem,2.2vw,2rem)] md:overflow-x-auto no-scrollbar">
+
+          {/* 🎯 로고 영역: min-w-max 추가. 넓은 PC 에서 로그인하면 글자 대신 3D 조각 (LogoBust) */}
           <div className="order-1 md:order-none flex-shrink-0 min-w-max">
-            <h1 className="font-normal leading-[1.0] tracking-tighter text-[clamp(18px,2.4vw,34px)]">
+            {showBust && (
+              <Suspense fallback={null}>
+                <LogoBust onReady={setBustReady} />
+              </Suspense>
+            )}
+            <h1 className={`font-normal leading-[1.0] tracking-tighter text-[clamp(18px,2.4vw,34px)] ${showBust && bustReady ? "sr-only" : ""}`}>
               buwon<br className="hidden md:block"/><span className="md:hidden"> </span>informatics
             </h1>
           </div>
 
           {/* 🎯 탭 영역: min-w-max 추가하여 찌그러짐 원천 차단 */}
-          <div className="order-3 md:order-none w-full md:w-auto grid grid-cols-4 md:flex md:flex-row md:flex-nowrap items-start md:flex-1 md:min-w-max gap-1 md:gap-[clamp(1.5rem,3vw,3rem)] md:pr-4">
+          <div className="order-3 md:order-none w-full md:w-auto grid grid-cols-4 md:flex md:flex-row md:flex-nowrap items-start md:flex-1 md:min-w-max gap-1 md:gap-[clamp(1.5rem,3vw,3rem)]">
             
             {/* 탭 1: 정보 수업 */}
             <div 
@@ -167,7 +187,8 @@ export default function Header({
           </div>
 
           {/* 🎯 로그인 영역: min-w-max와 ml-auto 추가로 무조건 우측으로 밀어내기 */}
-          <div className="order-2 md:order-none flex items-center md:items-start flex-shrink-0 md:min-w-max gap-[clamp(1rem,1.5vw,1.5rem)] ml-auto md:pl-4">
+          {/* (오른쪽 끝의 렌치 아이콘은 뜻이 없고 머리글을 넘치게 해서 2026-11-18 뺐다. 탭과의 사이는 부모 gap 만으로 둔다) */}
+          <div className="order-2 md:order-none flex items-center md:items-start flex-shrink-0 md:min-w-max ml-auto">
             <div className="flex flex-row md:flex-col items-center md:items-end gap-4 md:gap-0 text-right font-mono md:pt-[clamp(4px,0.5vw,8px)]">
               {currentUser ? (
                 <>
@@ -197,21 +218,6 @@ export default function Header({
                 </>
               )}
             </div>
-            <svg viewBox="0 0 100 100" className="hidden md:block opacity-90 group-hover:rotate-90 transition-transform duration-700 w-[clamp(36px,4.5vw,70px)] h-[clamp(36px,4.5vw,70px)]">
-              {isOutline ? (
-                <g fill="none" stroke="currentColor" strokeWidth="6" strokeLinejoin="round">
-                  <polygon points="15,40 40,15 50,25 25,50" />
-                  <polygon points="25,50 50,25 85,60 60,85" />
-                  <circle cx="55" cy="55" r="9" />
-                </g>
-              ) : (
-                <g>
-                  <path fill="currentColor" fillRule="evenodd" clipRule="evenodd" d="M15 40 L40 15 L50 25 L25 50 Z" />
-                  <path fill="currentColor" fillRule="evenodd" clipRule="evenodd" d="M25 50 L50 25 L85 60 L60 85 Z" />
-                  <circle cx="55" cy="55" r="12" fill={cutoutColor} />
-                </g>
-              )}
-            </svg>
           </div>
 
         </div>
