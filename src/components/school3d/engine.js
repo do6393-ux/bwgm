@@ -51,10 +51,10 @@ export function createSchool3D({ stage, labels, glbUrl, roomsUrl, onProgress, on
   const disc = new THREE.Mesh(new THREE.PlaneGeometry(420, 420),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false }));
   disc.rotation.x = -Math.PI / 2;
-  disc.position.y = -0.14;
+  disc.position.y = -0.64; // 바깥 땅은 1층 바닥보다 0.75m 아래 (출입구 계단·경사로가 땅에 닿게)
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: 0.45 }));
   ground.rotation.x = -Math.PI / 2;
-  ground.position.y = -0.12;
+  ground.position.y = -0.62;
   ground.receiveShadow = true;
   scene.add(disc, ground);
 
