@@ -13,6 +13,9 @@ describe("isEscToLower", () => {
     expect(isEscToLower({ key: "Escape", repeat: true, target: { tagName: "DIV" } })).toBe(false);
     expect(isEscToLower({ key: "Enter", target: { tagName: "DIV" } })).toBe(false);
   });
+  it("학교 지도처럼 다른 곳이 먼저 쓴 Esc 면 내리지 않는다", () => {
+    expect(isEscToLower({ key: "Escape", defaultPrevented: true, target: { tagName: "DIV" } })).toBe(false);
+  });
 });
 
 const at = new Date(2026, 10, 16, 10, 0);

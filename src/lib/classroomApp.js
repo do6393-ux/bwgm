@@ -67,9 +67,9 @@ export function createRaiser(app, { delay = LOWER_AFTER_MS, setTimer = setTimeou
   };
 }
 
-/** Esc 로 화면을 내릴까? 글을 쓰는 중(채팅 입력칸)이거나 키를 누르고 있는 것이면 아니다 */
+/** Esc 로 화면을 내릴까? 글을 쓰는 중(채팅 입력칸)이거나 키를 누르고 있는 것, 다른 곳(학교 지도 닫기 등)이 이미 쓴 Esc 면 아니다 */
 export function isEscToLower(event) {
-  if (!event || event.key !== "Escape" || event.repeat) return false;
+  if (!event || event.key !== "Escape" || event.repeat || event.defaultPrevented) return false;
   const t = event.target;
   if (!t) return true;
   return !t.isContentEditable && !["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName);

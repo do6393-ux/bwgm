@@ -6,8 +6,8 @@
 // screen: classroom_screens 문서 (없으면 null) — 선생님 메시지와 "읽음" 시각
 // messages: 그 교실의 대화 (없으면 null)
 // chatMode: "live" 채팅 단추가 눌린다 | "preview" 단추 모양만 (선생님 탭 미리보기)
-import { useEffect, useRef, useState } from "react";
-import { MessageSquare, ZoomIn } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Building2, MessageSquare, ZoomIn } from "lucide-react";
 import { fetchClassSchedule, fetchPeriodTimes } from "@/lib/timetable";
 import { fetchLunch } from "@/lib/neisMeal";
 import { scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
@@ -16,8 +16,10 @@ import { useNow } from "@/lib/useScreenAwake";
 import { isBeyondNextWeek, pickDaySchedule } from "@/lib/todayBrief";
 import { classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor } from "@/lib/classroomScreen";
 import { clockLabel, drawingToday, newReplies, noticeToday, todayMessages } from "@/lib/classroomChat";
+import { noticeKey } from "@/lib/classroomApp";
 import ClassroomChatPanel from "./ClassroomChatPanel";
 import DrawingView from "./DrawingView";
+import SchoolMapOverlay from "./SchoolMapOverlay";
 
 const W = 1280;
 const H = 720;
@@ -152,6 +154,16 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
     setSeenAt(new Date());
   };
   const showChat = live && chatOpen;
+
+  // ── 학교 3D 지도 (전체 화면으로 덮는다. 선생님 메시지가 새로 오면 닫아서 메시지가 보이게 한다) ──
+  const [mapOpen, setMapOpen] = useState(false);
+  const closeMap = useCallback(() => setMapOpen(false), []);
+  const mapNoticeKey = screen ? noticeKey(screen) : undefined; // undefined: 아직 교실 화면 문서를 모른다
+  const [seenMapNoticeKey, setSeenMapNoticeKey] = useState(mapNoticeKey);
+  if (mapNoticeKey !== seenMapNoticeKey) {
+    setSeenMapNoticeKey(mapNoticeKey);
+    if (seenMapNoticeKey !== undefined && mapNoticeKey != null) setMapOpen(false);
+  }
 
   const [boxRef, scale] = useFitScale();
 
@@ -322,17 +334,31 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
                     )}
                   </Card>
 
-                  <button
-                    type="button"
-                    onClick={live ? openChat : undefined}
-                    disabled={!live}
-                    title={live ? undefined : "교실 컴퓨터에서 교실 화면 주소로 띄우면 눌러져요"}
-                    className="shrink-0 h-[60px] rounded-[22px] bg-[#34d399] enabled:hover:bg-[#6ee7b7] text-[#052e22] text-[22px] font-bold flex items-center justify-center gap-3 disabled:cursor-default"
-                  >
-                    <MessageSquare className="w-7 h-7" strokeWidth={2.4} />
-                    선생님께 메시지 보내기
-                    {replies > 0 && <span className="px-3 py-0.5 rounded-full bg-[#052e22] text-[#fbbf24] text-[16px]">새 답장 {replies}</span>}
-                  </button>
+                  <div className="shrink-0 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={live ? openChat : undefined}
+                      disabled={!live}
+                      title={live ? undefined : "교실 컴퓨터에서 교실 화면 주소로 띄우면 눌러져요"}
+                      className="relative flex-1 min-w-0 h-[60px] rounded-[22px] bg-[#34d399] enabled:hover:bg-[#6ee7b7] text-[#052e22] text-[22px] font-bold flex items-center justify-center gap-3 disabled:cursor-default"
+                    >
+                      <MessageSquare className="w-7 h-7 shrink-0" strokeWidth={2.4} />
+                      <span className="truncate">선생님께 메시지 보내기</span>
+                      {replies > 0 && (
+                        <span className="absolute -top-3 right-3 px-3 py-0.5 rounded-full bg-[#052e22] border-2 border-[#34d399] text-[#fbbf24] text-[16px]">
+                          새 답장 {replies}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMapOpen(true)}
+                      className="shrink-0 h-[60px] px-5 rounded-[22px] bg-[#4a4a4a] hover:bg-[#5a5a5a] text-[#f5f5f5] text-[22px] font-bold flex items-center justify-center gap-2.5"
+                    >
+                      <Building2 className="w-7 h-7" strokeWidth={2.2} />
+                      학교 지도
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -370,6 +396,7 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
           )}
         </div>
       </div>
+      {mapOpen && <SchoolMapOverlay onClose={closeMap} />}
     </div>
   );
 }
