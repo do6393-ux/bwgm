@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot, query, orderBy, serverTimestamp } from "firebase/firestore";
 import { ExternalLink } from "lucide-react";
@@ -11,7 +11,15 @@ import ClassTimer from "@/components/timer/ClassTimer";
 import ClassPicker from "@/components/picker/ClassPicker";
 import { hashOfSubtab, isClassSubtabHash, subtabFromHash, visibleSubtabs } from "@/lib/classSubtabs";
 import { useLessons } from "@/lib/lessonsApi";
+import { MOUSE_QUERY, useMediaQuery } from "@/lib/useMediaQuery";
 import { WEEKDAYS } from "@/lib/workCalendar";
+
+// 3D 얼굴 조각: 홈에서 작은 탭 줄 오른쪽, 공지사항 [ + add ] 바로 위 빈 곳 (누구나, 로그인 안 한 학생도).
+// 마우스가 있는 PC 이고 작은 탭 줄 오른쪽에 BUST_ROOM_PX 만큼 빈 곳이 있을 때만 — 휴대폰·좁은 창은 작은 탭 줄이
+// 폭을 다 써서 자리가 없다(선생님은 작은 탭이 5개라 학생보다 넓은 창이 필요하다).
+// three 와 모델은 조각이 보일 때만 내려받는다. 크기는 src/index.css 의 .logo-bust
+const LogoBust = lazy(() => import("@/components/layout/LogoBust"));
+const BUST_ROOM_PX = 210; // .logo-bust 폭(190 × 0.92 ≈ 175px) + 띄울 간격
 
 // 정보 수업 탭은 작은 탭으로 나뉜다 (src/lib/classSubtabs.js). 학생에게는 앞의 세 개만 보인다.
 //   홈: 오늘 한눈에(공지사항 · 지금 낼 과제 · 최근 올라온 자료) · 수업 도구
@@ -39,6 +47,19 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
   const tabs = visibleSubtabs(isTeacher);
   // 학생이 #timer 주소로 들어오거나 로그아웃하면 홈을 보여 준다
   const current = tabs.some((t) => t.id === subtab) ? subtab : "home";
+  const rootRef = useRef(null);
+  const hasMouse = useMediaQuery(MOUSE_QUERY);
+  const [bustFits, setBustFits] = useState(false);
+  useEffect(() => {
+    const root = rootRef.current;
+    const nav = navRef.current;
+    if (!root || !nav) return undefined;
+    const ro = new ResizeObserver(() => setBustFits(root.clientWidth - nav.offsetWidth >= BUST_ROOM_PX));
+    ro.observe(root);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, []);
+  const showBust = hasMouse && bustFits && isVisible && current === "home";
 
   // 작은 탭을 바꿀 때 아래로 내려가 있었으면 탭 줄이 보이게 올린다
   const openSubtab = (id) => {
@@ -69,7 +90,7 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
   }, [isVisible, current, hashSeen]);
 
   return (
-    <div className="space-y-12 md:space-y-16 ui-enter">
+    <div ref={rootRef} className="relative space-y-12 md:space-y-16 ui-enter">
       <nav ref={navRef} aria-label="정보 수업 메뉴" className={`grid ${GRID_COLS[tabs.length] ?? "grid-cols-3"} md:inline-grid md:grid-flow-col md:auto-cols-max border border-black`}>
         {tabs.map((tab, i) => {
           const active = current === tab.id;
@@ -122,6 +143,14 @@ function TabClass({ currentUser, currentTheme, isVisible = true }) {
       {isTeacher && (
         <div hidden={current !== "picker"}>
           <ClassPicker active={isVisible && current === "picker"} />
+        </div>
+      )}
+      {/* 맨 뒤에 두어야 space-y 간격이 작은 탭 줄을 밀지 않는다 (!mt-0 은 이 칸에 붙는 간격을 없앤다) */}
+      {showBust && (
+        <div className="absolute right-0 top-0 !mt-0">
+          <Suspense fallback={null}>
+            <LogoBust />
+          </Suspense>
         </div>
       )}
     </div>

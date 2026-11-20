@@ -287,23 +287,11 @@
 }
 
 /*
-  머리글 로고 자리의 3D 조각 (src/components/layout/LogoBust.jsx) 크기.
-  PC 머리글(md 이상)에서는 탭 아이콘 줄 + 위아래 여백까지 쓴다(1920 에서 약 168px).
-  바깥 여백을 그만큼 음수로 줘서 머리글 높이는 글자 로고 때와 같고, 폭(0.92배)도 글자 로고와 비슷하다.
-  값은 Header.jsx 의 탭 아이콘 높이 clamp(58px,7.8vw,110px) · 안쪽 줄 위아래 여백 clamp(1.5rem,2.2vw,2rem) 과 같아야 한다.
-  (2026-11-18 196px 로 키웠다가 "크다"고 해서 이 크기로 되돌렸다)
+  정보 수업 홈 오른쪽 위 3D 조각 (src/components/layout/LogoBust.jsx, TabClass 가 띄움) 크기.
+  작은 탭 줄 윗선에서 공지사항 [ + add ] 바로 위까지. 폭은 높이의 0.92배.
+  (2026-11-18~20 에는 머리글 로고 자리에 있었다: 1920 에서 168px, 196px 은 "크다"고 했다)
 */
 .logo-bust {
-  --bust-h: 72px;
-  height: var(--bust-h);
-  width: calc(var(--bust-h) * 0.92);
-  margin-block: -12px;
-}
-@media (min-width: 768px) {
-  .logo-bust {
-    --bust-row: clamp(58px, 7.8vw, 110px);
-    --bust-pad: clamp(1.5rem, 2.2vw, 2rem);
-    --bust-h: calc(var(--bust-row) + 2 * var(--bust-pad) - 6px);
-    margin-block: calc(3px - var(--bust-pad));
-  }
+  height: 190px;
+  width: calc(190px * 0.92); /* 바꾸면 TabClass.jsx 의 BUST_ROOM_PX 도 */
 }

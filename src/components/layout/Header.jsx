@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import SettingsModal from "./SettingsModal";
@@ -6,16 +6,7 @@ import TeacherAdminModal from "./TeacherAdminModal";
 import { useIconMotion } from "./useIconMotion";
 import { isAdmin } from "@/lib/admin";
 
-// 로고 자리의 3D 조각은 마우스가 있는 기기(PC)에서 로그인한 선생님에게만. 창을 줄여도 PC 면 보인다.
-// 학생·휴대폰(터치 기기)은 지금처럼 "buwon informatics" 글자. three 와 모델은 조각이 보일 때만 내려받는다.
-const LogoBust = lazy(() => import("./LogoBust"));
-const MOUSE_QUERY = "(hover: hover) and (pointer: fine)";
-const subscribeMouse = (onChange) => {
-  const mq = window.matchMedia(MOUSE_QUERY);
-  mq.addEventListener("change", onChange);
-  return () => mq.removeEventListener("change", onChange);
-};
-const hasMouseNow = () => window.matchMedia(MOUSE_QUERY).matches;
+// 3D 얼굴 조각(LogoBust)은 2026-11-20 머리글 로고 자리에서 정보 수업 홈 오른쪽 위로 옮겼다 (TabClass).
 
 // 탭 아이콘 움직임은 useIconMotion: PC 는 마우스를 올린 동안 + 뗀 뒤 3초, 휴대폰은 누르면 3초.
 // 명찰·서류는 움직이는 동안 탭에 붙는 data-moving 으로 group-data-[moving=true]:… 클래스가 움직이고, 끝나면 제자리에서 멈춘다.
@@ -37,9 +28,6 @@ export default function Header({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTeacherAdminOpen, setIsTeacherAdminOpen] = useState(false);
   const isAdminUser = isAdmin(currentUser);
-  const hasMouse = useSyncExternalStore(subscribeMouse, hasMouseNow, () => false);
-  const [bustReady, setBustReady] = useState(false); // 조각이 다 뜨면 글자를 (화면 읽기 프로그램용으로만) 숨긴다
-  const showBust = !!currentUser && hasMouse;
 
   const iconMotion = useIconMotion();
   const sheet = isOutline
@@ -48,20 +36,14 @@ export default function Header({
 
   return (
     <>
-      {/* PC 의 위아래 여백은 안쪽 줄(overflow-x-auto)에 둔다: 로고 조각이 그 여백까지 커져도 잘리지 않게 (src/index.css .logo-bust).
-          머리글 아래 실선은 모든 탭에서 뺐다 (2026-11-18 사용자 요청) */}
+      {/* 머리글 아래 실선은 모든 탭에서 뺐다 (2026-11-18 사용자 요청) */}
       <header className="w-full transition-colors duration-500 px-4 md:px-12 py-3 md:py-0">
         {/* 🎯 부모 컨테이너 간격(gap) 확대 */}
         <div className="max-w-[1360px] w-full mx-auto flex flex-wrap md:flex-nowrap items-center md:items-start justify-between gap-x-4 gap-y-3 md:gap-[clamp(2rem,4vw,4rem)] md:py-[clamp(1.5rem,2.2vw,2rem)] md:overflow-x-auto no-scrollbar">
 
-          {/* 🎯 로고 영역: min-w-max 추가. PC 에서 로그인하면 글자 대신 3D 조각 (LogoBust) */}
+          {/* 🎯 로고 영역: min-w-max 추가 */}
           <div className="order-1 md:order-none flex-shrink-0 min-w-max">
-            {showBust && (
-              <Suspense fallback={null}>
-                <LogoBust onReady={setBustReady} />
-              </Suspense>
-            )}
-            <h1 className={`font-normal leading-[1.0] tracking-tighter text-[clamp(18px,2.4vw,34px)] ${showBust && bustReady ? "sr-only" : ""}`}>
+            <h1 className="font-normal leading-[1.0] tracking-tighter text-[clamp(18px,2.4vw,34px)]">
               buwon<br className="hidden md:block"/><span className="md:hidden"> </span>informatics
             </h1>
           </div>

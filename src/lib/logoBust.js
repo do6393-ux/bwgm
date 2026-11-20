@@ -1,5 +1,5 @@
-// 머리글 "buwon informatics" 자리에 서 있는 3D 조각 (src/components/layout/LogoBust.jsx) 의 계산.
-// three 를 부르지 않는 부분만 여기에 두어 머리글이 가볍게 쓰고, 테스트도 한다.
+// 정보 수업 홈 오른쪽 위에 서 있는 3D 조각 (src/components/layout/LogoBust.jsx) 의 계산.
+// three 를 부르지 않는 부분만 여기에 두어 가볍게 쓰고, 테스트도 한다.
 //
 // - 조각을 누를 때마다 LOOKS 순서대로 다음 모양으로 바뀌고, 마지막 다음은 처음으로 돌아간다.
 // - 처음(한 번도 안 눌렀을 때)은 맨 앞의 흰 대리석 (2026-11-18 사용자 요청).

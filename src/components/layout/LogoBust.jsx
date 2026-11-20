@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { createBustView } from "./logoBustScene";
 import { lookLabel, nextLook, readSavedLook, saveLook } from "@/lib/logoBust";
 
-// 머리글 "buwon informatics" 글자 대신 서 있는 3D 조각 (마우스가 있는 PC + 로그인한 선생님만, Header 가 늦게 불러온다).
+// 정보 수업 홈 오른쪽 위(작은 탭 줄 옆, 공지사항 [ + add ] 위)에 서 있는 3D 조각.
+// 마우스가 있는 넓은 PC 면 누구나(로그인 안 한 학생도) 본다. TabClass 가 늦게 불러온다.
 // 마우스 쪽으로 고개를 돌리고, 누를 때마다 다음 모양(9가지)으로 바뀐다. 고른 모양은 이 브라우저가 기억한다.
-// 모델을 다 받기 전이나 WebGL 이 안 되면 아무것도 안 보이고, 머리글은 글자 로고를 그대로 보여 준다(onReady).
-// 크기는 src/index.css 의 .logo-bust (머리글 여백까지 쓰고, 바깥 여백을 음수로 줘서 머리글 크기는 그대로).
+// 모델을 다 받기 전이나 WebGL 이 안 되면 아무것도 안 보인다 (onReady 로 알려 준다).
+// 크기는 src/index.css 의 .logo-bust
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/bust.glb`;
 
