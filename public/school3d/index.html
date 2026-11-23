@@ -1,0 +1,1287 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.css">
+<style>body{margin:0}[hidden]{display:none!important}</style>
+<script>window.SCHOOL3D_GLB = "buwon_floors.glb"; window.SCHOOL3D_ROOMS = "rooms.json"; window.SCHOOL3D_CAMPUS = "buwon_campus.glb";</script>
+<title>부원여중 층별 분해</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* buwon.vercel.app 'office' 테마에 맞춤: 거의 검정 바탕, 1px 선, 각진 모서리, Pretendard + Space Mono,
+   주황 강조(#FF5000) 하나와 확인용 초록(#00E599). 레이아웃: 왼쪽 열 = 소개·길찾기·층별 실, 오른쪽 = 층 탭, 아래 = 분해 */
+:root {
+  --page: #050505;
+  --well: #0A0A0A;
+  --surface: #111111;
+  --raised: #1A1A1A;
+  --line: #222222;
+  --line-strong: #333333;
+  --line-hover: #444444;
+  --ink: #E5E5E5;
+  --ink-strong: #FFFFFF;
+  --muted: #888888;
+  --faint: #666666;
+  --accent: #FF5000;
+  --accent-strong: #FF3000;
+  --accent-ink: #FFFFFF;
+  --ok: #00E599;
+  --ok-ink: #04140B;
+  --panel: rgba(17, 17, 17, 0.92);
+  --m-ease: cubic-bezier(.4, 0, .2, 1);
+  --m-dur: .18s;
+  --f-sans: Pretendard, "Noto Sans KR", -apple-system, BlinkMacSystemFont, system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --f-mono: "Space Mono", Pretendard, ui-monospace, SFMono-Regular, Menlo, Consolas, "Noto Sans KR", monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: radial-gradient(110% 85% at 55% 45%, #141414 0%, var(--page) 65%) fixed, var(--page);
+  color: var(--ink);
+  font-family: var(--f-sans);
+  overflow: hidden;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0;
+}
+#stage { position: fixed; inset: 0; z-index: 0; }
+#stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+#stage canvas:active { cursor: grabbing; }
+body.picking #stage canvas { cursor: crosshair; }
+#labels { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+.hud { position: fixed; z-index: 2; }
+
+/* 왼쪽 열 */
+.side {
+  top: calc(env(safe-area-inset-top, 0px) + 20px);
+  left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px);
+  width: min(340px, calc(100vw - 100px));
+  max-height: calc(100% - env(safe-area-inset-top, 0px) - 120px);
+  display: flex; flex-direction: column; gap: 12px;
+  overflow-y: auto; overscroll-behavior: contain; padding-right: 2px;
+  scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent;
+}
+.intro { display: grid; gap: 8px; padding-bottom: 4px; }
+.eyebrow {
+  margin: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  margin: 0; font-weight: 700; font-size: clamp(22px, 2.4vw, 28px);
+  line-height: 1.2; letter-spacing: -.025em; color: var(--ink-strong); text-wrap: balance;
+}
+.keys { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); }
+.keys b { font-family: var(--f-mono); font-weight: 700; font-size: 11px; color: var(--ink); }
+
+.card {
+  background: var(--panel); border: 1px solid var(--line);
+  padding: 14px; display: grid; gap: 12px;
+}
+.card > summary, .card header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  font-family: var(--f-mono); font-weight: 700; font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--ink); cursor: pointer; list-style: none;
+}
+.card > summary::-webkit-details-marker { display: none; }
+.card > summary::after { content: "−"; color: var(--faint); }
+.card:not([open]) > summary::after { content: "+"; }
+.card h2 { margin: 0; font: inherit; }
+.count { font-family: var(--f-mono); font-size: 11px; letter-spacing: 0; text-transform: none; color: var(--ok); font-weight: 400; }
+.route-body { display: grid; gap: 10px; }
+
+.field { display: grid; grid-template-columns: 40px 1fr auto; align-items: stretch; gap: 0; }
+.field .tag {
+  display: grid; place-items: center; font-size: 12px; font-weight: 700;
+  border: 1px solid var(--line-strong); border-right: none; color: var(--muted); background: var(--well);
+}
+.field .tag.from { color: var(--page); background: var(--ink-strong); border-color: var(--ink-strong); }
+.field .tag.to { color: var(--ok-ink); background: var(--ok); border-color: var(--ok); }
+select {
+  min-width: 0; width: 100%; font: inherit; font-size: 13px; color: var(--ink);
+  background: var(--well); border: 1px solid var(--line-strong); border-radius: 0; padding: 8px 8px;
+}
+select:hover { border-color: var(--line-hover); }
+.field .btn { border-left: none; }
+.btn {
+  font: inherit; font-weight: 700; font-size: 12px;
+  padding: 8px 12px; border-radius: 0; cursor: pointer; white-space: nowrap;
+  background: transparent; color: var(--ink); border: 1px solid var(--line-strong);
+  transition: border-color var(--m-dur) var(--m-ease), background var(--m-dur) var(--m-ease), color var(--m-dur) var(--m-ease);
+}
+.btn:hover { border-color: var(--line-hover); color: var(--ink-strong); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.primary:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.pickhint { font-size: 12px; color: var(--accent); }
+/* 건물 사이 길: 구름다리로 / 바깥으로 */
+.via { display: grid; grid-template-columns: 1fr 1fr; }
+.via .btn { display: grid; gap: 2px; justify-items: start; text-align: left; padding: 8px 10px; }
+.via .btn + .btn { border-left: none; }
+.via .btn small { font-family: var(--f-mono); font-weight: 400; font-size: 11px; color: var(--muted); }
+.via .btn[aria-pressed="true"] { border-color: var(--ok); color: var(--ink-strong); box-shadow: inset 0 0 0 1px var(--ok); }
+.via .btn[aria-pressed="true"] small { color: var(--ok); }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; counter-reset: st; }
+.steps li { position: relative; padding: 0 0 10px 28px; font-size: 13px; line-height: 1.45; counter-increment: st; }
+.steps li::before {
+  content: counter(st); position: absolute; left: 0; top: 1px; width: 18px; height: 18px;
+  display: grid; place-items: center; font-family: var(--f-mono); font-size: 10px;
+  border: 1px solid var(--ok); color: var(--ok);
+}
+.steps li:not(:last-child)::after { content: ""; position: absolute; left: 9px; top: 20px; bottom: 1px; width: 1px; background: var(--line-strong); }
+.steps li.end::before { background: var(--ok); color: var(--ok-ink); }
+.note { font-size: 12px; line-height: 1.5; color: var(--muted); margin: 0; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 150px; overflow-y: auto; }
+.chip {
+  font: inherit; font-size: 12px; line-height: 1; padding: 7px 9px; cursor: pointer;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--ink); border-radius: 0;
+  transition: border-color var(--m-dur) var(--m-ease);
+}
+.chip:hover { border-color: var(--ok); color: var(--ink-strong); }
+.link {
+  font: inherit; font-size: 12px; color: var(--muted); background: none; border: none; padding: 0;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer; justify-self: start;
+}
+.link:hover { color: var(--ink); }
+
+/* 건물 선택 + 층 탭 */
+.floors {
+  right: calc(max(16px, env(safe-area-inset-right, 0px)) + 4px);
+  top: 50%; transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.bseg, .ftabs { display: flex; flex-direction: column; }
+.btab {
+  width: 52px; height: 38px; padding: 0; cursor: pointer; border-radius: 0;
+  font: inherit; font-size: 12px; font-weight: 700; letter-spacing: -0.01em;
+  background: var(--panel); color: var(--muted); border: 1px solid var(--line-strong);
+  transition: background var(--m-dur) var(--m-ease), color var(--m-dur) var(--m-ease), border-color var(--m-dur) var(--m-ease);
+}
+.btab + .btab { margin-top: -1px; }
+.btab:hover { border-color: var(--line-hover); color: var(--ink-strong); position: relative; z-index: 1; }
+.btab[aria-pressed="true"] { background: var(--ink-strong); color: var(--page); border-color: var(--ink-strong); position: relative; z-index: 2; }
+.btab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ftab {
+  position: relative; width: 52px; height: 56px; padding: 0;
+  display: grid; place-content: center; justify-items: center; gap: 2px;
+  background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: 0; cursor: pointer; font: inherit;
+  transition: background var(--m-dur) var(--m-ease), color var(--m-dur) var(--m-ease), border-color var(--m-dur) var(--m-ease);
+}
+.ftab + .ftab { margin-top: -1px; }
+.ftab .n { font-family: var(--f-mono); font-weight: 700; font-size: 20px; line-height: 1; }
+.ftab .u { font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; color: var(--muted); }
+.ftab:hover { border-color: var(--line-hover); z-index: 1; }
+.ftab[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); z-index: 2; }
+.ftab[aria-pressed="true"] .u { color: var(--accent-ink); }
+
+/* 확대·축소 (전자칠판용 큰 버튼) */
+.zoom { right: calc(max(16px, env(safe-area-inset-right, 0px)) + 4px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); display: flex; flex-direction: column; }
+.zbtn {
+  width: 56px; height: 56px; font-family: var(--f-mono); font-size: 26px; line-height: 1; cursor: pointer; border-radius: 0;
+  background: var(--panel); color: var(--ink-strong); border: 1px solid var(--line-strong);
+  transition: border-color var(--m-dur) var(--m-ease), background var(--m-dur) var(--m-ease);
+}
+.zbtn + .zbtn { margin-top: -1px; }
+.zbtn:hover { border-color: var(--line-hover); position: relative; z-index: 1; }
+.zbtn:active { background: var(--accent); border-color: var(--accent); }
+.zbtn.home { font-size: 20px; }
+.zbtn.txt { font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--muted); }
+.zbtn.txt[aria-pressed="true"] { color: var(--accent); }
+
+/* 아래 분해 조작 */
+.controls {
+  left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+  width: min(520px, calc(100vw - 32px));
+}
+.dock { display: flex; align-items: center; gap: 12px; background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }
+.slider { flex: 1; min-width: 0; display: grid; gap: 6px; }
+.slider .lab {
+  display: flex; justify-content: space-between; font-family: var(--f-mono); font-size: 10px;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+}
+.slider .lab b { font-weight: 700; color: var(--ink-strong); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+input[type="range"] { width: 100%; accent-color: var(--accent); margin: 0; }
+.btn:focus-visible, .ftab:focus-visible, .flbl:focus-visible, .chip:focus-visible, .link:focus-visible,
+select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+/* 3D 위 라벨 */
+.lbl, .slbl, .mk { position: absolute; left: 0; top: 0; white-space: nowrap; will-change: transform; line-height: 1; }
+.lbl { font-size: 11px; padding: 4px 6px; background: var(--panel); color: var(--ink); border: 1px solid var(--line-strong); pointer-events: auto; cursor: pointer; }
+.lbl:hover { border-color: var(--accent); color: var(--ink-strong); }
+.slbl { font-family: var(--f-mono); font-size: 10px; padding: 2px 4px; background: rgba(5, 5, 5, 0.78); color: var(--ink); }
+.mk { font-size: 12px; font-weight: 700; padding: 5px 8px; }
+.mk.from { background: var(--ink-strong); color: var(--page); }
+.mk.to { background: var(--ok); color: var(--ok-ink); }
+.flbl {
+  position: absolute; left: 0; top: 0; will-change: transform; pointer-events: auto; cursor: pointer;
+  font-family: var(--f-mono); font-weight: 700; font-size: 12px; padding: 5px 9px; border-radius: 0;
+  background: var(--ink); color: var(--page); border: none; transition: opacity .25s var(--m-ease);
+}
+.flbl[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+
+.loading {
+  position: fixed; z-index: 3; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  background: var(--panel); border: 1px solid var(--line); padding: 14px 18px; display: grid; gap: 10px;
+  width: min(260px, calc(100vw - 48px));
+}
+.loading p { margin: 0; font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; color: var(--muted); }
+.pbar { height: 2px; background: var(--line-strong); overflow: hidden; }
+.pbar i { display: block; height: 100%; width: 0%; background: var(--accent); }
+
+@media (max-width: 720px) {
+  .side { width: calc(100vw - 32px); max-height: 46%; }
+  .keys { display: none; }
+  .floors { top: auto; transform: none; flex-direction: row; align-items: flex-end; gap: 8px; bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); }
+  .bseg, .ftabs { flex-direction: row; }
+  .btab { width: 52px; height: 44px; }
+  .btab + .btab { margin-top: 0; margin-left: -1px; }
+  .ftab { width: 44px; height: 44px; }
+  .ftab + .ftab { margin-top: 0; margin-left: -1px; }
+  .ftab .n { font-size: 16px; }
+  .controls { bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); }
+  .zoom { bottom: calc(env(safe-area-inset-bottom, 0px) + 146px); }
+  .zbtn { width: 44px; height: 44px; font-size: 22px; }
+  .dock { gap: 8px; padding: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .chip, .ftab, .flbl { transition: none; }
+}
+</style>
+
+<div id="stage"></div>
+<div id="labels"></div>
+
+<aside class="hud side" aria-label="안내">
+  <header class="intro">
+    <p class="eyebrow">Buwon Girls' Middle School · 3D</p>
+    <h1>본관 · 솔향관 층별 분해 보기</h1>
+    <div class="keys"><span><b>DRAG</b> 회전</span><span><b>WHEEL</b> 가리킨 곳 확대</span><span><b>R-DRAG</b> 이동</span><span><b>더블클릭</b> 그곳으로</span></div>
+  </header>
+
+  <details class="card" id="routecard" open>
+    <summary>길찾기 <span class="count" id="rt-sum"></span></summary>
+    <div class="route-body">
+      <div class="field">
+        <span class="tag from">출발</span>
+        <select id="sel-from" aria-label="출발 실"></select>
+        <button class="btn" id="pick-from" type="button" aria-pressed="false">찍기</button>
+      </div>
+      <div class="field">
+        <span class="tag to">도착</span>
+        <select id="sel-to" aria-label="도착 실"></select>
+        <button class="btn" id="pick-to" type="button" aria-pressed="false">찍기</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="rt-swap" type="button">출발 ↔ 도착</button>
+        <button class="link" id="rt-clear" type="button">지우기</button>
+        <span class="pickhint" id="pickhint" hidden>건물에서 실을 누르세요</span>
+      </div>
+      <div class="via" id="rt-via" role="group" aria-label="가는 길" hidden></div>
+      <ol class="steps" id="rt-steps" hidden></ol>
+      <p class="note" id="rt-note">출발과 도착을 고르거나, 찍기를 누른 뒤 건물에서 실을 누르세요.</p>
+    </div>
+  </details>
+
+  <section class="card" id="roomlist" hidden>
+    <header><h2 id="rl-title">3층</h2><span class="count" id="rl-count"></span></header>
+    <p class="note">이름을 누르면 그 실로 가까이 가요.</p>
+    <div class="chips" id="rl-chips"></div>
+    <button class="link" id="rl-clear" type="button">전체 층 다시 보기</button>
+  </section>
+</aside>
+
+<nav class="hud floors" aria-label="건물·층 선택">
+  <div class="bseg" id="bseg" role="group" aria-label="건물" hidden>
+    <button class="btab" type="button" data-b="main" aria-pressed="true">본관</button>
+    <button class="btab" type="button" data-b="sol" aria-pressed="false">솔향관</button>
+  </div>
+  <div class="ftabs" id="ftabs" role="group" aria-label="층"></div>
+</nav>
+
+<div class="hud zoom" role="group" aria-label="확대·축소">
+  <button class="zbtn" id="zoom-in" type="button" aria-label="확대">+</button>
+  <button class="zbtn" id="zoom-out" type="button" aria-label="축소">−</button>
+  <button class="zbtn home" id="btn-view" type="button" aria-label="처음 시점으로">⌂</button>
+  <button class="zbtn txt" id="btn-top" type="button" aria-pressed="false" aria-label="위에서 내려다보기 (평면)">평면</button>
+  <button class="zbtn txt" id="btn-campus" type="button" aria-pressed="true" aria-label="주변(운동장·정문) 보이기" hidden>주변</button>
+</div>
+
+<section class="hud controls" aria-label="분해 조작">
+  <div class="dock">
+    <button class="btn" id="btn-merge" type="button">합치기</button>
+    <label class="slider" for="explode">
+      <span class="lab"><span>Explode</span><b id="gval">0%</b></span>
+      <input type="range" id="explode" min="0" max="100" step="1" value="0">
+    </label>
+    <button class="btn primary" id="btn-split" type="button">분해</button>
+  </div>
+</section>
+
+<div class="loading" id="loading">
+  <p id="ld-text">LOADING MODEL · 2.5MB</p>
+  <span class="pbar"><i id="ld-bar"></i></span>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  // 학교·사용자 PC 가 Windows 애니메이션 끔 상태라 분해가 뚝 끊겨 보여서, 이 지도는 항상 부드럽게 움직임
+  const reduce = false;
+  // 단독 페이지로 쓸 때는 window.SCHOOL3D_GLB / SCHOOL3D_ROOMS 로 파일 경로를 지정
+  const GLB_URL = window.SCHOOL3D_GLB || null;
+  const ROOMS_URL = window.SCHOOL3D_ROOMS || "rooms.json";
+  const C = { route: 0x00e599, walker: 0xff5000 };
+  const state = { sel: null, pick: null, from: null, to: null, route: null, zoomGoal: null, bld: "main", top: false };
+  // 건물별 분해 상태 (target = 목표 0~1, p = 지금 값). 고른 건물만 아래 슬라이더로 벌림
+  const EX = { main: { target: 0, p: 0 }, sol: { target: 0, p: 0 } };
+  // 건물·층 정보 — rooms.json 의 buildings 로 덮어씀 (예전 파일이면 본관만)
+  let BLD = [{ id: "main", name: "본관", animation: "explode", center_local: [0, 0, 0],
+               floors: [1, 2, 3, 4].map((k) => ({ key: k, node: k + "F", label: k + "층" })) }];
+  const LIFT = { main: (e) => 4 + 26 * e, sol: (e) => 3 + 15 * e };     // 분해할 때 시점이 따라 올라가는 높이
+  const FLBL_POS = { main: [-49, 1.8, -12], sol: [-15, 1.8, 6] };        // 층 이름표 자리 (층 노드 기준)
+  const floorNode = {}, floorInfo = {};                                  // 층 번호 → 노드 / {bld, label}
+  let mixer = null, rooms = [], seats = [], nav = null;
+  const acts = {};
+  const roomLabels = [], floorLabels = [], seatLabels = [];
+  const WING = { "북측동": "북측동", "남측동": "남측동", "연결동": "연결동", "동측계단": "동쪽", "북측돌출부": "북쪽 돌출부", "솔향관": "솔향관" };
+
+  if (!window.THREE || !THREE.GLTFLoader || !THREE.OrbitControls) {
+    $("ld-text").textContent = "3D 라이브러리를 불러오지 못했어요. 새로고침해 주세요.";
+    return;
+  }
+  if (window.innerWidth < 720) $("routecard").open = false;
+
+  const bldOf = (k) => (floorInfo[k] ? floorInfo[k].bld : (k > 10 ? "sol" : "main"));
+  const bldName = (id) => (BLD.find((b) => b.id === id) || { name: "" }).name;
+  const floorKeys = () => Object.keys(floorNode).map(Number);
+  function floorTitle(k) {
+    const lab = floorInfo[k] ? floorInfo[k].label : k + "층";
+    return BLD.length > 1 ? bldName(bldOf(k)) + " " + lab : lab;
+  }
+  const lvShort = (n) => n.lv || (floorInfo[n.f] ? floorInfo[n.f].label : n.f + "층");
+
+  // ---------------------------------------------------------------- 렌더러 / 장면
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  $("stage").appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.05);
+  sun.position.set(-70, 150, 95);
+  sun.target.position.set(0, 30, 0);
+  sun.castShadow = true;
+  const sc = sun.shadow.camera;
+  sc.left = -120; sc.right = 120; sc.top = 120; sc.bottom = -120; sc.near = 10; sc.far = 450;
+  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.bias = -0.0004;
+  sun.shadow.normalBias = 0.15;                     // 면 노멀 기준 그림자 보정 (작으면 벽에 빗금 무늬)
+  scene.add(sun, sun.target);
+
+  const gc = document.createElement("canvas");
+  gc.width = gc.height = 256;
+  const g2 = gc.getContext("2d");
+  const grad = g2.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grad.addColorStop(0, "rgba(255,255,255,0.10)");
+  grad.addColorStop(1, "rgba(255,255,255,0)");
+  g2.fillStyle = grad;
+  g2.fillRect(0, 0, 256, 256);
+  const disc = new THREE.Mesh(new THREE.PlaneGeometry(420, 420),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(gc), transparent: true, depthWrite: false }));
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = -2.44;                           // 운동장 높이 (차도 -0.6 보다 1.8m 아래, 솔향관 1층 = 운동장)
+  scene.add(disc);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.ShadowMaterial({ opacity: 0.45 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.position.y = -2.42;                         // 그림자 받는 판도 운동장 높이 (위에 두면 솔향관 1층 안에 떠 보임)
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // ---------------------------------------------------------------- 시점 / 조작
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 12;
+  controls.maxDistance = 900;
+  controls.maxPolarAngle = THREE.MathUtils.degToRad(88);
+  controls.zoomSpeed = 0.9;
+
+  const HOME_OFF = new THREE.Vector3(-82, 88, 128);
+  const easeOf = (p) => p * p * (3 - 2 * p);
+  let campus = null, campusOn = true, fly = null;
+  function viewFor(id) {
+    const fit = Math.max(1, (16 / 9) / camera.aspect);
+    const b = BLD.find((x) => x.id === id) || BLD[0];
+    const c = b.center_local || [0, 0, 0];
+    const ty = (LIFT[id] || LIFT.sol)(easeOf(EX[id].p));
+    let tgt, k;
+    if (id === "main") {
+      const wide = campus && campusOn;               // 주변까지 보일 때는 운동장 쪽으로 조금 물러남
+      tgt = new THREE.Vector3(wide ? -6 : 2, ty, wide ? 14 : 0);
+      k = fit * (wide ? 1.2 : 1);
+    } else {
+      tgt = new THREE.Vector3(c[0], ty, c[2]);
+      k = fit * 0.6;
+    }
+    return { tgt, pos: tgt.clone().add(HOME_OFF.clone().multiplyScalar(k)) };
+  }
+  function homeView() {
+    const v = viewFor(state.bld);
+    controls.target.copy(v.tgt);
+    camera.position.copy(v.pos);
+    state.zoomGoal = null;
+    fly = null;
+    controls.update();
+  }
+  function flyHome() {
+    const v = viewFor(state.bld);
+    fly = { t0: performance.now(), a: controls.target.clone(), b: v.tgt, pa: camera.position.clone(), pb: v.pos };
+    state.zoomGoal = null;
+  }
+  // 노멀 없이 받은 GLB 는 면마다 노멀을 계산해 둠 — 없으면 그림자 보정(normalBias)이 안 먹어서 벽에 빗금 무늬(shadow acne)가 생김
+  function flatNormals(o) {
+    if (!o.isMesh || o.geometry.attributes.normal) return;
+    const g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry;
+    g.computeVertexNormals();
+    if (g !== o.geometry) o.geometry.dispose();
+    o.geometry = g;
+  }
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  window.addEventListener("resize", resize);
+  resize();
+  homeView();
+
+  // ---------------------------------------------------------------- 분해 조작 (고른 건물)
+  const slider = $("explode");
+  slider.addEventListener("input", () => { EX[state.bld].target = slider.value / 100; });
+  $("btn-split").addEventListener("click", () => { EX[state.bld].target = 1; });
+  $("btn-merge").addEventListener("click", () => { EX[state.bld].target = 0; });
+  $("btn-view").addEventListener("click", () => {
+    state.top = false;
+    $("btn-top").setAttribute("aria-pressed", "false");
+    flyHome();
+  });
+  // 버튼 확대·축소: 목표 거리를 정하고 매 프레임 부드럽게 다가감
+  function zoomBy(f) {
+    const cur = state.zoomGoal != null ? state.zoomGoal : camera.position.distanceTo(controls.target);
+    state.zoomGoal = THREE.MathUtils.clamp(cur * f, controls.minDistance, controls.maxDistance);
+    fly = null;
+  }
+  $("zoom-in").addEventListener("click", () => zoomBy(0.75));
+  $("zoom-out").addEventListener("click", () => zoomBy(1.33));
+  controls.addEventListener("start", () => { fly = null; state.zoomGoal = null; });   // 손으로 돌리면 날아가던 것 멈춤
+
+  // ---------------------------------------------------------------- 카메라 맞춤: 층·실·찍은 곳으로 날아가기
+  const TOP_POLAR = 0.02;                                   // 평면 = 거의 바로 위
+  const OBL_POLAR = THREE.MathUtils.degToRad(42);          // 층 보기 = 위에서 비스듬히
+  const ROOM_POLAR = THREE.MathUtils.degToRad(48);
+  const fbox = {};
+  function floorBox(k) {                                    // 층 노드 기준 상자 (분해 애니는 층 노드만 움직이므로 한 번만 잼)
+    if (fbox[k]) return fbox[k];
+    const node = floorNode[k];
+    node.updateWorldMatrix(true, true);
+    const inv = node.matrixWorld.clone().invert(), m = new THREE.Matrix4();
+    const box = new THREE.Box3(), b = new THREE.Box3();
+    node.traverse((o) => {
+      if (!o.isMesh) return;
+      if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+      box.union(b.copy(o.geometry.boundingBox).applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld)));
+    });
+    const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
+    c.y = box.min.y + 1.0;                                  // 바닥 조금 위를 바라봄
+    return (fbox[k] = { c, s });
+  }
+  const qq = new THREE.Quaternion(), ee = new THREE.Euler();
+  function yawOf(node) { node.getWorldQuaternion(qq); return ee.setFromQuaternion(qq, "YXZ").y; }
+  function curAz() { const o = camera.position.clone().sub(controls.target); return Math.atan2(o.x, o.z); }
+  function offsetFor(polar, az, dist) {
+    return new THREE.Vector3(Math.sin(polar) * Math.sin(az), Math.cos(polar), Math.sin(polar) * Math.cos(az)).multiplyScalar(dist);
+  }
+  // 화면에서 안내판·버튼에 안 가린 부분: 가로·세로 비율(fw, fh)과 그 가운데가 화면 가운데에서 어긋난 비율(cx 오른쪽+, cy 위쪽+)
+  function freeArea() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const side = document.querySelector(".side").getBoundingClientRect();
+    let L = 0, R = W - 96, T = 0, B = H - 100;
+    if (W > 720) L = Math.min(W * 0.45, side.right + 12);
+    else { R = W - 60; T = Math.min(H * 0.5, side.bottom + 8); B = H - 150; }
+    return { fw: (R - L) / W, fh: (B - T) / H, cx: ((L + R) / 2 - W / 2) / W, cy: (H / 2 - (T + B) / 2) / H };
+  }
+  function fitDist(w, d) {                                  // 가로 w · 세로 d 가 안 가린 부분에 다 들어오는 거리
+    const fa = freeArea();
+    const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), th = tv * camera.aspect;
+    return Math.max(w / 2 / (th * fa.fw), d / 2 / (tv * fa.fh)) * 1.08;
+  }
+  const UP = new THREE.Vector3(0, 1, 0);
+  function framed(tgt, pos) {                               // 보려는 곳이 안 가린 부분 가운데에 오게 피벗·카메라를 옆으로 옮김
+    const fa = freeArea();
+    const dist = pos.distanceTo(tgt);
+    const tv = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2), th = tv * camera.aspect;
+    const fwd = tgt.clone().sub(pos).normalize();
+    const right = fwd.clone().cross(UP).normalize(), up = right.clone().cross(fwd);
+    const sh = right.multiplyScalar(-fa.cx * 2 * dist * th).add(up.multiplyScalar(-fa.cy * 2 * dist * tv));
+    return { tgt: tgt.add(sh), pos: pos.add(sh) };
+  }
+  // dyn: 매 프레임 목표를 다시 계산 (분해 중이라 층이 움직여도 따라감)
+  function flyDyn(dyn, dur) {
+    state.zoomGoal = null;
+    wz.log = 0;
+    const d = dyn();
+    fly = { t0: performance.now(), a: controls.target.clone(), pa: camera.position.clone(), b: d.tgt, pb: d.pos, dyn, dur: dur || 1000 };
+  }
+  function floorView(k) {                                   // 층 하나가 화면에 꽉 차게 (평면이면 층이 화면에 반듯하게)
+    const node = floorNode[k], fb = floorBox(k), top = state.top, az = curAz();
+    const r = Math.hypot(fb.s.x, fb.s.z);
+    return () => {
+      node.updateWorldMatrix(true, false);                  // 분해 애니가 방금 옮긴 위치로
+      const tgt = node.localToWorld(fb.c.clone());
+      const pos = top ? offsetFor(TOP_POLAR, yawOf(node), fitDist(fb.s.x, fb.s.z))
+                      : offsetFor(OBL_POLAR, az, fitDist(r * 0.9, r * 0.7));
+      return framed(tgt, pos.add(tgt));
+    };
+  }
+  function bldTopView() {                                   // 층을 안 골랐을 때 평면: 건물 전체
+    const b = BLD.find((x) => x.id === state.bld) || BLD[0];
+    const ks = b.floors.map((f) => f.key).filter((k) => floorNode[k]);
+    const box = new THREE.Box3(), c = new THREE.Vector3(), s = new THREE.Vector3();
+    return () => {
+      box.makeEmpty();
+      ks.forEach((k) => box.expandByObject(floorNode[k]));
+      box.getCenter(c); box.getSize(s);
+      const tgt = new THREE.Vector3(c.x, box.min.y, c.z);
+      return framed(tgt, offsetFor(TOP_POLAR, 0, fitDist(s.x, s.z) + s.y).add(tgt));
+    };
+  }
+  function roomView(i) {                                    // 실 하나 가까이 (자리 이름표가 보이는 거리)
+    const r = rooms[i], node = floorNode[r.floor], top = state.top, az = curAz();
+    const p = new THREE.Vector3().fromArray(r.pos_local);
+    p.y -= 1.0;
+    return () => {
+      node.updateWorldMatrix(true, false);
+      const tgt = node.localToWorld(p.clone());
+      return framed(tgt, offsetFor(top ? TOP_POLAR : ROOM_POLAR, top ? yawOf(node) : az, 30).add(tgt));
+    };
+  }
+  function roomClick(i) {
+    if (state.pick) { const w = state.pick; setPick(null); setEnd(w, i); return; }
+    if (state.sel !== rooms[i].floor) select(rooms[i].floor, false);
+    flyDyn(roomView(i), 1000);
+  }
+  function focusAt(p) {                                     // 더블클릭한 곳을 가운데로 + 확대
+    const off = camera.position.clone().sub(controls.target);
+    const nd = THREE.MathUtils.clamp(off.length() * 0.45, 18, controls.maxDistance);
+    const tgt = p.clone();
+    flyDyn(() => framed(tgt.clone(), tgt.clone().add(off.clone().setLength(nd))), 800);
+  }
+  $("btn-top").addEventListener("click", () => {
+    state.top = !state.top;
+    $("btn-top").setAttribute("aria-pressed", String(state.top));
+    if (state.sel !== null) flyDyn(floorView(state.sel), 1100);
+    else if (state.top) flyDyn(bldTopView(), 1100);
+    else flyHome();
+  });
+
+  // 휠 = 마우스가 가리킨 곳을 향해 확대·축소 (그곳이 화면에서 제자리에 있도록). 손가락 두 개 벌리기는 원래대로
+  const wz = { log: 0, p: null };
+  const wray = new THREE.Raycaster(), wndc = new THREE.Vector2();
+  function pickPoint(cx, cy) {
+    wndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+    wray.setFromCamera(wndc, camera);
+    const objs = visibleFloors().map((f) => floorNode[f]).filter(Boolean);
+    if (campus && campusOn) objs.push(campus);
+    const hit = objs.length ? wray.intersectObjects(objs, true)[0] : null;
+    return hit ? hit.point : null;
+  }
+  function onWheel(e) {
+    e.preventDefault();
+    e.stopPropagation();                                    // OrbitControls 의 가운데 확대는 막음
+    fly = null;
+    state.zoomGoal = null;
+    const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    wz.log = THREE.MathUtils.clamp(wz.log + dy * 0.0012, -1.5, 1.5);
+    wz.p = pickPoint(e.clientX, e.clientY) || controls.target.clone();
+  }
+  $("stage").addEventListener("wheel", onWheel, { capture: true, passive: false });
+  $("labels").addEventListener("wheel", onWheel, { passive: false });   // 이름표 위에서 굴려도 같게
+  function wheelStep() {
+    if (Math.abs(wz.log) < 1e-3 || !wz.p) { wz.log = 0; return; }
+    const step = wz.log * 0.22;
+    wz.log -= step;
+    const dist = camera.position.distanceTo(controls.target);
+    let f = Math.exp(step);
+    f = THREE.MathUtils.clamp(dist * f, controls.minDistance, controls.maxDistance) / dist;
+    if (Math.abs(f - 1) < 1e-5) { wz.log = 0; return; }
+    controls.target.sub(wz.p).multiplyScalar(f).add(wz.p);
+    camera.position.sub(wz.p).multiplyScalar(f).add(wz.p);
+  }
+
+  // ---------------------------------------------------------------- 건물 고르기 + 층 탭
+  let shown = -1;
+  function buildTabs() {
+    const box = $("ftabs");
+    box.textContent = "";
+    const b = BLD.find((x) => x.id === state.bld) || BLD[0];
+    b.floors.slice().sort((x, y) => y.key - x.key).forEach((f) => {
+      const el = document.createElement("button");
+      el.className = "ftab";
+      el.type = "button";
+      el.dataset.f = String(f.key);
+      el.setAttribute("aria-pressed", String(state.sel === f.key));
+      el.setAttribute("aria-label", floorTitle(f.key));
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = f.label.replace("층", "");
+      const u = document.createElement("span");
+      u.className = "u";
+      u.textContent = "층";
+      el.append(n, u);
+      el.addEventListener("click", () => select(f.key));
+      box.appendChild(el);
+    });
+    document.querySelectorAll(".btab").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.b === state.bld)));
+  }
+  function setBuilding(id, move = true) {
+    if (!BLD.some((b) => b.id === id)) return;
+    if (state.bld !== id) {
+      EX[state.bld].target = 0;                      // 다른 건물은 합쳐 둠
+      state.bld = id;
+      shown = -1;
+      if (state.sel !== null && bldOf(state.sel) !== id) select(state.sel, false);
+      buildTabs();
+    }
+    if (move) { if (state.top) flyDyn(bldTopView(), 1100); else flyHome(); }
+  }
+  document.querySelectorAll(".btab").forEach((t) => t.addEventListener("click", () => setBuilding(t.dataset.b)));
+  buildTabs();
+
+  // ---------------------------------------------------------------- 모델
+  function progress(pct) {
+    $("ld-bar").style.width = pct + "%";
+    $("ld-text").textContent = "LOADING MODEL · " + pct + "%";
+  }
+  function b64ToBuf(text) {
+    const bin = atob(text.trim());
+    const buf = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+    return buf.buffer;
+  }
+  async function fetchModel() {
+    const res = await fetch("buwon_floors.glb.txt");
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const total = 3468828;
+    let text;
+    if (res.body && res.body.getReader) {
+      const reader = res.body.getReader();
+      const parts = [];
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parts.push(value);
+        got += value.length;
+        progress(Math.min(99, Math.round((got / total) * 100)));
+      }
+      const all = new Uint8Array(got);
+      let o = 0;
+      parts.forEach((p) => { all.set(p, o); o += p.length; });
+      text = new TextDecoder().decode(all);
+    } else {
+      text = await res.text();
+    }
+    return b64ToBuf(text);
+  }
+
+  // ---------------------------------------------------------------- 주변(부지·운동장·정문·나무) — 건물을 띄운 뒤 따로 불러옴
+  const CAMPUS_URL = window.SCHOOL3D_CAMPUS || null;
+  function loadCampus() {
+    const p = CAMPUS_URL
+      ? new Promise((res, rej) => loader.load(CAMPUS_URL, res, undefined, rej))
+      : fetch("buwon_campus.glb.txt").then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.text(); })
+          .then((t) => new Promise((res, rej) => loader.parse(b64ToBuf(t), "", res, rej)));
+    p.then((g) => {
+      campus = g.scene;
+      campus.traverse((o) => {
+        if (!o.isMesh) return;
+        flatNormals(o);
+        const see = /glass|fence/.test(o.material.name);
+        if (see) o.material.depthWrite = false;
+        o.castShadow = !see;
+        o.receiveShadow = true;
+      });
+      campus.visible = campusOn;
+      scene.add(campus);
+      $("btn-campus").hidden = false;
+      if (state.bld === "main" && EX.main.p < 0.02 && state.zoomGoal == null && !fly) homeView();
+    }).catch((e) => console.warn("주변 모델을 불러오지 못했어요", e));
+  }
+  $("btn-campus").addEventListener("click", () => {
+    campusOn = !campusOn;
+    if (campus) campus.visible = campusOn;
+    $("btn-campus").setAttribute("aria-pressed", String(campusOn));
+  });
+
+  function mkLabel(cls, text, hidden) {
+    const el = document.createElement("span");
+    el.className = cls;
+    el.textContent = text;
+    el.hidden = !!hidden;
+    $("labels").appendChild(el);
+    return el;
+  }
+
+  const loader = new THREE.GLTFLoader();
+  const modelP = GLB_URL
+    ? new Promise((res, rej) => loader.load(GLB_URL, res, (x) => { if (x.total) progress(Math.min(99, Math.round(x.loaded / x.total * 100))); }, rej))
+    : fetchModel().then((buf) => new Promise((res, rej) => loader.parse(buf, "", res, rej)));
+  Promise.all([modelP, fetch(ROOMS_URL).then((r) => r.json())]).then(([gltf, meta]) => {
+    const root = gltf.scene;
+    scene.add(root);
+    if (Array.isArray(meta.buildings) && meta.buildings.length) BLD = meta.buildings;
+    BLD = BLD.filter((b) => b.floors.every((f) => root.getObjectByName(f.node)));     // 모델에 없는 건물은 뺌
+    BLD.forEach((b) => {
+      if (!EX[b.id]) EX[b.id] = { target: 0, p: 0 };
+      b.floors.forEach((f) => {
+        const node = root.getObjectByName(f.node);
+        floorNode[f.key] = node;
+        floorInfo[f.key] = { bld: b.id, label: f.label };
+        node.traverse((o) => {
+          o.userData.floor = f.key;
+          if (!o.isMesh) return;
+          flatNormals(o);
+          const glass = /glass/.test(o.material.name);
+          o.material = o.material.clone();
+          if (glass) o.material.depthWrite = false;
+          o.material.userData.base = { opacity: o.material.opacity, transparent: o.material.transparent, depthWrite: o.material.depthWrite };
+          o.userData.glass = glass;
+          o.castShadow = !glass;
+          o.receiveShadow = true;
+        });
+      });
+    });
+    mixer = new THREE.AnimationMixer(root);
+    BLD.forEach((b, i) => {
+      const clip = gltf.animations.find((a) => a.name === b.animation) || (i === 0 ? gltf.animations[0] : null);
+      if (!clip) return;
+      const act = mixer.clipAction(clip);
+      act.setLoop(THREE.LoopOnce);
+      act.clampWhenFinished = true;
+      act.play();
+      acts[b.id] = { act, dur: clip.duration };
+    });
+    $("bseg").hidden = BLD.length < 2;
+
+    rooms = meta.rooms || [];
+    seats = meta.seats || [];
+    nav = meta.nav;
+    rooms.forEach((r, i) => {
+      const el = mkLabel("lbl", r.name, true);
+      el.setAttribute("role", "button");
+      el.title = "이 실 가까이 보기";
+      el.addEventListener("click", () => roomClick(i));
+      roomLabels.push({ el, p: new THREE.Vector3().fromArray(r.pos_local), floor: r.floor });
+    });
+    seats.forEach((s) => seatLabels.push({ el: mkLabel("slbl", s.name, true), p: new THREE.Vector3().fromArray(s.pos_local), floor: s.floor }));
+    floorKeys().sort((a, b) => a - b).forEach((k) => {
+      const b = bldOf(k);
+      const n = floorInfo[k].label.replace("층", "");
+      const el = document.createElement("button");
+      el.className = "flbl";
+      el.type = "button";
+      el.textContent = b === "main" ? n + "F" : bldName(b).slice(0, 2) + " " + n + "F";
+      el.setAttribute("aria-label", floorTitle(k));
+      el.setAttribute("aria-pressed", "false");
+      el.addEventListener("click", () => select(k));
+      $("labels").appendChild(el);
+      floorLabels.push({ el, p: new THREE.Vector3().fromArray(FLBL_POS[b] || FLBL_POS.sol), floor: k });
+    });
+    fillSelects();
+    buildTabs();
+    $("loading").hidden = true;
+    loadCampus();
+  }).catch((e) => {
+    console.warn(e);
+    $("ld-text").textContent = "모델 파일을 불러오지 못했어요. 새로고침해 주세요.";
+  });
+
+  // ---------------------------------------------------------------- 실 이름 (같은 층에 같은 이름이면 동 이름을 붙임)
+  function roomName(i, withFloor) {
+    const r = rooms[i];
+    const dup = rooms.some((o, j) => j !== i && o.floor === r.floor && o.name === r.name);
+    return (withFloor ? floorTitle(r.floor) + " " : "") + r.name + (dup ? " (" + (WING[r.wing] || r.wing) + ")" : "");
+  }
+  function fillSelects() {
+    ["sel-from", "sel-to"].forEach((id) => {
+      const s = $(id);
+      s.textContent = "";
+      const ph = document.createElement("option");
+      ph.value = "";
+      ph.textContent = id === "sel-from" ? "출발할 곳 선택" : "도착할 곳 선택";
+      s.appendChild(ph);
+      BLD.forEach((b) => b.floors.slice().sort((x, y) => x.key - y.key).forEach((f) => {
+        const og = document.createElement("optgroup");
+        og.label = floorTitle(f.key);
+        rooms.map((r, i) => i).filter((i) => rooms[i].floor === f.key)
+          .sort((a, c) => rooms[a].name.localeCompare(rooms[c].name, "ko", { numeric: true }))
+          .forEach((i) => {
+            const o = document.createElement("option");
+            o.value = String(i);
+            o.textContent = roomName(i, false);
+            og.appendChild(o);
+          });
+        if (og.children.length) s.appendChild(og);
+      }));
+    });
+  }
+
+  // ---------------------------------------------------------------- 층 보이기 / 흐리게
+  function setDim(node, dim) {
+    node.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = o.material, b = m.userData.base;
+      m.transparent = dim || b.transparent;
+      m.opacity = dim ? b.opacity * 0.08 : b.opacity;
+      m.depthWrite = dim ? false : b.depthWrite;
+      m.needsUpdate = true;
+      o.castShadow = !dim && !o.userData.glass;
+    });
+  }
+  function visibleFloors() {
+    if (state.sel) return [state.sel];
+    if (state.route) return state.route.floors;
+    return floorKeys();
+  }
+  function refreshDim() {
+    const vis = visibleFloors();
+    floorKeys().forEach((k) => setDim(floorNode[k], !vis.includes(k)));
+  }
+  // cam: 층을 고르면 그 층으로 날아가고, 풀면 건물 전체로 (길찾기 등 안에서 부를 때는 false)
+  function select(f, cam = true) {
+    if (!floorKeys().length || !floorNode[f]) return;
+    state.sel = state.sel === f ? null : f;
+    refreshDim();
+    floorLabels.forEach((l) => l.el.setAttribute("aria-pressed", String(state.sel === l.floor)));
+    const box = $("roomlist");
+    if (state.sel === null) {
+      document.querySelectorAll(".ftab").forEach((t) => t.setAttribute("aria-pressed", "false"));
+      box.hidden = true;
+      if (cam) { if (state.top) flyDyn(bldTopView(), 1100); else flyHome(); }
+      return;
+    }
+    const b = bldOf(state.sel);
+    if (b !== state.bld) setBuilding(b, !cam);
+    document.querySelectorAll(".ftab").forEach((t) => t.setAttribute("aria-pressed", String(+t.dataset.f === state.sel)));
+    const list = rooms.map((r, i) => i).filter((i) => rooms[i].floor === state.sel);
+    $("rl-title").textContent = floorTitle(state.sel) + " 실 목록";
+    $("rl-count").textContent = list.length + "개";
+    const chips = $("rl-chips");
+    chips.textContent = "";
+    list.forEach((i) => {
+      const c = document.createElement("button");
+      c.type = "button";
+      c.className = "chip";
+      c.textContent = roomName(i, false);
+      c.title = "이 실 가까이 보기 (찍기를 누른 뒤면 출발·도착으로)";
+      c.addEventListener("click", () => roomClick(i));
+      chips.appendChild(c);
+    });
+    box.hidden = false;
+    if (EX[b].target < 0.85) EX[b].target = 1;
+    if (cam) flyDyn(floorView(state.sel), 1100);
+  }
+  $("rl-clear").addEventListener("click", () => select(state.sel));
+
+  // ---------------------------------------------------------------- 길찾기
+  function setEnd(which, i) {
+    state[which] = i;
+    $(which === "from" ? "sel-from" : "sel-to").value = i === null ? "" : String(i);
+    route();
+  }
+  $("sel-from").addEventListener("change", (e) => setEnd("from", e.target.value === "" ? null : +e.target.value));
+  $("sel-to").addEventListener("change", (e) => setEnd("to", e.target.value === "" ? null : +e.target.value));
+  $("rt-swap").addEventListener("click", () => { const a = state.from; state.from = state.to; state.to = a; setEnd("from", state.from); setEnd("to", state.to); });
+  $("rt-clear").addEventListener("click", () => { state.from = state.to = null; $("sel-from").value = ""; $("sel-to").value = ""; route(); });
+  function setPick(which) {
+    state.pick = state.pick === which ? null : which;
+    $("pick-from").setAttribute("aria-pressed", String(state.pick === "from"));
+    $("pick-to").setAttribute("aria-pressed", String(state.pick === "to"));
+    $("pickhint").hidden = !state.pick;
+    $("pickhint").textContent = state.pick === "from" ? "건물에서 출발할 실을 누르세요" : "건물에서 도착할 실을 누르세요";
+    document.body.classList.toggle("picking", !!state.pick);
+  }
+  $("pick-from").addEventListener("click", () => setPick("from"));
+  $("pick-to").addEventListener("click", () => setPick("to"));
+
+  // skip(e) 가 true 인 간선은 빼고 찾음 (건물 사이: 구름다리로만 / 바깥으로만)
+  function dijkstra(src, dst, skip) {
+    const n = nav.nodes.length;
+    const adj = Array.from({ length: n }, () => []);
+    nav.edges.forEach((e, k) => { if (skip && skip(e)) return; adj[e[0]].push([e[1], e[2], k]); adj[e[1]].push([e[0], e[2], k]); });
+    const dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), via = new Int32Array(n).fill(-1);
+    const done = new Uint8Array(n);
+    dist[src] = 0;
+    for (;;) {
+      let u = -1, best = Infinity;
+      for (let i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
+      if (u < 0 || u === dst) break;
+      done[u] = 1;
+      for (const [v, w, k] of adj[u]) if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; via[v] = k; }
+    }
+    if (!isFinite(dist[dst])) return null;
+    const path = [], edges = [];
+    for (let v = dst; v >= 0; v = prev[v]) { path.unshift(v); if (via[v] >= 0) edges.unshift(via[v]); }
+    return { path, edges, dist: dist[dst] };
+  }
+
+  // 경로(초록) 위에 걷는 사람(주황)이 항상 보이도록: 둘 다 투명 패스 + depthTest 끔, 렌더 순서로 위아래 결정
+  const ROUTE_MAT = new THREE.MeshBasicMaterial({ color: C.route, transparent: true, opacity: 0.9, depthTest: false, depthWrite: false });
+  const WALK_MAT = new THREE.MeshBasicMaterial({ color: C.walker, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+  const HALO_MAT = new THREE.MeshBasicMaterial({ color: C.walker, transparent: true, opacity: 0.35, depthTest: false, depthWrite: false });
+  const RING_MAT = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthTest: false, depthWrite: false });
+  const cylGeo = new THREE.CylinderGeometry(0.3, 0.3, 1, 10, 1, true);
+  cylGeo.translate(0, 0.5, 0);
+  const jointGeo = new THREE.SphereGeometry(0.3, 10, 8);
+  const routeGroup = new THREE.Group();
+  scene.add(routeGroup);
+  const walker = new THREE.Group();
+  const ring = new THREE.Mesh(new THREE.SphereGeometry(1.15, 20, 14), RING_MAT);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(0.95, 20, 14), WALK_MAT);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(1.9, 20, 14), HALO_MAT);
+  halo.renderOrder = 20; ring.renderOrder = 21; core.renderOrder = 22;
+  walker.add(halo, ring, core);
+  walker.visible = false;
+  scene.add(walker);
+  const segs = [], joints = [];
+  const mkFrom = mkLabel("mk from", "출발", true), mkTo = mkLabel("mk to", "도착", true);
+
+  function nodeOf(i) { return nav.nodes.findIndex((n) => n.r === i); }
+  // 건물 사이를 바깥으로 잇는 간선 (본관 통로 ↔ 솔향관 현관)
+  const crossOut = (e) => e[3] === "out" && bldOf(nav.nodes[e[0]].f) !== bldOf(nav.nodes[e[1]].f);
+  function cost(res) {
+    let walk = 0, nStair = 0;
+    res.edges.forEach((k) => { const e = nav.edges[k]; if (e[3] === "stair") nStair++; else walk += e[2]; });
+    return { m: Math.round(walk + nStair * 7), min: Math.max(1, Math.round((walk / 1.2 + nStair * 22) / 60)) };
+  }
+  state.via = "bridge";                               // 건물 사이 기본 = 구름다리 (실내)
+  $("rt-via").addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-via]");
+    if (!b) return;
+    state.via = b.dataset.via;
+    route();
+  });
+
+  function route() {
+    const steps = $("rt-steps");
+    state.route = null;
+    steps.hidden = true;
+    $("rt-via").hidden = true;
+    $("rt-sum").textContent = "";
+    $("rt-note").hidden = false;
+    $("rt-note").textContent = "출발과 도착을 고르거나, 찍기를 누른 뒤 건물에서 실을 누르세요.";
+    if (nav && state.from !== null && state.to !== null) {
+      if (state.from === state.to) {
+        $("rt-note").textContent = "출발과 도착이 같은 곳이에요.";
+      } else {
+        const src = nodeOf(state.from), dst = nodeOf(state.to);
+        const cross = bldOf(rooms[state.from].floor) !== bldOf(rooms[state.to].floor);
+        // 건물 사이면 두 길을 다 계산: 2층 구름다리로 / 바깥(본관 통로 → 솔향관 1.5층 현관)으로
+        const alts = [];
+        if (cross) {
+          const a = dijkstra(src, dst, crossOut), b = dijkstra(src, dst, (e) => e[3] === "bridge");
+          if (a) alts.push({ id: "bridge", label: "구름다리로", res: a });
+          if (b) alts.push({ id: "out", label: "바깥으로", res: b });
+        }
+        if (!alts.length) {
+          const r = dijkstra(src, dst);
+          if (r) alts.push({ id: "best", label: "", res: r });
+        }
+        const pick = alts.find((a) => a.id === state.via) || alts[0];
+        const res = pick ? pick.res : null;
+        if (!res) {
+          $("rt-note").textContent = "이어지는 길을 찾지 못했어요.";
+        } else {
+          const fl = [...new Set(res.path.map((i) => nav.nodes[i].f))].filter((k) => floorNode[k]).sort((a, b) => a - b);
+          state.route = { path: res.path, floors: fl };
+          const c = cost(res);
+          $("rt-sum").textContent = c.m + "m · " + c.min + "분";
+          const via = $("rt-via");
+          via.textContent = "";
+          if (alts.length > 1) {
+            alts.forEach((a) => {
+              const ac = cost(a.res);
+              const b = document.createElement("button");
+              b.type = "button";
+              b.className = "btn";
+              b.dataset.via = a.id;
+              b.setAttribute("aria-pressed", String(a === pick));
+              b.textContent = a.label;
+              const sm = document.createElement("small");
+              sm.textContent = ac.m + "m · " + ac.min + "분";
+              b.appendChild(sm);
+              via.appendChild(b);
+            });
+            via.hidden = false;
+          }
+          steps.textContent = "";
+          describe(res).forEach((t, k, arr) => {
+            const li = document.createElement("li");
+            li.textContent = t;
+            if (k === arr.length - 1) li.className = "end";
+            steps.appendChild(li);
+          });
+          steps.hidden = false;
+          $("rt-note").hidden = true;
+          const per = {};
+          fl.forEach((k) => { per[bldOf(k)] = (per[bldOf(k)] || 0) + 1; });
+          if (cross) {
+            // 건물 사이 길은 두 건물을 합친 채로 보여줌 — 벌리면 구름다리·바깥길 이음매가 공중으로 늘어남
+            Object.keys(EX).forEach((b) => { EX[b].target = 0; });
+            if (state.bld !== "main") setBuilding("main");
+          } else {
+            if (!per[state.bld]) setBuilding(Object.keys(per)[0]);
+            Object.keys(per).forEach((b) => { if (per[b] > 1 && EX[b] && EX[b].target < 0.6) EX[b].target = 0.85; });
+          }
+          if (state.sel !== null) select(state.sel, false);
+        }
+      }
+    }
+    refreshDim();
+  }
+
+  function describe(res) {
+    const out = ["출발: " + roomName(state.from, true)];
+    let lastWing = null, k = 0;
+    const P = res.path;
+    while (k < P.length - 1) {
+      const e = nav.edges[res.edges[k]];
+      const na = nav.nodes[P[k]];
+      if (e[3] === "stair") {
+        let j = k;
+        while (j < P.length - 1 && nav.edges[res.edges[j]][3] === "stair" && nav.edges[res.edges[j]][4] === e[4]) j++;
+        out.push(e[4] + "으로 " + lvShort(na) + " → " + lvShort(nav.nodes[P[j]]));
+        lastWing = null;
+        k = j;
+        continue;
+      }
+      const nb = nav.nodes[P[k + 1]];
+      if (e[3] === "out") {
+        // 간선 [a, b] 를 어느 쪽으로 지나는지에 따라 문구를 바꿈 (중정: a = 통로 쪽, b = 로비)
+        if (e[4] === "중정") out.push(P[k] === e[1] ? "로비에서 나가 중정을 지나 통로로" : "통로로 나가 중정을 지나 로비로");
+        else if (bldOf(na.f) !== bldOf(nb.f)) {
+          const dest = bldName(bldOf(nb.f));
+          out.push(bldOf(nb.f) === "main" ? "바깥으로 나가 본관 앞 보행로를 따라 " + dest + " 통로로"
+                                          : "본관 앞 보행로를 따라 " + dest + " " + lvShort(nb) + " 현관으로");
+        }
+        else out.push("바깥으로 돌아서 이동");
+        lastWing = null;
+      } else if (e[3] === "bridge") {
+        out.push("구름다리를 건너 " + bldName(bldOf(nb.f)) + "으로");
+        lastWing = null;
+      }
+      if (nb.k === "corr" && nb.wing !== lastWing) {
+        out.push((nb.wing === "연결동" ? "연결동 복도" : nb.wing + " 복도") + "를 따라 이동");
+        lastWing = nb.wing;
+      }
+      k++;
+    }
+    out.push("도착: " + roomName(state.to, true));
+    return out;
+  }
+
+  // 경로를 원통 조각으로 (층이 움직여도 따라가도록 매 프레임 갱신)
+  const wp = [];
+  function updateRoute(t) {
+    const R = state.route;
+    const n = R ? R.path.length : 0;
+    while (wp.length < n) wp.push(new THREE.Vector3());
+    for (let i = 0; i < n; i++) {
+      const nd = nav.nodes[R.path[i]];
+      const node = floorNode[nd.f];
+      wp[i].fromArray(nd.p);
+      if (node) node.localToWorld(wp[i]);
+    }
+    while (segs.length < n - 1) {
+      const m = new THREE.Mesh(cylGeo, ROUTE_MAT); m.renderOrder = 10; routeGroup.add(m); segs.push(m);
+      const j = new THREE.Mesh(jointGeo, ROUTE_MAT); j.renderOrder = 10; routeGroup.add(j); joints.push(j);
+    }
+    const up = new THREE.Vector3(0, 1, 0), d = new THREE.Vector3();
+    let total = 0;
+    for (let i = 0; i < segs.length; i++) {
+      const on = i < n - 1;
+      segs[i].visible = joints[i].visible = on;
+      if (!on) continue;
+      d.subVectors(wp[i + 1], wp[i]);
+      const len = d.length();
+      total += len;
+      segs[i].position.copy(wp[i]);
+      segs[i].scale.set(1, Math.max(len, 0.001), 1);
+      segs[i].quaternion.setFromUnitVectors(up, d.normalize());
+      joints[i].position.copy(wp[i + 1]);
+    }
+    walker.visible = n > 1;
+    mkFrom.hidden = mkTo.hidden = n < 2;
+    if (n < 2) return;
+    let s = ((t / 1000) * 14) % total;               // 초당 14m 로 경로를 따라 이동
+    for (let i = 0; i < n - 1; i++) {
+      const len = wp[i].distanceTo(wp[i + 1]);
+      if (s <= len) { walker.position.lerpVectors(wp[i], wp[i + 1], len ? s / len : 0); break; }
+      s -= len;
+    }
+    walker.position.y += 0.6;
+    const k = reduce ? 1 : 1 + 0.25 * Math.sin(t / 220);
+    halo.scale.setScalar(k);
+    // 확대해도 너무 커지지 않게 거리에 맞춰 크기 조절
+    walker.scale.setScalar(THREE.MathUtils.clamp(camera.position.distanceTo(walker.position) / 160, 0.45, 1.6));
+    project(wp[0], mkFrom, 0, -18);
+    project(wp[n - 1], mkTo, 0, -18);
+  }
+
+  // ---------------------------------------------------------------- 건물에서 실 찍기
+  const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+  let downAt = null, lastTap = null;
+  renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener("pointerup", (e) => {
+    if (!downAt || !floorKeys().length) return;
+    if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) { lastTap = null; return; }
+    if (!state.pick) {
+      // 두 번 누르기(마우스 더블클릭·손가락 두 번 톡톡) = 그곳을 가운데로 당겨 확대
+      const now = performance.now();
+      if (lastTap && now - lastTap.t < 400 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 30) {
+        lastTap = null;
+        const p = pickPoint(e.clientX, e.clientY);
+        if (p) focusAt(p);
+      } else {
+        lastTap = { t: now, x: e.clientX, y: e.clientY };
+      }
+      return;
+    }
+    lastTap = null;
+    ndc.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    const vis = visibleFloors().map((f) => floorNode[f]).filter(Boolean);
+    const hit = ray.intersectObjects(vis, true)[0];
+    if (!hit) return;
+    let o = hit.object;
+    while (o && !o.userData.floor) o = o.parent;
+    const f = o ? o.userData.floor : null;
+    if (!f || !floorNode[f]) return;
+    const lp = floorNode[f].worldToLocal(hit.point.clone());
+    let best = -1, bd = Infinity;
+    rooms.forEach((r, i) => {
+      if (r.floor !== f) return;
+      const dd = Math.hypot(r.pos_local[0] - lp.x, r.pos_local[2] - lp.z);
+      if (dd < bd) { bd = dd; best = i; }
+    });
+    if (best >= 0) {
+      const which = state.pick;
+      setPick(null);
+      setEnd(which, best);
+    }
+  });
+
+  // ---------------------------------------------------------------- 매 프레임
+  const v = new THREE.Vector3(), tmp = new THREE.Vector3();
+  function project(world, el, dx, dy) {
+    v.copy(world).project(camera);
+    if (v.z > 1 || v.z < -1) { el.style.visibility = "hidden"; return; }
+    el.style.visibility = "visible";
+    const x = (v.x * 0.5 + 0.5) * window.innerWidth + (dx || 0);
+    const y = (-v.y * 0.5 + 0.5) * window.innerHeight + (dy || 0);
+    el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) translate(-50%,-50%)";
+  }
+  function place(l) {
+    const node = floorNode[l.floor];
+    if (!node) { l.el.hidden = true; return; }
+    node.localToWorld(tmp.copy(l.p));
+    project(tmp, l.el);
+  }
+
+  function frame(t) {
+    let dy = 0;
+    for (const id in EX) {
+      const ex = EX[id];
+      const prevE = easeOf(ex.p);
+      ex.p += (ex.target - ex.p) * (reduce ? 1 : 0.07);
+      if (Math.abs(ex.target - ex.p) < 1e-4) ex.p = ex.target;
+      if (acts[id]) acts[id].act.time = Math.min(ex.p, 0.9999) * acts[id].dur;
+      if (id === state.bld) {
+        const L = LIFT[id] || LIFT.sol;
+        dy = L(easeOf(ex.p)) - L(prevE);
+      }
+    }
+    if (mixer) mixer.update(0);
+    if (fly) {
+      // 출발 시각과 같은 시계(performance.now)로 재고 0..1 로 묶음 (프레임 시각이 조금 앞설 때 튀지 않게)
+      const k = THREE.MathUtils.clamp((performance.now() - fly.t0) / (fly.dur || 900), 0, 1);
+      const e = easeOf(k);
+      if (fly.dyn) { const d = fly.dyn(); fly.b = d.tgt; fly.pb = d.pos; }
+      controls.target.lerpVectors(fly.a, fly.b, e);
+      camera.position.lerpVectors(fly.pa, fly.pb, e);
+      // 층을 따라가는 비행은 분해가 다 끝날 때까지 붙어 있음
+      if (k >= 1 && (!fly.dyn || Object.values(EX).every((x) => x.p === x.target))) fly = null;
+    } else if (dy) {
+      controls.target.y += dy;
+      camera.position.y += dy;
+    }
+    if (state.zoomGoal != null) {
+      const off = camera.position.clone().sub(controls.target);
+      const dist = off.length();
+      const nd = reduce ? state.zoomGoal : dist + (state.zoomGoal - dist) * 0.18;
+      camera.position.copy(controls.target).add(off.setLength(nd));
+      if (Math.abs(state.zoomGoal - nd) < 0.05) state.zoomGoal = null;
+    }
+    wheelStep();
+    controls.update();
+    scene.updateMatrixWorld();
+    if (floorKeys().length) updateRoute(t);
+    renderer.render(scene, camera);
+
+    const p = EX[state.bld].p;
+    const pct = Math.round(p * 100);
+    if (pct !== shown) {
+      shown = pct;
+      $("gval").textContent = pct + "%";
+      if (document.activeElement !== slider) slider.value = pct;
+    }
+    if (!floorKeys().length) { requestAnimationFrame(frame); return; }
+    floorLabels.forEach((l) => {
+      const fo = Math.min(1, Math.max(0, (EX[bldOf(l.floor)].p - 0.25) / 0.3));
+      l.el.style.opacity = fo;
+      l.el.style.pointerEvents = fo > 0.5 ? "auto" : "none";
+      place(l);
+    });
+    roomLabels.forEach((l) => {
+      const on = state.sel === l.floor;
+      l.el.hidden = !on;
+      if (on) place(l);
+    });
+    const near = camera.position.distanceTo(controls.target) < 120;
+    seatLabels.forEach((l) => {
+      const on = near && state.sel === l.floor;
+      l.el.hidden = !on;
+      if (on) place(l);
+    });
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body></html>
