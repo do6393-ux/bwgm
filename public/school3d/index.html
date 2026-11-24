@@ -192,6 +192,17 @@ select:hover { border-color: var(--line-hover); }
 .zbtn.home { font-size: 20px; }
 .zbtn.txt { font-family: inherit; font-size: 13px; font-weight: 600; letter-spacing: -0.01em; color: var(--muted); }
 .zbtn.txt[aria-pressed="true"] { color: var(--accent); }
+/* 창 높이가 낮을 때(교실 PC 배율 125·150% 등) 층 탭과 확대·축소 묶음이 겹치지 않게:
+   960 이하 = 층 탭을 위(84px, 포털 닫기 단추 아래)로 붙임, 709 이하 = 확대·축소 묶음을 층 탭 왼쪽 줄로 옮김 */
+@media (min-width: 721px) and (max-height: 960px) {
+  .floors { top: calc(env(safe-area-inset-top, 0px) + 84px); transform: none; }
+}
+@media (min-width: 721px) and (max-height: 709px) {
+  .zoom { right: calc(max(16px, env(safe-area-inset-right, 0px)) + 68px); }
+}
+@media (min-width: 721px) and (max-width: 819px) and (max-height: 709px) {
+  .zoom { bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }   /* 아래 분해 조작 막대와 안 겹치게 */
+}
 
 /* 아래 분해 조작 */
 .controls {
@@ -522,7 +533,10 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
     const W = window.innerWidth, H = window.innerHeight;
     const side = document.querySelector(".side").getBoundingClientRect();
     let L = 0, R = W - 96, T = 0, B = H - 100;
-    if (W > 720) L = Math.min(W * 0.45, side.right + 12);
+    if (W > 720) {
+      L = Math.min(W * 0.45, side.right + 12);
+      R = Math.min(R, document.querySelector(".zoom").getBoundingClientRect().left - 12);   // 창이 낮으면 확대 묶음이 왼쪽 줄로 옴
+    }
     else { R = W - 60; T = Math.min(H * 0.5, side.bottom + 8); B = H - 150; }
     return { fw: (R - L) / W, fh: (B - T) / H, cx: ((L + R) / 2 - W / 2) / W, cy: (H / 2 - (T + B) / 2) / H };
   }
