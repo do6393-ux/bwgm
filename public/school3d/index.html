@@ -265,6 +265,68 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
 @media (prefers-reduced-motion: reduce) {
   .btn, .chip, .ftab, .flbl { transition: none; }
 }
+
+/* ---------------- 사람 눈높이로 걷기 ---------------- */
+.walkcard { gap: 8px; }
+.walkcard .btn { padding: 11px 12px; font-size: 13px; }
+.walkcard .btn:disabled { opacity: .45; cursor: default; }
+body.walking .side, body.walking .floors, body.walking .zoom, body.walking .controls { display: none; }
+body.walking #labels > :not(.wsign) { display: none; }
+body.walking #stage canvas, body.walking #stage canvas:active { cursor: default; }
+body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
+.w-top { top: calc(env(safe-area-inset-top, 0px) + 20px); left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px); display: flex; align-items: stretch; gap: 8px; max-width: calc(100vw - 130px); }
+.w-top .btn { padding: 10px 14px; font-size: 13px; }
+.w-where {
+  display: flex; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 13px; font-weight: 600; color: var(--ink-strong); background: var(--panel); border: 1px solid var(--line); padding: 0 12px;
+}
+/* 오른쪽 위 = 포털 닫기 단추(20px) 아래부터 */
+.w-map { top: calc(env(safe-area-inset-top, 0px) + 84px); right: calc(max(16px, env(safe-area-inset-right, 0px)) + 4px); margin: 0; padding: 8px; background: var(--panel); border: 1px solid var(--line); display: grid; gap: 6px; pointer-events: none; }
+.w-map figcaption { display: flex; justify-content: space-between; gap: 10px; font-family: var(--f-mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.w-map figcaption b { font-family: var(--f-sans); font-size: 12px; letter-spacing: 0; text-transform: none; color: var(--ink-strong); }
+.w-map canvas { display: block; width: 192px; height: 104px; }
+.w-floors { right: calc(max(16px, env(safe-area-inset-right, 0px)) + 4px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); display: flex; flex-direction: column; align-items: stretch; }
+.w-floors .cap { font-family: var(--f-mono); font-size: 10px; letter-spacing: .06em; color: var(--muted); text-align: center; padding-bottom: 6px; }
+.w-floors .ftab { width: 52px; height: 46px; }
+.w-bottom { left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); display: grid; justify-items: center; gap: 10px; pointer-events: none; }
+.w-bottom > * { pointer-events: auto; }
+.w-hint { margin: 0; font-size: 13px; color: var(--ink); background: rgba(5, 5, 5, 0.78); border: 1px solid var(--line); padding: 8px 14px; white-space: nowrap; }
+.w-stair { display: flex; }
+.w-stair .btn { display: grid; justify-items: center; gap: 3px; padding: 11px 18px; font-size: 15px; background: var(--panel); }
+.w-stair .btn + .btn { border-left: none; }
+.w-stair .btn small { font-family: var(--f-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
+.w-stair .btn.hot { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.w-cam { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
+.w-cam .btn { padding: 10px 14px; font-size: 13px; background: var(--panel); }
+.w-cross { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; }
+.w-cross::before, .w-cross::after { content: ""; position: absolute; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55); }
+.w-cross::before { left: 10px; top: 0; width: 2px; height: 22px; }
+.w-cross::after { left: 0; top: 10px; width: 22px; height: 2px; }
+.wsign {
+  position: absolute; left: 0; top: 0; will-change: transform; white-space: nowrap; line-height: 1; pointer-events: none;
+  font-size: 14px; font-weight: 700; letter-spacing: -0.01em; padding: 6px 10px 7px;
+  background: rgba(17, 17, 17, 0.92); color: var(--ink-strong); border: 1px solid var(--line-strong); border-top: 2px solid var(--accent);
+}
+.w-fade { position: fixed; inset: 0; z-index: 6; background: var(--page); opacity: 0; pointer-events: none; transition: opacity .17s var(--m-ease); }
+.w-fade.on { opacity: 1; }
+/* 지도를 꾹 누를 때 차오르는 동그라미 */
+.lpring { position: fixed; z-index: 4; left: 0; top: 0; width: 72px; height: 72px; margin: -36px 0 0 -36px; pointer-events: none; opacity: 0; }
+.lpring circle { fill: rgba(5, 5, 5, 0.55); stroke: var(--accent); stroke-width: 4; stroke-dasharray: 189; stroke-dashoffset: 189; transform: rotate(-90deg); transform-origin: 50% 50%; }
+.lpring text { fill: #fff; font: 700 12px var(--f-sans); text-anchor: middle; dominant-baseline: central; }
+.lpring.go { animation: lpin .1s .12s linear forwards; }
+.lpring.go circle { animation: lpfill .53s .12s linear forwards; }
+@keyframes lpin { to { opacity: 1; } }
+@keyframes lpfill { to { stroke-dashoffset: 0; } }
+/* 창이 낮을 때(교실 TV 배율 150% ≈ 853×480): 왼쪽 안내판이 넘쳐 걷기 단추가 스크롤 밑으로 숨지 않게 줄임 */
+@media (min-width: 721px) and (max-height: 620px) {
+  .intro .eyebrow, .intro .keys, .walkcard .note { display: none; }
+  .walkcard { padding: 10px; }
+}
+@media (max-width: 720px) {
+  .w-map canvas { width: 150px; height: 82px; }
+  .w-hint { font-size: 12px; white-space: normal; text-align: center; max-width: calc(100vw - 170px); }
+  .w-top { max-width: calc(100vw - 40px); }
+}
 </style>
 
 <div id="stage"></div>
@@ -300,6 +362,11 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
       <p class="note" id="rt-note">출발과 도착을 고르거나, 찍기를 누른 뒤 건물에서 실을 누르세요.</p>
     </div>
   </details>
+
+  <section class="card walkcard" aria-label="사람 눈높이로 걷기">
+    <button class="btn primary" id="w-start" type="button" disabled title="1층 현관에서 시작해요. 지도를 꾹 누르면 그 자리에서 시작해요.">사람 눈높이로 걸어 보기</button>
+    <p class="note">1층 현관에서 시작해요. 지도를 꾹 누르면 그 자리에서 시작해요.</p>
+  </section>
 
   <section class="card" id="roomlist" hidden>
     <header><h2 id="rl-title">3층</h2><span class="count" id="rl-count"></span></header>
@@ -341,12 +408,41 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
   <span class="pbar"><i id="ld-bar"></i></span>
 </div>
 
+<div id="walkhud" hidden>
+  <div class="hud w-top">
+    <button class="btn primary" id="w-exit" type="button">← 걷기 끝</button>
+    <span class="w-where" id="w-where" aria-live="polite"></span>
+  </div>
+  <figure class="hud w-map" aria-hidden="true">
+    <figcaption><span>Floor plan</span><b id="w-maplab"></b></figcaption>
+    <canvas id="w-map"></canvas>
+  </figure>
+  <div class="hud w-floors" role="group" aria-label="층 옮기기">
+    <span class="cap" id="w-bld"></span>
+    <div class="ftabs" id="w-floors"></div>
+  </div>
+  <div class="hud w-bottom">
+    <div class="w-stair" id="w-stair" role="group" aria-label="계단" hidden></div>
+    <p class="w-hint" id="w-hint"></p>
+  </div>
+  <div class="hud w-cam" id="w-camwrap" hidden>
+    <button class="btn" id="w-cam" type="button" aria-pressed="false">카메라 전환</button>
+  </div>
+  <div class="hud w-cross" id="w-cross" hidden></div>
+</div>
+<svg class="lpring" id="lpring" viewBox="0 0 72 72" aria-hidden="true"><circle cx="36" cy="36" r="30"/><text x="36" y="36">걷기</text></svg>
+<div class="w-fade" id="w-fade"></div>
+
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
+  // 키는 페이지가 시작할 때 가장 먼저(capture) 받음: 걷는 중 Esc 는 preventDefault 해서
+  // 이 페이지를 iframe 으로 띄운 포털이 "Esc = 지도 닫기"를 하지 않게 함 (포털은 defaultPrevented 면 안 닫음)
+  let walkKey = null;
+  window.addEventListener("keydown", (e) => { if (walkKey) walkKey(e); }, true);
   // 학교·사용자 PC 가 Windows 애니메이션 끔 상태라 분해가 뚝 끊겨 보여서, 이 지도는 항상 부드럽게 움직임
   const reduce = false;
   // 단독 페이지로 쓸 때는 window.SCHOOL3D_GLB / SCHOOL3D_ROOMS 로 파일 경로를 지정
@@ -392,7 +488,8 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(35, 1, 1, 5000);
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 0.75));
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x2a2a2a, 0.75);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 1.05);
   sun.position.set(-70, 150, 95);
   sun.target.position.set(0, 30, 0);
@@ -617,17 +714,21 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
   // 휠 = 마우스가 가리킨 곳을 향해 확대·축소 (그곳이 화면에서 제자리에 있도록). 손가락 두 개 벌리기는 원래대로
   const wz = { log: 0, p: null };
   const wray = new THREE.Raycaster(), wndc = new THREE.Vector2();
-  function pickPoint(cx, cy) {
+  function pickHit(cx, cy) {
     wndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
     wray.setFromCamera(wndc, camera);
     const objs = visibleFloors().map((f) => floorNode[f]).filter(Boolean);
     if (campus && campusOn) objs.push(campus);
-    const hit = objs.length ? wray.intersectObjects(objs, true)[0] : null;
+    return (objs.length && wray.intersectObjects(objs, true)[0]) || null;
+  }
+  function pickPoint(cx, cy) {
+    const hit = pickHit(cx, cy);
     return hit ? hit.point : null;
   }
   function onWheel(e) {
     e.preventDefault();
     e.stopPropagation();                                    // OrbitControls 의 가운데 확대는 막음
+    if (WK.on) return;                                      // 걷는 중에는 휠 확대 없음
     fly = null;
     state.zoomGoal = null;
     const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
@@ -741,15 +842,16 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
         o.castShadow = !see;
         o.receiveShadow = true;
       });
-      campus.visible = campusOn;
+      campus.visible = campusOn || WK.on;
       scene.add(campus);
       $("btn-campus").hidden = false;
+      walkDataReset();                                // 걷기용 격자에 주변(바깥 땅)도 넣도록 다시 만듦
       if (state.bld === "main" && EX.main.p < 0.02 && state.zoomGoal == null && !fly) homeView();
     }).catch((e) => console.warn("주변 모델을 불러오지 못했어요", e));
   }
   $("btn-campus").addEventListener("click", () => {
     campusOn = !campusOn;
-    if (campus) campus.visible = campusOn;
+    if (campus) campus.visible = campusOn || WK.on;
     $("btn-campus").setAttribute("aria-pressed", String(campusOn));
   });
 
@@ -830,6 +932,7 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
     fillSelects();
     buildTabs();
     $("loading").hidden = true;
+    $("w-start").disabled = !nav;
     loadCampus();
   }).catch((e) => {
     console.warn(e);
@@ -1171,9 +1274,9 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
   // ---------------------------------------------------------------- 건물에서 실 찍기
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   let downAt = null, lastTap = null;
-  renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener("pointerdown", (e) => { downAt = WK.on ? null : [e.clientX, e.clientY]; });
   renderer.domElement.addEventListener("pointerup", (e) => {
-    if (!downAt || !floorKeys().length) return;
+    if (WK.on || !downAt || !floorKeys().length) return;
     if (Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 6) { lastTap = null; return; }
     if (!state.pick) {
       // 두 번 누르기(마우스 더블클릭·손가락 두 번 톡톡) = 그곳을 가운데로 당겨 확대
@@ -1211,6 +1314,1005 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
     }
   });
 
+  // ================================================================ 사람 눈높이로 걷기
+  // 분해 0% 로 합친 채로 걷는다. 처음 걸을 때 층·주변 삼각형을 1.5m 칸 격자에 한 번 넣어 두고
+  // 바닥 높이·벽 충돌·누른 곳 찾기·표지판 가림을 모두 이 격자로 계산 (교실 PC 에서도 가볍게)
+  const EYE = 1.6, RAD = 0.18, STEP_UP = 0.4, DROP = 0.55, BAND_LO = 0.3, BAND_HI = 1.75;
+  const WK = {
+    on: false, pos: new THREE.Vector3(), ground: 0, yaw: 0, pitch: 0,
+    path: null, pi: 0, v: 0, vmax: 3, stairGoal: 0, stuckT: 0, stuckP: new THREE.Vector3(), goalAt: 0,
+    keys: new Set(), lock: false, unlockAt: 0, down: null, dragAt: 0, t: 0, saved: null,
+    here: -1, stair: -1, fk: null, where: "", tick: 0, fine: false,
+  };
+  let CG = null, NP = null, ADJ = null, SIGNS = null, CEIL = null;
+  const WALK_SKY = new THREE.Color(0xb7bbbe);
+  const lamp = new THREE.PointLight(0xffffff, 0, 16, 1.4);         // 눈 위치에 따라다니는 빛: 가까운 벽은 밝고 먼 곳은 조금 어둡게 (깊이감)
+  scene.add(lamp);
+  // 걷는 동안 빛: 해 그림자는 끄고(실내가 통째로 어두워져서) 하늘빛 + 눈 위치 빛 + 옅은 안개로 거리감
+  const LIGHT = { sun: 0.45, hemi: 0.55, ground: 0x8c8c8c, lamp: 0.9, lampDist: 22, decay: 1.2, fogNear: 30, fogFar: 150 };
+  const walkFog = new THREE.Fog(WALK_SKY, 30, 150);
+  function applyWalkLight() {
+    sun.intensity = LIGHT.sun;
+    hemi.intensity = LIGHT.hemi;
+    hemi.groundColor.setHex(LIGHT.ground);
+    lamp.intensity = LIGHT.lamp; lamp.distance = LIGHT.lampDist; lamp.decay = LIGHT.decay;
+    walkFog.near = LIGHT.fogNear; walkFog.far = LIGHT.fogFar;
+  }
+  const cvs = renderer.domElement;
+
+  function walkDataReset() {
+    if (!CG) return;
+    if (SIGNS) SIGNS.forEach((s) => s.el.remove());
+    if (CEIL) { scene.remove(CEIL); CEIL.geometry.dispose(); }
+    CG = NP = ADJ = SIGNS = CEIL = null;
+    MM.cache = {};
+    if (WK.on) buildWalkData();
+  }
+  function buildWalkData() {
+    buildGrid();
+    buildNav();
+    buildCeil();
+    buildSigns();
+  }
+
+  // ---------------------------------------------------------------- 격자
+  function buildGrid() {
+    scene.updateMatrixWorld(true);
+    const meshes = [];
+    floorKeys().forEach((k) => floorNode[k].traverse((o) => { if (o.isMesh) meshes.push([o, k]); }));
+    if (campus) campus.traverse((o) => { if (o.isMesh) meshes.push([o, 0]); });
+    let total = 0;
+    meshes.forEach(([m]) => { const g = m.geometry; total += Math.floor((g.index ? g.index.count : g.attributes.position.count) / 3); });
+    const T = new Float32Array(total * 9), F = new Uint8Array(total), FK = new Uint8Array(total);
+    const Y0 = new Float32Array(total), Y1 = new Float32Array(total);
+    let n = 0, bx0 = Infinity, bx1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;     // 격자 범위 = 건물 + 45m
+    meshes.forEach(([m, fk]) => {
+      const g = m.geometry, pa = g.attributes.position, ia = g.index ? g.index.array : null;
+      const arr = pa.isInterleavedBufferAttribute ? null : pa.array, e = m.matrixWorld.elements;
+      const see = /glass|fence/.test(m.material.name || "");
+      const cnt = ia ? ia.length : pa.count;
+      for (let i = 0; i + 2 < cnt; i += 3) {
+        const o = n * 9;
+        for (let q = 0; q < 3; q++) {
+          const vi = ia ? ia[i + q] : i + q;
+          const x = arr ? arr[vi * 3] : pa.getX(vi), y = arr ? arr[vi * 3 + 1] : pa.getY(vi), z = arr ? arr[vi * 3 + 2] : pa.getZ(vi);
+          T[o + q * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
+          T[o + q * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+          T[o + q * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+        }
+        const ax = T[o], ay = T[o + 1], az = T[o + 2];
+        const ux = T[o + 3] - ax, uy = T[o + 4] - ay, uz = T[o + 5] - az, wx = T[o + 6] - ax, wy = T[o + 7] - ay, wz = T[o + 8] - az;
+        const cx = uy * wz - uz * wy, cy = uz * wx - ux * wz, cz = ux * wy - uy * wx;
+        const len = Math.sqrt(cx * cx + cy * cy + cz * cz);
+        if (len < 1e-9) continue;                                   // 넓이 없는 삼각형 (이 칸은 다음 삼각형이 덮어씀)
+        const ny = cy / len;
+        let fl = ny > 0.6 ? 1 : ny < -0.6 ? 8 : 2;                 // 1 바닥 · 2 벽(충돌) · 8 천장 · 4 유리·울타리(누를 때 지나침)
+        if (see) fl |= 4;
+        F[n] = fl; FK[n] = fk;
+        Y0[n] = Math.min(ay, T[o + 4], T[o + 7]); Y1[n] = Math.max(ay, T[o + 4], T[o + 7]);
+        if (fk) {
+          bx0 = Math.min(bx0, ax, T[o + 3], T[o + 6]); bx1 = Math.max(bx1, ax, T[o + 3], T[o + 6]);
+          bz0 = Math.min(bz0, az, T[o + 5], T[o + 8]); bz1 = Math.max(bz1, az, T[o + 5], T[o + 8]);
+        }
+        n++;
+      }
+    });
+    const cs = 1.5, x0 = bx0 - 45, z0 = bz0 - 45;
+    const nx = Math.ceil((bx1 + 45 - x0) / cs), nz = Math.ceil((bz1 + 45 - z0) / cs);
+    const R = new Int32Array(n * 4);
+    const head = new Uint32Array(nx * nz + 1);
+    for (let t = 0; t < n; t++) {
+      const o = t * 9;
+      const xa = Math.min(T[o], T[o + 3], T[o + 6]), xb = Math.max(T[o], T[o + 3], T[o + 6]);
+      const za = Math.min(T[o + 2], T[o + 5], T[o + 8]), zb = Math.max(T[o + 2], T[o + 5], T[o + 8]);
+      const i0 = Math.floor((xa - x0) / cs), i1 = Math.floor((xb - x0) / cs), j0 = Math.floor((za - z0) / cs), j1 = Math.floor((zb - z0) / cs);
+      if (i1 < 0 || j1 < 0 || i0 >= nx || j0 >= nz) { R[t * 4] = -1; continue; }
+      R[t * 4] = Math.max(0, i0); R[t * 4 + 1] = Math.min(nx - 1, i1); R[t * 4 + 2] = Math.max(0, j0); R[t * 4 + 3] = Math.min(nz - 1, j1);
+      for (let j = R[t * 4 + 2]; j <= R[t * 4 + 3]; j++) for (let i = R[t * 4]; i <= R[t * 4 + 1]; i++) head[j * nx + i + 1]++;
+    }
+    for (let q = 1; q <= nx * nz; q++) head[q] += head[q - 1];
+    const items = new Uint32Array(head[nx * nz]), fill = head.slice(0, nx * nz);
+    for (let t = 0; t < n; t++) {
+      if (R[t * 4] < 0) continue;
+      for (let j = R[t * 4 + 2]; j <= R[t * 4 + 3]; j++) for (let i = R[t * 4]; i <= R[t * 4 + 1]; i++) items[fill[j * nx + i]++] = t;
+    }
+    CG = { T, F, FK, Y0, Y1, n, cs, x0, z0, nx, nz, head, items, stamp: new Uint32Array(n), mark: 0 };
+  }
+  const cellI = (x) => Math.floor((x - CG.x0) / CG.cs), cellJ = (z) => Math.floor((z - CG.z0) / CG.cs);
+
+  // (x, z) 아래에서 ymax 이하로 가장 높은 바닥 (없으면 -Infinity)
+  function groundAt(x, z, ymax) {
+    const G = CG, T = G.T, i = cellI(x), j = cellJ(z);
+    if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) return -Infinity;
+    let best = -Infinity;
+    for (let q = G.head[j * G.nx + i], qe = G.head[j * G.nx + i + 1]; q < qe; q++) {
+      const t = G.items[q];
+      if (!(G.F[t] & 1) || G.Y0[t] > ymax) continue;
+      const o = t * 9, ax = T[o], az = T[o + 2], bx = T[o + 3], bz = T[o + 5], cx = T[o + 6], cz = T[o + 8];
+      const d = (bz - cz) * (ax - cx) + (cx - bx) * (az - cz);
+      if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((bz - cz) * (x - cx) + (cx - bx) * (z - cz)) / d;
+      const l2 = ((cz - az) * (x - cx) + (ax - cx) * (z - cz)) / d;
+      const l3 = 1 - l1 - l2;
+      if (l1 < -1e-5 || l2 < -1e-5 || l3 < -1e-5) continue;
+      const y = l1 * T[o + 1] + l2 * T[o + 4] + l3 * T[o + 7];
+      if (y <= ymax && y > best) best = y;
+    }
+    return best;
+  }
+
+  // 삼각형을 높이 띠 [lo, hi] 로 잘라 위에서 본 다각형 → PA (문 위 상인방처럼 띠 밖 부분은 길을 막지 않게)
+  const PA = new Float64Array(30), PB = new Float64Array(30);
+  function clipY(src, ns, dst, y0, above) {
+    let nd = 0;
+    for (let i = 0; i < ns; i++) {
+      const j = (i + 1) % ns;
+      const ay = src[i * 3 + 1], by = src[j * 3 + 1];
+      const ina = above ? ay >= y0 : ay <= y0, inb = above ? by >= y0 : by <= y0;
+      if (ina) { dst[nd * 3] = src[i * 3]; dst[nd * 3 + 1] = ay; dst[nd * 3 + 2] = src[i * 3 + 2]; nd++; }
+      if (ina !== inb && nd < 9) {
+        const s = (y0 - ay) / (by - ay);
+        dst[nd * 3] = src[i * 3] + (src[j * 3] - src[i * 3]) * s; dst[nd * 3 + 1] = y0;
+        dst[nd * 3 + 2] = src[i * 3 + 2] + (src[j * 3 + 2] - src[i * 3 + 2]) * s; nd++;
+      }
+    }
+    return nd;
+  }
+  function bandPoly(t, lo, hi) {
+    const T = CG.T, o = t * 9;
+    for (let k = 0; k < 9; k++) PA[k] = T[o + k];
+    const n = clipY(PA, 3, PB, lo, true);
+    return n < 2 ? 0 : clipY(PB, n, PA, hi, false);
+  }
+  // 점에서 PA 다각형(위에서 본 모양)까지 가장 가까운 점
+  const CP = { x: 0, z: 0, d: 0, inside: false };
+  function polyClosest(px, pz, n) {
+    let best = Infinity, sign = 0, inside = n >= 3;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n, ax = PA[i * 3], az = PA[i * 3 + 2], ex = PA[j * 3] - ax, ez = PA[j * 3 + 2] - az;
+      const l2 = ex * ex + ez * ez;
+      let s = l2 > 1e-12 ? ((px - ax) * ex + (pz - az) * ez) / l2 : 0;
+      s = s < 0 ? 0 : s > 1 ? 1 : s;
+      const qx = ax + ex * s, qz = az + ez * s, d = (px - qx) * (px - qx) + (pz - qz) * (pz - qz);
+      if (d < best) { best = d; CP.x = qx; CP.z = qz; }
+      const cr = ex * (pz - az) - ez * (px - ax);
+      if (Math.abs(cr) > 1e-7) { const sg = cr > 0 ? 1 : -1; if (!sign) sign = sg; else if (sg !== sign) inside = false; }
+    }
+    CP.d = Math.sqrt(best);
+    CP.inside = inside && sign !== 0;
+  }
+  // 발 높이 feet 에서 반지름 r 안에 걸리는 벽을 하나씩 돌며 fn(삼각형) — 같은 삼각형은 한 번만
+  function eachWall(x, z, feet, r, fn) {
+    const G = CG, lo = feet + BAND_LO, hi = feet + BAND_HI;
+    const i0 = Math.max(0, cellI(x - r)), i1 = Math.min(G.nx - 1, cellI(x + r));
+    const j0 = Math.max(0, cellJ(z - r)), j1 = Math.min(G.nz - 1, cellJ(z + r));
+    G.mark++;
+    for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
+      for (let q = G.head[j * G.nx + i], qe = G.head[j * G.nx + i + 1]; q < qe; q++) {
+        const t = G.items[q];
+        if (G.stamp[t] === G.mark) continue;
+        G.stamp[t] = G.mark;
+        if (!(G.F[t] & 2) || G.Y1[t] <= lo || G.Y0[t] >= hi) continue;
+        const o = t * 9, T = G.T;
+        if (Math.min(T[o], T[o + 3], T[o + 6]) > x + r || Math.max(T[o], T[o + 3], T[o + 6]) < x - r ||
+            Math.min(T[o + 2], T[o + 5], T[o + 8]) > z + r || Math.max(T[o + 2], T[o + 5], T[o + 8]) < z - r) continue;
+        const n = bandPoly(t, lo, hi);
+        if (n < 2) continue;
+        polyClosest(x, z, n);
+        if (fn(t) === false) return;
+      }
+    }
+  }
+  function minWallDist(x, z, feet, r) {
+    let m = Infinity;
+    eachWall(x, z, feet, r, () => { m = CP.inside ? 0 : Math.min(m, CP.d); return m > 0; });
+    return m;
+  }
+  // 벽에 겹치면 밀어냄 (ox, oz = 움직이기 전 자리: 벽 면 위에 딱 걸렸을 때 어느 쪽으로 밀지)
+  function pushOut(p, feet, ox, oz) {
+    for (let it = 0; it < 3; it++) {
+      let moved = false;
+      eachWall(p.x, p.z, feet, RAD, (t) => {
+        if (!CP.inside && CP.d >= RAD) return;
+        let dx = p.x - CP.x, dz = p.z - CP.z, d = Math.hypot(dx, dz);
+        if (CP.inside || d < 1e-5) { dx = ox - p.x; dz = oz - p.z; d = Math.hypot(dx, dz); }
+        if (d < 1e-6) return;
+        const k = CP.inside ? (CP.d + RAD) / d : RAD / d;
+        p.x = (CP.inside ? p.x : CP.x) + dx * k;
+        p.z = (CP.inside ? p.z : CP.z) + dz * k;
+        moved = true;
+      });
+      if (!moved) break;
+    }
+  }
+  // a → b 를 곧장 걸어갈 수 있나 (벽·낭떠러지 없이)
+  function clearLine(a, b) {
+    const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(L / 0.2));
+    let feet = a.y;
+    for (let k = 1; k <= n; k++) {
+      const x = a.x + (dx * k) / n, z = a.z + (dz * k) / n;
+      const g = groundAt(x, z, feet + STEP_UP);
+      if (g < feet - DROP) return false;
+      feet = g;
+      if (minWallDist(x, z, feet, RAD * 0.9) < RAD * 0.9) return false;
+    }
+    return Math.abs(feet - b.y) < 0.5;
+  }
+  // 광선 o + d·t 를 격자 칸 따라 (2D DDA) → 처음 맞은 삼각형. skip 비트가 있는 삼각형(유리 등)은 지나침
+  function rayGrid(o, d, maxT, skip) {
+    const G = CG, T = G.T;
+    let i = cellI(o.x), j = cellJ(o.z);
+    if (i < 0 || j < 0 || i >= G.nx || j >= G.nz) return null;
+    const si = d.x > 0 ? 1 : -1, sj = d.z > 0 ? 1 : -1;
+    const tdx = Math.abs(d.x) > 1e-9 ? G.cs / Math.abs(d.x) : Infinity, tdz = Math.abs(d.z) > 1e-9 ? G.cs / Math.abs(d.z) : Infinity;
+    let tmx = Math.abs(d.x) > 1e-9 ? (G.x0 + (i + (si > 0 ? 1 : 0)) * G.cs - o.x) / d.x : Infinity;
+    let tmz = Math.abs(d.z) > 1e-9 ? (G.z0 + (j + (sj > 0 ? 1 : 0)) * G.cs - o.z) / d.z : Infinity;
+    let best = maxT, hit = -1, tIn = 0;
+    G.mark++;
+    while (i >= 0 && j >= 0 && i < G.nx && j < G.nz && tIn <= best) {
+      for (let q = G.head[j * G.nx + i], qe = G.head[j * G.nx + i + 1]; q < qe; q++) {
+        const t = G.items[q];
+        if (G.stamp[t] === G.mark) continue;
+        G.stamp[t] = G.mark;
+        if (G.F[t] & skip) continue;
+        const k = t * 9;
+        const e1x = T[k + 3] - T[k], e1y = T[k + 4] - T[k + 1], e1z = T[k + 5] - T[k + 2];
+        const e2x = T[k + 6] - T[k], e2y = T[k + 7] - T[k + 1], e2z = T[k + 8] - T[k + 2];
+        const px = d.y * e2z - d.z * e2y, py = d.z * e2x - d.x * e2z, pz = d.x * e2y - d.y * e2x;
+        const det = e1x * px + e1y * py + e1z * pz;
+        if (Math.abs(det) < 1e-12) continue;
+        const inv = 1 / det, sx = o.x - T[k], sy = o.y - T[k + 1], sz = o.z - T[k + 2];
+        const u = (sx * px + sy * py + sz * pz) * inv;
+        if (u < 0 || u > 1) continue;
+        const qx = sy * e1z - sz * e1y, qy = sz * e1x - sx * e1z, qz = sx * e1y - sy * e1x;
+        const vv = (d.x * qx + d.y * qy + d.z * qz) * inv;
+        if (vv < 0 || u + vv > 1) continue;
+        const tt = (e2x * qx + e2y * qy + e2z * qz) * inv;
+        if (tt > 1e-4 && tt < best) { best = tt; hit = t; }
+      }
+      if (tmx < tmz) { tIn = tmx; tmx += tdx; i += si; } else { tIn = tmz; tmz += tdz; j += sj; }
+      if (hit >= 0 && best <= tIn) break;
+    }
+    return hit >= 0 ? { t: best, tri: hit } : null;
+  }
+
+  // ---------------------------------------------------------------- 길찾기 점(발 높이) · 천장 · 표지판
+  function buildNav() {
+    NP = nav.nodes.map((nd) => {
+      const p = new THREE.Vector3(nd.p[0], nd.p[1] - 0.9, nd.p[2]);
+      if (floorNode[nd.f]) floorNode[nd.f].localToWorld(p);
+      const g = groundAt(p.x, p.z, p.y + 0.3);
+      if (g > p.y - 1) p.y = g;
+      return p;
+    });
+    ADJ = nav.nodes.map(() => []);
+    nav.edges.forEach((e, k) => { ADJ[e[0]].push([e[1], k]); ADJ[e[1]].push([e[0], k]); });
+  }
+  // 웹 모델엔 지붕이 없어서, 위에 아무것도 없는 바닥 위에는 그 층 벽 꼭대기 높이로 천장을 덮음 (걷는 동안만)
+  function buildCeil() {
+    const G = CG, T = G.T, pos = [], w = new THREE.Vector3();
+    floorKeys().forEach((k) => {
+      const lvl = floorNode[k].getWorldPosition(w).y;
+      let top = -Infinity;
+      for (let t = 0; t < G.n; t++) if (G.FK[t] === k && (G.F[t] & 2) && !(G.F[t] & 4)) top = Math.max(top, G.Y1[t]);
+      if (!isFinite(top) || top < lvl + 2) return;
+      const cy = top - 0.02;
+      for (let t = 0; t < G.n; t++) {
+        if (G.FK[t] !== k || !(G.F[t] & 1) || Math.abs(G.Y0[t] - lvl) > 0.03 || Math.abs(G.Y1[t] - lvl) > 0.03) continue;
+        const o = t * 9, mx = (T[o] + T[o + 3] + T[o + 6]) / 3, mz = (T[o + 2] + T[o + 5] + T[o + 8]) / 3;
+        if (groundAt(mx, mz, cy + 0.6) > lvl + 1.0) continue;    // 위에 윗층 바닥·계단이 있으면 그대로
+        pos.push(T[o], cy, T[o + 2], T[o + 6], cy, T[o + 8], T[o + 3], cy, T[o + 5]);
+      }
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    geo.computeVertexNormals();
+    let wm = null;
+    floorNode[floorKeys()[0]].traverse((o) => { if (!wm && o.isMesh && o.material.name === "w_wall") wm = o.material; });
+    CEIL = new THREE.Mesh(geo, wm ? wm.clone() : new THREE.MeshStandardMaterial({ color: 0xeeeeee }));
+    CEIL.visible = WK.on;
+    scene.add(CEIL);
+  }
+  // 실 이름 표지판: 문 위(2.45m) 복도 쪽 벽 바로 앞에.
+  // 문 점(pt)은 문턱 안쪽에 있어서, 그 문 점과 이어진 복도 점에서 문 쪽으로 광선을 쏴 처음 맞는 벽(문 위 벽)에 붙임
+  function buildSigns() {
+    const dir = new THREE.Vector3();
+    SIGNS = [];
+    rooms.forEach((r, i) => {
+      const ni = nodeOf(i);
+      if (ni < 0) return;
+      const room = NP[ni];
+      let door = -1, bd = Infinity;
+      ADJ[ni].forEach(([o]) => {
+        if (nav.nodes[o].k === "room") return;
+        const d = NP[o].distanceTo(room);
+        if (d < bd) { bd = d; door = o; }
+      });
+      let pos = null;
+      if (door >= 0 && bd > 0.3) {
+        // 바깥(복도) 기준점: 문 점이 pt 면 그와 이어진 복도·다른 점, 아니면 문 점 자신
+        let src = door;
+        if (nav.nodes[door].k === "pt") {
+          let od = Infinity;
+          ADJ[door].forEach(([o]) => {
+            if (o === ni || nav.nodes[o].k === "room" || Math.abs(NP[o].y - room.y) > 0.5) return;
+            const d = Math.hypot(NP[o].x - NP[door].x, NP[o].z - NP[door].z) + (nav.nodes[o].k === "corr" ? 0 : 2);
+            if (d < od && d < 8) { od = d; src = o; }
+          });
+        }
+        const a = NP[src].clone();
+        a.y = room.y + 2.45;
+        const via = src === door ? room : NP[door];
+        dir.set(via.x - a.x, 0, via.z - a.z);
+        const L = dir.length();
+        if (L > 0.05) {
+          dir.normalize();
+          const h = rayGrid(a, dir, L + 1.5, 4);
+          if (h && h.t > 0.3) pos = a.addScaledVector(dir, h.t - 0.12);
+        }
+      }
+      if (!pos) {
+        pos = room.clone();
+        pos.y += 2.45;
+      }
+      const el = mkLabel("wsign", roomName(i, false), true);
+      SIGNS.push({ el, pos, feet: room.y, seen: false, chk: 0 });
+    });
+  }
+
+  // ---------------------------------------------------------------- 움직이기
+  const P = new THREE.Vector3();
+  function moveBy(dx, dz) {
+    const n = Math.max(1, Math.ceil(Math.hypot(dx, dz) / 0.08));
+    for (let k = 0; k < n; k++) {
+      P.set(WK.pos.x + dx / n, 0, WK.pos.z + dz / n);
+      pushOut(P, WK.ground, WK.pos.x, WK.pos.z);
+      const g = groundAt(P.x, P.z, WK.ground + STEP_UP);
+      if (g < WK.ground - DROP) return false;                    // 바닥이 없거나 낭떠러지 → 멈춤
+      WK.pos.x = P.x; WK.pos.z = P.z; WK.ground = g;
+    }
+    return true;
+  }
+  const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+  const yawTo = (a, b) => Math.atan2(-(b.x - a.x), -(b.z - a.z));
+  function clampPitch() { WK.pitch = THREE.MathUtils.clamp(WK.pitch, -1.35, 1.35); }
+
+  // 목적지 표시 (바닥의 주황 동그라미)
+  const goalMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(C.walker).convertSRGBToLinear(), transparent: true, opacity: 0.95,
+                                                depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const goal = new THREE.Group();
+  const goalRing = new THREE.Mesh(new THREE.RingGeometry(0.26, 0.36, 40), goalMat);
+  const goalDot = new THREE.Mesh(new THREE.CircleGeometry(0.09, 20), goalMat);
+  goalRing.rotation.x = goalDot.rotation.x = -Math.PI / 2;
+  goal.add(goalRing, goalDot);
+  goal.visible = false;
+  scene.add(goal);
+
+  function nearNodes(p, n) {
+    const out = [];
+    NP.forEach((q, i) => { if (Math.abs(q.y - p.y) < 1.0) out.push([Math.hypot(q.x - p.x, q.z - p.z), i]); });
+    return out.sort((a, b) => a[0] - b[0]).slice(0, n).map((x) => x[1]);
+  }
+  function setPath(pts) {
+    WK.path = pts;
+    WK.pi = 0;
+    WK.stuckT = 0;
+    WK.stuckP.copy(WK.pos);
+    let L = 0, prev = WK.pos;
+    pts.forEach((p) => { L += Math.hypot(p.x - prev.x, p.z - prev.z); prev = p; });
+    WK.vmax = THREE.MathUtils.clamp(L / 4.5, 2.2, 5.5);
+    goal.position.copy(pts[pts.length - 1]);
+    goal.position.y += 0.03;
+    goal.visible = true;
+    WK.goalAt = performance.now();
+  }
+  function stopPath() {
+    WK.path = null;
+    WK.v = 0;
+    goal.visible = false;
+  }
+  // 누른 곳까지: 곧장 갈 수 있으면 곧장, 아니면 길찾기 점을 따라 (계단을 지나야 하면 계단 앞에서 멈추고 위/아래층 단추)
+  function planWalk(tgt) {
+    WK.stairGoal = 0;
+    const s = new THREE.Vector3(WK.pos.x, WK.ground, WK.pos.z);
+    if (Math.abs(tgt.y - s.y) < 0.6 && clearLine(s, tgt)) { setPath([tgt]); return; }
+    const a = nearNodes(s, 6).find((i) => clearLine(s, NP[i]));
+    const b = nearNodes(tgt, 6).find((i) => clearLine(NP[i], tgt));
+    const r = a != null && b != null ? dijkstra(a, b) : null;
+    if (!r) { setPath([tgt]); return; }                          // 길이 없으면 곧장 (막히면 그 앞에서 멈춤)
+    let pts = [];
+    for (let k = 0; k < r.path.length; k++) {
+      if (k > 0 && nav.edges[r.edges[k - 1]][3] === "stair") {
+        WK.stairGoal = NP[r.path[k]].y > NP[r.path[k - 1]].y ? 1 : -1;
+        break;
+      }
+      pts.push(NP[r.path[k]].clone());
+    }
+    if (!WK.stairGoal) pts.push(tgt);
+    // 앞쪽 점이 바로 보이면 그 앞의 점들은 건너뜀 (복도에서 지그재그 안 하게)
+    for (let k = Math.min(pts.length - 1, 4); k > 0; k--) {
+      if (Math.hypot(pts[k].x - s.x, pts[k].z - s.z) < 30 && clearLine(s, pts[k])) { pts = pts.slice(k); break; }
+    }
+    setPath(pts);
+  }
+  function tapWalk(cx, cy) {
+    if (!CG) return;
+    wndc.set((cx / window.innerWidth) * 2 - 1, -(cy / window.innerHeight) * 2 + 1);
+    wray.setFromCamera(wndc, camera);
+    const o = wray.ray.origin, d = wray.ray.direction;
+    const h = rayGrid(o, d, 250, 4);                             // 유리·울타리 너머를 누를 수 있게 지나침
+    if (!h || (CG.F[h.tri] & 8)) return;                         // 하늘·천장
+    const p = o.clone().addScaledVector(d, h.t);
+    const tgt = new THREE.Vector3();
+    if (CG.F[h.tri] & 1) {
+      tgt.set(p.x, groundAt(p.x, p.z, p.y + 0.05), p.z);
+      // 책상 위처럼 발보다 조금 높은 면 → 그 아래 바닥으로 (가다가 책상 앞에서 멈춤)
+      if (tgt.y > WK.ground + STEP_UP && tgt.y < WK.ground + 1.3) tgt.y = groundAt(p.x, p.z, WK.ground + STEP_UP);
+    } else {
+      // 벽·책상 옆면 → 그 바로 앞
+      const hx = p.x - WK.pos.x, hz = p.z - WK.pos.z, L = Math.hypot(hx, hz);
+      if (L < 0.6) return;
+      const k = (L - 0.45) / L;
+      tgt.set(WK.pos.x + hx * k, 0, WK.pos.z + hz * k);
+      tgt.y = groundAt(tgt.x, tgt.z, Math.max(WK.ground, p.y) + STEP_UP);
+    }
+    if (!isFinite(tgt.y)) return;
+    planWalk(tgt);
+  }
+  function followPath(dt) {
+    const pts = WK.path, tgt = pts[WK.pi];
+    const dx = tgt.x - WK.pos.x, dz = tgt.z - WK.pos.z, d = Math.hypot(dx, dz);
+    const last = WK.pi === pts.length - 1;
+    if (d < (last ? 0.08 : 0.4)) {
+      if (!last) { WK.pi++; return; }
+      stopPath();
+      if (WK.stairGoal) { WK.stair = -2; whereNow(); }        // 계단 단추를 바로 띄움
+      return;
+    }
+    let rem = d;
+    for (let k = WK.pi + 1; k < pts.length; k++) rem += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].z - pts[k - 1].z);
+    const want = Math.min(WK.vmax, Math.sqrt(2 * 3.2 * rem) + 0.15);
+    WK.v += THREE.MathUtils.clamp(want - WK.v, -8 * dt, 4.5 * dt);
+    const step = Math.min(d, WK.v * dt);
+    moveBy((dx / d) * step, (dz / d) * step);
+    // 가는 쪽으로 천천히 고개를 돌림 (손으로 둘러보는 중이면 그대로)
+    if (d > 0.6 && !WK.down && performance.now() - WK.dragAt > 600) {
+      WK.yaw += angDiff(Math.atan2(-dx, -dz), WK.yaw) * Math.min(1, dt * 3);
+      WK.pitch += (Math.min(0, WK.pitch) * 0.6 - WK.pitch) * Math.min(1, dt * 2);
+    }
+    WK.stuckT += dt;
+    if (WK.stuckT > 0.6) {
+      if (Math.hypot(WK.pos.x - WK.stuckP.x, WK.pos.z - WK.stuckP.z) < 0.12) stopPath();   // 막혀서 못 감
+      WK.stuckT = 0;
+      WK.stuckP.copy(WK.pos);
+    }
+  }
+
+  // ---------------------------------------------------------------- 지금 위치 · 층 · 계단
+  function whereNow() {
+    let best = -1, bd = Infinity, st = -1, sd = Infinity;
+    for (let i = 0; i < NP.length; i++) {
+      const q = NP[i];
+      if (Math.abs(q.y - WK.ground) > 1.0) continue;
+      const d = Math.hypot(q.x - WK.pos.x, q.z - WK.pos.z);
+      if (d < bd) { bd = d; best = i; }
+      if (nav.nodes[i].k === "stair" && d < sd) { sd = d; st = i; }
+    }
+    WK.here = bd < 14 ? best : -1;
+    const stair = sd < 3.2 ? st : -1;
+    if (stair !== WK.stair) { WK.stair = stair; showStair(); }
+    let txt = "바깥", fk = null;
+    if (WK.here >= 0) {
+      const n = nav.nodes[WK.here];
+      fk = n.f;
+      txt = bldName(bldOf(n.f)) + " " + lvShort(n);
+      WK.lvLab = txt;
+      // 어느 실·복도인지는 벽에 안 가려 보이는 가장 가까운 점으로 (교실 안이면 벽 너머 복도 점이 더 가까워도 교실)
+      const eye = new THREE.Vector3(WK.pos.x, WK.ground + 1.2, WK.pos.z), dv = new THREE.Vector3(), c = [];
+      NP.forEach((q, i) => {
+        const k = nav.nodes[i].k;
+        if ((k !== "room" && k !== "corr") || Math.abs(q.y - WK.ground) > 1.0) return;
+        const d = Math.hypot(q.x - eye.x, q.z - eye.z);
+        if (d < 12) c.push([d, i]);
+      });
+      c.sort((a, b) => a[0] - b[0]);
+      for (const [d, i] of c.slice(0, 6)) {
+        dv.set(NP[i].x - eye.x, 0, NP[i].z - eye.z).normalize();
+        if (d > 0.3 && rayGrid(eye, dv, d, 0)) continue;
+        const m = nav.nodes[i];
+        if (m.k === "room") txt += " · " + roomName(m.r, false);
+        else if (m.wing) txt += " · " + (WING[m.wing] || m.wing) + " 복도";
+        break;
+      }
+    } else if (WK.fk) fk = WK.fk;
+    if (txt !== WK.where) { WK.where = txt; $("w-where").textContent = txt; }
+    if (fk !== WK.fk) { WK.fk = fk; buildWalkFloors(); }
+  }
+  function buildWalkFloors() {
+    const box = $("w-floors");
+    box.textContent = "";
+    const bid = WK.fk ? bldOf(WK.fk) : "main";
+    const b = BLD.find((x) => x.id === bid) || BLD[0];
+    $("w-bld").textContent = b.name;
+    b.floors.slice().sort((x, y) => y.key - x.key).forEach((f) => {
+      const el = document.createElement("button");
+      el.className = "ftab";
+      el.type = "button";
+      el.setAttribute("aria-pressed", String(WK.fk === f.key));
+      el.setAttribute("aria-label", floorTitle(f.key) + "으로 옮기기");
+      const n = document.createElement("span");
+      n.className = "n";
+      n.textContent = f.label.replace("층", "");
+      const u = document.createElement("span");
+      u.className = "u";
+      u.textContent = "층";
+      el.append(n, u);
+      el.addEventListener("click", () => goFloor(f.key));
+      box.appendChild(el);
+    });
+  }
+  function showStair() {
+    const box = $("w-stair");
+    box.textContent = "";
+    const s = WK.stair;
+    if (s < 0) { box.hidden = true; return; }
+    const outs = [];
+    ADJ[s].forEach(([o, k]) => { if (nav.edges[k][3] === "stair") outs.push(o); });
+    outs.sort((a, b) => NP[b].y - NP[a].y);
+    outs.forEach((o) => {
+      const up = NP[o].y > NP[s].y;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn" + (WK.stairGoal === (up ? 1 : -1) ? " hot" : "");
+      b.textContent = up ? "▲ 위층으로" : "▼ 아래층으로";
+      const sm = document.createElement("small");
+      sm.textContent = (BLD.length > 1 ? bldName(bldOf(nav.nodes[o].f)) + " " : "") + lvShort(nav.nodes[o]);
+      b.appendChild(sm);
+      b.addEventListener("click", () => { WK.stairGoal = 0; teleport(o, false); });
+      box.appendChild(b);
+    });
+    box.hidden = !outs.length;
+  }
+  function fadeDo(fn) {
+    const f = $("w-fade");
+    f.classList.add("on");
+    setTimeout(() => {
+      fn();
+      requestAnimationFrame(() => requestAnimationFrame(() => f.classList.remove("on")));
+    }, 180);
+  }
+  // 보고 싶은 쪽(want)에 가까우면서 앞이 트인 방향 — 옮긴 뒤 벽에 코를 박고 서 있지 않게
+  function openYaw(want) {
+    const eye = new THREE.Vector3(WK.pos.x, WK.ground + EYE, WK.pos.z), d = new THREE.Vector3();
+    let best = want, bs = -Infinity;
+    for (let k = 0; k < 24; k++) {
+      const a = want + (k * Math.PI * 2) / 24;
+      d.set(-Math.sin(a), 0, -Math.cos(a));
+      const h = rayGrid(eye, d, 14, 0);
+      const s = (h ? h.t : 14) + 4 * Math.cos(a - want);
+      if (s > bs) { bs = s; best = a; }
+    }
+    return best;
+  }
+  // 길찾기 점 o 로 옮김 (계단: 계단에서 복도 쪽을 보게)
+  function teleport(o, keepYaw) {
+    stopPath();
+    fadeDo(() => {
+      WK.pos.copy(NP[o]);
+      WK.ground = NP[o].y;
+      pushOut(WK.pos, WK.ground, WK.pos.x + 0.01, WK.pos.z);
+      let want = WK.yaw;
+      if (!keepYaw) {
+        const nb = ADJ[o].map(([x]) => x).find((x) => nav.nodes[x].k !== "stair" && Math.hypot(NP[x].x - NP[o].x, NP[x].z - NP[o].z) > 0.5);
+        if (nb != null) want = yawTo(NP[o], NP[nb]);
+      }
+      WK.yaw = openYaw(want);
+      WK.pitch = 0;
+      WK.stair = -2;
+      whereNow();
+    });
+  }
+  // 오른쪽 아래 층 단추: 계단 곁이면 같은 계단의 그 층으로, 아니면 그 층에서 지금 자리와 가장 가까운 복도로
+  function goFloor(k) {
+    if (WK.fk === k || !floorNode[k]) return;
+    const lvl = floorNode[k].getWorldPosition(new THREE.Vector3()).y;
+    let to = -1;
+    if (WK.stair >= 0) {
+      const nm = nav.nodes[WK.stair].name;
+      to = nav.nodes.findIndex((n, i) => n.f === k && n.k === "stair" && n.name === nm && Math.abs(NP[i].y - lvl) < 0.3);
+    }
+    if (to < 0) {
+      let bd = Infinity;
+      nav.nodes.forEach((n, i) => {
+        if (n.f !== k || n.k === "room" || Math.abs(NP[i].y - lvl) > 0.3) return;
+        const d = Math.hypot(NP[i].x - WK.pos.x, NP[i].z - WK.pos.z) + (n.k === "corr" ? 0 : 1.5);
+        if (d < bd) { bd = d; to = i; }
+      });
+    }
+    if (to >= 0) teleport(to, true);
+  }
+
+  // ---------------------------------------------------------------- 표지판 · 작은 평면
+  const sv = new THREE.Vector3(), sdir = new THREE.Vector3();
+  function drawSigns(t) {
+    const eye = camera.position, cand = [];
+    SIGNS.forEach((s) => {
+      s.show = false;
+      if (Math.abs(s.feet - WK.ground) > 1.3) return;
+      const d = eye.distanceTo(s.pos);
+      if (d < 22) cand.push([d, s]);
+    });
+    cand.sort((a, b) => a[0] - b[0]);
+    let budget = 5;                                             // 가림 검사는 한 프레임에 몇 개씩 돌아가며
+    cand.slice(0, 12).forEach(([d, s]) => {
+      if (budget > 0 && t - s.chk > 160) {
+        s.chk = t;
+        budget--;
+        sdir.subVectors(s.pos, eye).normalize();
+        s.seen = !rayGrid(eye, sdir, d - 0.2, 4);
+      }
+      s.show = s.seen;
+      if (!s.show) return;
+      sv.copy(s.pos).project(camera);
+      if (sv.z > 1 || Math.abs(sv.x) > 1.2 || Math.abs(sv.y) > 1.2) { s.show = false; return; }
+      const x = (sv.x * 0.5 + 0.5) * window.innerWidth, y = (-sv.y * 0.5 + 0.5) * window.innerHeight;
+      const k = THREE.MathUtils.clamp(6 / d, 0.62, 1.25);
+      s.el.style.transform = "translate(" + x.toFixed(1) + "px," + y.toFixed(1) + "px) translate(-50%,-50%) scale(" + k.toFixed(3) + ")";
+      s.el.style.zIndex = String(1000 - Math.round(d * 10));
+    });
+    SIGNS.forEach((s) => { if (s.el.hidden === s.show) s.el.hidden = !s.show; });
+  }
+  const MM = { cache: {}, ctx: null, W: 0, H: 0, dpr: 1 };
+  function mapFor(k) {
+    if (MM.cache[k]) return MM.cache[k];
+    const G = CG, T = G.T, lvl = floorNode[k].getWorldPosition(new THREE.Vector3()).y;
+    let xa = Infinity, xb = -Infinity, za = Infinity, zb = -Infinity;
+    for (let t = 0; t < G.n; t++) {
+      if (G.FK[t] !== k) continue;
+      const o = t * 9;
+      for (let q = 0; q < 9; q += 3) {
+        xa = Math.min(xa, T[o + q]); xb = Math.max(xb, T[o + q]);
+        za = Math.min(za, T[o + q + 2]); zb = Math.max(zb, T[o + q + 2]);
+      }
+    }
+    const W = MM.W, H = MM.H, pad = 8 * MM.dpr;
+    const s = Math.min((W - 2 * pad) / (xb - xa), (H - 2 * pad) / (zb - za));
+    const ox = (W - (xb - xa) * s) / 2, oy = (H - (zb - za) * s) / 2;
+    const cv = document.createElement("canvas");
+    cv.width = W; cv.height = H;
+    const g = cv.getContext("2d");
+    const X = (x) => (x - xa) * s + ox, Z = (z) => (z - za) * s + oy;
+    g.fillStyle = "#2a2a2a";
+    g.beginPath();
+    for (let t = 0; t < G.n; t++) {
+      if (G.FK[t] !== k || !(G.F[t] & 1) || G.Y0[t] < lvl - 0.1 || G.Y1[t] > lvl + 2.0) continue;
+      const o = t * 9;
+      g.moveTo(X(T[o]), Z(T[o + 2])); g.lineTo(X(T[o + 3]), Z(T[o + 5])); g.lineTo(X(T[o + 6]), Z(T[o + 8])); g.closePath();
+    }
+    g.fill();
+    const bands = bldOf(k) === "main" ? [[1.1, 1.3]] : [[1.1, 1.3], [2.9, 3.1]];
+    [[0, "#b0b0b0"], [4, "#6a6a6a"]].forEach(([see, col]) => {
+      g.strokeStyle = col;
+      g.lineWidth = Math.max(1, MM.dpr);
+      g.beginPath();
+      for (let t = 0; t < G.n; t++) {
+        if (G.FK[t] !== k || !(G.F[t] & 2) || (G.F[t] & 4) !== see) continue;
+        for (const [lo, hi] of bands) {
+          if (G.Y0[t] > lvl + lo || G.Y1[t] < lvl + hi) continue;
+          const n = bandPoly(t, lvl + lo, lvl + hi);
+          if (n < 2) continue;
+          g.moveTo(X(PA[0]), Z(PA[2]));
+          for (let q = 1; q < n; q++) g.lineTo(X(PA[q * 3]), Z(PA[q * 3 + 2]));
+          break;
+        }
+      }
+      g.stroke();
+    });
+    return (MM.cache[k] = { cv, X, Z });
+  }
+  function drawMap() {
+    const k = WK.fk || floorKeys()[0], m = mapFor(k), g = MM.ctx, r = MM.dpr;
+    g.clearRect(0, 0, MM.W, MM.H);
+    g.drawImage(m.cv, 0, 0);
+    const x = THREE.MathUtils.clamp(m.X(WK.pos.x), 4 * r, MM.W - 4 * r), y = THREE.MathUtils.clamp(m.Z(WK.pos.z), 4 * r, MM.H - 4 * r);
+    const ang = Math.atan2(-Math.cos(WK.yaw), -Math.sin(WK.yaw));
+    g.fillStyle = "rgba(255, 80, 0, 0.32)";
+    g.beginPath();
+    g.moveTo(x, y);
+    g.arc(x, y, 24 * r, ang - 0.6, ang + 0.6);
+    g.closePath();
+    g.fill();
+    g.beginPath();
+    g.arc(x, y, 4.5 * r, 0, Math.PI * 2);
+    g.fillStyle = "#FF5000";
+    g.fill();
+    g.lineWidth = 1.5 * r;
+    g.strokeStyle = "#fff";
+    g.stroke();
+    const lab = WK.here >= 0 ? WK.lvLab : "바깥";
+    if ($("w-maplab").textContent !== lab) $("w-maplab").textContent = lab;
+  }
+
+  // ---------------------------------------------------------------- 걷기 시작 · 끝
+  // at: 지도를 꾹 누른 곳 { f: 층(없으면 주변), lp: 그 층 기준 좌표, up: 바닥 면인지, yaw }
+  function enterWalk(at) {
+    if (WK.on || WK.busy || !nav || !floorKeys().length) return;
+    WK.busy = true;
+    if (state.pick) setPick(null);
+    lpCancel();
+    const ex = {};
+    Object.keys(EX).forEach((b) => { ex[b] = { target: EX[b].target, p: EX[b].p }; });
+    WK.saved = { pos: camera.position.clone(), tgt: controls.target.clone(), ex };
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    fadeDo(() => {
+      Object.keys(EX).forEach((b) => { EX[b].target = EX[b].p = 0; if (acts[b]) acts[b].act.time = 0; });
+      if (mixer) mixer.update(0);
+      fly = null; state.zoomGoal = null; wz.log = 0;
+      WK.on = true;
+      WK.busy = false;
+      if (campus) campus.visible = true;
+      floorKeys().forEach((k) => setDim(floorNode[k], false));
+      scene.updateMatrixWorld(true);
+      if (!CG) buildWalkData();
+      CEIL.visible = true;
+      // 시작 자리
+      let p = null, yaw = 0;
+      if (at) {
+        const w = at.f ? floorNode[at.f].localToWorld(at.lp.clone()) : at.lp.clone();
+        if (at.up) {
+          const g = groundAt(w.x, w.z, w.y + 0.1);
+          if (Math.abs(g - w.y) < 0.15 && minWallDist(w.x, w.z, g, RAD) >= RAD) p = new THREE.Vector3(w.x, g, w.z);
+        }
+        if (!p) {
+          let bd = Infinity, bi = -1;
+          nav.nodes.forEach((n, i) => {
+            if (at.f && n.f !== at.f) return;
+            const d = Math.hypot(NP[i].x - w.x, NP[i].z - w.z) + Math.abs(NP[i].y - w.y) * 0.5;
+            if (d < bd) { bd = d; bi = i; }
+          });
+          if (bi >= 0) p = NP[bi].clone();
+        }
+        yaw = at.yaw;
+      }
+      if (!p) {
+        // 1층 현관: 로비 서쪽 주출입구(중정 쪽) 바로 안에서 로비 안쪽을 봄
+        const li = nodeOf(rooms.findIndex((r) => r.name === "로비" && r.floor === 1));
+        const door = li >= 0 ? ADJ[li].map(([x]) => x).find((x) => nav.nodes[x].k === "pt") : null;
+        if (li >= 0 && door != null) {
+          p = NP[door].clone().lerp(NP[li], 0.6);
+          p.y = groundAt(p.x, p.z, NP[li].y + 0.3);
+          yaw = yawTo(NP[door], NP[li]) + 0.5;
+        } else {
+          p = NP[0].clone();
+        }
+      }
+      WK.pos.copy(p);
+      WK.ground = p.y;
+      pushOut(WK.pos, WK.ground, p.x + 0.01, p.z);
+      WK.yaw = yaw;
+      WK.pitch = -0.06;
+      WK.t = 0; WK.v = 0; WK.path = null; WK.stairGoal = 0; WK.stair = -2; WK.fk = null; WK.where = "";
+      WK.keys.clear();
+      controls.enabled = false;
+      camera.fov = 70; camera.near = 0.05; camera.far = 700;
+      camera.updateProjectionMatrix();
+      sun.castShadow = false;
+      applyWalkLight();
+      scene.background = WALK_SKY;
+      scene.fog = walkFog;
+      disc.visible = ground.visible = false;
+      routeGroup.visible = walker.visible = false;
+      document.body.classList.add("walking");
+      $("walkhud").hidden = false;
+      WK.fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+      $("w-camwrap").hidden = !WK.fine;
+      setHint();
+      if (!MM.ctx) {
+        const c = $("w-map"), r = Math.min(window.devicePixelRatio || 1, 2);
+        MM.dpr = r; MM.W = Math.round(c.clientWidth * r) || 192 * r; MM.H = Math.round(c.clientHeight * r) || 104 * r;
+        c.width = MM.W; c.height = MM.H;
+        MM.ctx = c.getContext("2d");
+      }
+      whereNow();
+    });
+  }
+  function exitWalk() {
+    if (!WK.on || WK.busy) return;
+    WK.busy = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    fadeDo(() => {
+      WK.on = false;
+      WK.busy = false;
+      stopPath();
+      WK.keys.clear();
+      WK.down = null;
+      document.body.classList.remove("walking", "wlock");
+      $("walkhud").hidden = true;
+      if (CEIL) CEIL.visible = false;
+      if (SIGNS) SIGNS.forEach((s) => { s.el.hidden = true; });
+      camera.fov = 35; camera.near = 1; camera.far = 5000;
+      camera.rotation.order = "XYZ";
+      camera.updateProjectionMatrix();
+      sun.castShadow = true; sun.intensity = 1.05;
+      hemi.intensity = 0.75; hemi.groundColor.setHex(0x2a2a2a);
+      lamp.intensity = 0;
+      scene.background = null;
+      scene.fog = null;
+      disc.visible = ground.visible = true;
+      routeGroup.visible = true;
+      if (campus) campus.visible = campusOn;
+      const S = WK.saved;
+      Object.keys(S.ex).forEach((b) => { EX[b].target = S.ex[b].target; EX[b].p = S.ex[b].p; });
+      camera.position.copy(S.pos);
+      controls.target.copy(S.tgt);
+      controls.enabled = true;
+      controls.update();
+      refreshDim();
+      $("w-start").focus({ preventScroll: true });
+    });
+  }
+  function setHint() {
+    $("w-hint").textContent = WK.lock ? "마우스로 둘러보기 · W A S D 이동 · 클릭하면 그곳으로 · Esc 원래대로"
+      : WK.fine ? "바닥을 클릭해 이동 · 끌어서 둘러보기 · 방향키·WASD 로도 걸어요"
+      : "바닥을 눌러 이동 · 끌어서 둘러보기";
+  }
+  $("w-start").addEventListener("click", () => enterWalk(null));
+  $("w-exit").addEventListener("click", () => exitWalk());
+
+  // ---------------------------------------------------------------- 지도를 꾹 누르면 그 자리에서 시작
+  const LP = { t: 0, id: null, x: 0, y: 0 };
+  function lpCancel() {
+    if (LP.t) clearTimeout(LP.t);
+    LP.t = 0;
+    LP.id = null;
+    $("lpring").classList.remove("go");
+  }
+  cvs.addEventListener("pointerdown", (e) => {
+    if (WK.on || state.pick || !nav || !floorKeys().length) return;
+    if (LP.id !== null) { lpCancel(); return; }                  // 두 손가락(확대) 이면 취소
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    LP.id = e.pointerId; LP.x = e.clientX; LP.y = e.clientY;
+    const ring = $("lpring");
+    ring.style.transform = "translate(" + LP.x + "px," + LP.y + "px)";
+    ring.classList.remove("go");
+    void ring.getBoundingClientRect();
+    ring.classList.add("go");
+    LP.t = setTimeout(lpFire, 650);
+  });
+  cvs.addEventListener("pointermove", (e) => {
+    if (LP.id === e.pointerId && Math.hypot(e.clientX - LP.x, e.clientY - LP.y) > 10) lpCancel();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((n) => cvs.addEventListener(n, (e) => { if (LP.id === e.pointerId) lpCancel(); }));
+  $("stage").addEventListener("wheel", () => lpCancel(), { capture: true, passive: true });
+  function lpFire() {
+    const x = LP.x, y = LP.y;
+    LP.t = 0;
+    const h = pickHit(x, y);
+    lpCancel();
+    if (!h) return;
+    let o = h.object;
+    while (o && !o.userData.floor) o = o.parent;
+    const f = o ? o.userData.floor : null;
+    const n = h.face ? h.face.normal.clone().transformDirection(h.object.matrixWorld) : null;
+    const fwd = controls.target.clone().sub(camera.position);
+    enterWalk({ f, lp: f ? floorNode[f].worldToLocal(h.point.clone()) : h.point.clone(), up: !!n && n.y > 0.6, yaw: Math.atan2(-fwd.x, -fwd.z) });
+  }
+
+  // ---------------------------------------------------------------- 걷는 중 손·마우스
+  cvs.addEventListener("pointerdown", (e) => {
+    if (!WK.on) return;
+    if (WK.lock) {
+      if (e.pointerType !== "mouse") document.exitPointerLock();          // 마우스 고정 중 화면을 손으로 누르면 원래대로
+      else if (e.button === 0) tapWalk(window.innerWidth / 2, window.innerHeight / 2);
+      return;
+    }
+    if (WK.down) { WK.down.multi = true; return; }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    WK.down = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, t: performance.now(), moved: false, multi: false };
+    try { cvs.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
+  });
+  cvs.addEventListener("pointermove", (e) => {
+    if (!WK.on) return;
+    if (WK.lock) {
+      WK.yaw -= e.movementX * 0.0023;
+      WK.pitch -= e.movementY * 0.0023;
+      clampPitch();
+      return;
+    }
+    const D = WK.down;
+    if (!D || D.id !== e.pointerId) return;
+    const dx = e.clientX - D.lx, dy = e.clientY - D.ly;
+    D.lx = e.clientX; D.ly = e.clientY;
+    if (!D.moved && Math.hypot(e.clientX - D.x, e.clientY - D.y) > 8) D.moved = true;
+    if (!D.moved) return;
+    // 화면을 잡아 끄는 느낌: 오른쪽으로 끌면 왼쪽을 봄
+    const k = (1.25 * THREE.MathUtils.degToRad(camera.fov)) / window.innerHeight;
+    WK.yaw += dx * k;
+    WK.pitch += dy * k;
+    clampPitch();
+    WK.dragAt = performance.now();
+  });
+  cvs.addEventListener("pointerup", (e) => {
+    if (!WK.on || WK.lock) return;
+    const D = WK.down;
+    if (!D || D.id !== e.pointerId) return;
+    WK.down = null;
+    if (!D.moved && !D.multi && performance.now() - D.t < 700) tapWalk(e.clientX, e.clientY);
+  });
+  cvs.addEventListener("pointercancel", (e) => { if (WK.down && WK.down.id === e.pointerId) WK.down = null; });
+
+  // ---------------------------------------------------------------- 카메라 전환 (PC: 마우스 고정 + WASD)
+  $("w-cam").addEventListener("click", (e) => {
+    if (WK.lock) { document.exitPointerLock(); return; }
+    if (e.pointerType && e.pointerType !== "mouse") return;      // 손으로 누르면 안 켬
+    stopPath();
+    const r = cvs.requestPointerLock();
+    if (r && r.catch) r.catch(() => {});
+  });
+  document.addEventListener("pointerlockchange", () => {
+    const was = WK.lock;
+    WK.lock = WK.on && document.pointerLockElement === cvs;
+    if (was && !WK.lock) WK.unlockAt = performance.now();
+    document.body.classList.toggle("wlock", WK.lock);
+    $("w-cross").hidden = !WK.lock;
+    $("w-cam").setAttribute("aria-pressed", String(WK.lock));
+    WK.down = null;
+    setHint();
+  });
+
+  // ---------------------------------------------------------------- 키보드
+  const MOVE_KEYS = new Set(["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyW", "KeyA", "KeyS", "KeyD", "ShiftLeft", "ShiftRight"]);
+  walkKey = (e) => {
+    if (!WK.on) return;
+    if (e.key === "Escape" || e.key === "Esc") {
+      e.preventDefault();                                       // 포털이 지도 전체를 닫지 않게
+      if (document.pointerLockElement || performance.now() - WK.unlockAt < 700) return;   // 이 Esc 는 마우스 고정만 풂
+      exitWalk();
+      return;
+    }
+    if (MOVE_KEYS.has(e.code)) {
+      if (!e.code.startsWith("Shift")) e.preventDefault();
+      WK.keys.add(e.code);
+    }
+  };
+  window.addEventListener("keyup", (e) => { WK.keys.delete(e.code); });
+  window.addEventListener("blur", () => { WK.keys.clear(); });
+
+  function walkFrame(t) {
+    const dt = WK.t ? Math.min(0.1, Math.max(0, (t - WK.t) / 1000)) : 0;   // 느린 PC 에서도 걷는 속도는 같게 (충돌은 8cm 씩 나눠 계산)
+    WK.t = t;
+    const K = WK.keys;
+    let fwd = 0, side = 0, turn = 0;
+    if (K.has("ArrowUp") || K.has("KeyW")) fwd += 1;
+    if (K.has("ArrowDown") || K.has("KeyS")) fwd -= 1;
+    if (K.has("ArrowLeft")) turn += 1;
+    if (K.has("ArrowRight")) turn -= 1;
+    if (K.has("KeyA")) { if (WK.lock) side -= 1; else turn += 1; }
+    if (K.has("KeyD")) { if (WK.lock) side += 1; else turn -= 1; }
+    if (fwd || side || turn) { if (WK.path) stopPath(); }
+    WK.yaw += turn * 1.8 * dt;
+    if (fwd || side) {
+      const sp = (K.has("ShiftLeft") || K.has("ShiftRight") ? 4.6 : 2.6) * dt;
+      const f = fwd < 0 ? fwd * 0.7 : fwd;
+      const sy = Math.sin(WK.yaw), cy = Math.cos(WK.yaw);
+      moveBy((-sy * f + cy * side) * sp, (-cy * f - sy * side) * sp);
+    } else if (WK.path) followPath(dt);
+    WK.pos.y += (WK.ground - WK.pos.y) * Math.min(1, dt * 12);
+    camera.position.set(WK.pos.x, WK.pos.y + EYE, WK.pos.z);
+    camera.rotation.set(WK.pitch, WK.yaw, 0, "YXZ");
+    camera.updateMatrixWorld();
+    // 빛은 눈보다 1.2m 뒤·0.5m 위: 벽 바로 앞에 서도 화면이 새하얗게 타지 않게
+    lamp.position.set(camera.position.x + Math.sin(WK.yaw) * 1.2, camera.position.y + 0.5, camera.position.z + Math.cos(WK.yaw) * 1.2);
+    if (goal.visible) {
+      const a = (performance.now() - WK.goalAt) / 1000;
+      goal.scale.setScalar(1 + 0.12 * Math.sin(a * 6));
+    }
+    if (t - WK.tick > 200) { WK.tick = t; whereNow(); }
+    renderer.render(scene, camera);
+    drawSigns(t);
+    drawMap();
+  }
+
   // ---------------------------------------------------------------- 매 프레임
   const v = new THREE.Vector3(), tmp = new THREE.Vector3();
   function project(world, el, dx, dy) {
@@ -1229,6 +2331,7 @@ select:focus-visible, input[type="range"]:focus-visible, .card > summary:focus-v
   }
 
   function frame(t) {
+    if (WK.on) { walkFrame(t); requestAnimationFrame(frame); return; }
     let dy = 0;
     for (const id in EX) {
       const ex = EX[id];

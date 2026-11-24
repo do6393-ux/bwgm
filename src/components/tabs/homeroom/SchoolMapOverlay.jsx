@@ -2,6 +2,7 @@
 // 지도는 buwon2 에서 만든 단독 페이지 public/school3d/index.html 을 iframe 으로 그대로 쓴다
 // (three.js 는 그 페이지가 CDN 에서 부르고, 모델 파일은 같은 폴더). 모델이 바뀌면 그 폴더만 다시 복사한다.
 // 닫기 단추·Esc 로 닫히고, 아무도 안 만지면 MAP_IDLE_MS 뒤 저절로 닫혀 교실 화면으로 돌아간다.
+// 단, 지도 안에서 "사람 눈높이로 걷기" 중인 Esc 는 지도가 preventDefault 하므로 걷기만 끝나고 지도는 안 닫힌다.
 // 교실 화면은 1280×720 을 transform 으로 늘린 상자라, 지도는 그 밖(전체 화면 요소나 body)에 띄운다.
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -22,6 +23,8 @@ export default function SchoolMapOverlay({ onClose }) {
     const onKey = (event) => {
       poke();
       if (event.key !== "Escape" || event.repeat) return;
+      // 지도 안에서 걷기·카메라 전환을 끝내는 Esc 는 지도 페이지가 먼저 받아 preventDefault 한다 → 지도는 그대로 둔다
+      if (event.defaultPrevented) return;
       // 교실 컴퓨터 프로그램의 "Esc 로 화면 내리기"(useEscToLower)보다 먼저 받아서 지도만 닫는다
       event.preventDefault();
       onClose();
