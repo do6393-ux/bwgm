@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMinutes, classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor, splitClassCell } from "./classroomScreen";
+import { addMinutes, classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor, shortDate, splitClassCell } from "./classroomScreen";
 
 const TIMES = ["09:00", "09:55", "10:50", "11:45", "13:30", "14:25", "15:20"];
 const at = (hh, mm) => new Date(2026, 10, 13, hh, mm); // 11/13(금)
@@ -71,6 +71,11 @@ describe("오른쪽 칸", () => {
   it("monthDay", () => {
     expect(monthDay("2026-11-19")).toBe("11월 19일");
     expect(monthDay("2027-01-06")).toBe("1월 6일");
+  });
+
+  it("shortDate", () => {
+    expect(shortDate("2026-11-25")).toBe("11월 25일 (수)");
+    expect(shortDate("2027-01-03")).toBe("1월 3일 (일)");
   });
 
   it("schoolLimitFor: 반찬이 많으면 학사일정을 줄인다", () => {

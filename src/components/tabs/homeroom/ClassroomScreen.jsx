@@ -1,6 +1,6 @@
 // 내 학급 "교실 화면": 교실 TV·전자칠판에 띄워 두는 1280×720 화면.
 // 담는 칸(평소엔 16:9 미리보기, 전체 화면이면 화면 전체) 크기에 맞춰 통째로 줄이고 늘린다.
-// 우리 반 시간표(컴시간) · 급식 · 학사일정(나이스) · 시계 · 선생님 메시지 · 선생님께 메시지 보내기(채팅).
+// 우리 반 시간표(컴시간) · 급식 · 다가오는 일정(나이스 학사일정 + 선생님이 넣은 우리 반 일정) · 시계 · 선생님 메시지 · 선생님께 메시지 보내기(채팅).
 // 학생 이름·번호 같은 개인정보는 나오지 않는다 (채팅에 학생이 스스로 쓴 이름만).
 //
 // screen: classroom_screens 문서 (없으면 null) — 선생님 메시지와 "읽음" 시각
@@ -10,20 +10,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, MessageSquare, ZoomIn } from "lucide-react";
 import { fetchClassSchedule, fetchPeriodTimes } from "@/lib/timetable";
 import { fetchLunch } from "@/lib/neisMeal";
-import { scheduleTag, scheduleWhen, upcomingSchool } from "@/lib/neisSchedule";
+import { mergeUpcoming } from "@/lib/classEvents";
 import { useSchoolDay } from "@/lib/useSchoolDay";
 import { useNow } from "@/lib/useScreenAwake";
 import { isBeyondNextWeek, pickDaySchedule } from "@/lib/todayBrief";
-import { classroomRows, classroomStatus, longDate, monthDay, schoolLimitFor } from "@/lib/classroomScreen";
+import { classroomRows, classroomStatus, longDate, schoolLimitFor } from "@/lib/classroomScreen";
 import { clockLabel, drawingToday, newReplies, noticeToday, todayMessages } from "@/lib/classroomChat";
 import { noticeKey } from "@/lib/classroomApp";
 import ClassroomChatPanel from "./ClassroomChatPanel";
+import ClassroomUpcoming from "./ClassroomUpcoming";
 import DrawingView from "./DrawingView";
 import SchoolMapOverlay from "./SchoolMapOverlay";
 
 const W = 1280;
 const H = 720;
-const SOON_DAYS = 7;
 const RELOAD_MINUTES = 30; // 아침 동기화가 늦게 끝나도 따라가게 시간표를 이만큼마다 다시 읽는다
 const DRAWING_BIG_MS = 60 * 1000; // 선생님 그림이 새로 오면(또는 작은 그림을 누르면) 이만큼 크게 보여 준다
 
@@ -115,8 +115,12 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
   }, [mealDate]);
   const mealShown = meal.date === mealDate;
 
-  // ── 학사일정 (급식·채팅 단추와 한 칸을 나눠 써서, 반찬이 많은 날은 줄인다) ──
-  const schoolItems = upcomingSchool(events, today, schoolLimitFor(mealShown ? meal.list.length : 0));
+  // ── 다가오는 일정: 학사일정 + 우리 반 일정 (급식·채팅 단추와 한 칸을 나눠 써서, 반찬이 많은 날은 줄인다) ──
+  // 누르면 급식 칸 자리까지 늘어나 남은 일정을 모두 보여 준다
+  const upcoming = mergeUpcoming(events, screen?.classEvents, today, schoolLimitFor(mealShown ? meal.list.length : 0));
+  const upcomingAll = mergeUpcoming(events, screen?.classEvents, today, Infinity);
+  const [upcomingOpen, setUpcomingOpen] = useState(false);
+  const closeUpcoming = useCallback(() => setUpcomingOpen(false), [setUpcomingOpen]);
 
   // ── 선생님 메시지 (띄운 날에만) ──
   const notice = noticeToday(screen, today);
@@ -148,6 +152,7 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
   const openChat = () => {
     setSeenAt(new Date());
     setChatOpen(true);
+    setUpcomingOpen(false); // 채팅을 닫았을 때 급식 칸이 다시 보이게
   };
   const closeChat = () => {
     setChatOpen(false);
@@ -155,14 +160,17 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
   };
   const showChat = live && chatOpen;
 
-  // ── 학교 3D 지도 (전체 화면으로 덮는다. 선생님 메시지가 새로 오면 닫아서 메시지가 보이게 한다) ──
+  // ── 학교 3D 지도 (전체 화면으로 덮는다. 선생님 메시지가 새로 오면 지도를 닫고 늘어난 일정 칸도 접는다) ──
   const [mapOpen, setMapOpen] = useState(false);
-  const closeMap = useCallback(() => setMapOpen(false), []);
+  const closeMap = useCallback(() => setMapOpen(false), [setMapOpen]);
   const mapNoticeKey = screen ? noticeKey(screen) : undefined; // undefined: 아직 교실 화면 문서를 모른다
   const [seenMapNoticeKey, setSeenMapNoticeKey] = useState(mapNoticeKey);
   if (mapNoticeKey !== seenMapNoticeKey) {
     setSeenMapNoticeKey(mapNoticeKey);
-    if (seenMapNoticeKey !== undefined && mapNoticeKey != null) setMapOpen(false);
+    if (seenMapNoticeKey !== undefined && mapNoticeKey != null) {
+      setMapOpen(false);
+      setUpcomingOpen(false);
+    }
   }
 
   const [boxRef, scale] = useFitScale();
@@ -285,54 +293,37 @@ export default function ClassroomScreen({ grade, classNum, screen = null, messag
                 <ClassroomChatPanel messages={chatList} readAt={screen?.teacherReadAt || null} onSend={onSend} onClose={closeChat} />
               ) : (
                 <>
-                  <Card
-                    title={day.isToday ? "오늘 급식" : "급식"}
-                    className="shrink-0"
-                    aside={mealShown && meal.kcal && <span className="font-mono text-[14px] text-[#bdbdbd]">{meal.kcal}</span>}
-                  >
-                    {!mealShown ? (
-                      <div className="h-[150px] rounded-2xl bg-white/[0.05] animate-pulse" aria-label="급식을 불러오는 중" />
-                    ) : meal.list.length === 0 ? (
-                      <p className="py-4 px-1 text-[20px] text-[#bdbdbd]">{meal.status === "error" ? "급식을 불러오지 못했어요." : "급식이 없는 날이에요."}</p>
-                    ) : (
-                      <ul className="px-1 overflow-hidden">
-                        {meal.list.map((dish, i) => (
-                          <li key={i} className="text-[21px] leading-[1.3] truncate">
-                            {dish}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </Card>
-
-                  <Card title="다가오는 학사일정" className="flex-1 overflow-hidden">
-                    {schoolItems.length === 0 ? (
-                      <p className="py-1 px-1 text-[20px] text-[#bdbdbd]">{ready ? "다가오는 학사일정이 없어요." : ""}</p>
-                    ) : (
-                      <ul className="flex flex-col gap-1.5 px-1">
-                        {schoolItems.map((e) => {
-                          const when = scheduleWhen(e, today);
-                          const tag = scheduleTag(e);
-                          const soon = when.days <= SOON_DAYS;
-                          return (
-                            <li key={e.id} className="flex items-baseline gap-3">
-                              <span className="flex-1 min-w-0 text-[21px] font-bold leading-[1.4] truncate">
-                                {e.title}
-                                {tag && tag !== "공휴일" && <span className="ml-2 text-[15px] font-medium text-[#bdbdbd]">({tag})</span>}
-                              </span>
-                              <span className="shrink-0 text-[15px] text-[#bdbdbd]">
-                                {monthDay(e.start)}
-                                {e.end !== e.start ? "부터" : ""}
-                              </span>
-                              <span className={`shrink-0 min-w-[76px] text-right font-mono text-[24px] font-bold ${soon ? "text-[#34d399]" : "text-[#f5f5f5]"}`}>
-                                {when.label}
-                              </span>
+                  {!upcomingOpen && (
+                    <Card
+                      title={day.isToday ? "오늘 급식" : "급식"}
+                      className="shrink-0"
+                      aside={mealShown && meal.kcal && <span className="font-mono text-[14px] text-[#bdbdbd]">{meal.kcal}</span>}
+                    >
+                      {!mealShown ? (
+                        <div className="h-[150px] rounded-2xl bg-white/[0.05] animate-pulse" aria-label="급식을 불러오는 중" />
+                      ) : meal.list.length === 0 ? (
+                        <p className="py-4 px-1 text-[20px] text-[#bdbdbd]">{meal.status === "error" ? "급식을 불러오지 못했어요." : "급식이 없는 날이에요."}</p>
+                      ) : (
+                        <ul className="px-1 overflow-hidden">
+                          {meal.list.map((dish, i) => (
+                            <li key={i} className="text-[21px] leading-[1.3] truncate">
+                              {dish}
                             </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </Card>
+                          ))}
+                        </ul>
+                      )}
+                    </Card>
+                  )}
+
+                  <ClassroomUpcoming
+                    items={upcoming}
+                    allItems={upcomingAll}
+                    today={today}
+                    ready={ready}
+                    expanded={upcomingOpen}
+                    onExpand={() => setUpcomingOpen(true)}
+                    onCollapse={closeUpcoming}
+                  />
 
                   <div className="shrink-0 flex gap-3">
                     <button

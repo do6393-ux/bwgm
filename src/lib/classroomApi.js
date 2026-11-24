@@ -1,6 +1,7 @@
 // 교실 화면 메시지·채팅의 Firestore 읽기·쓰기.
-//   classroom_screens/{id}            { ownerUid, grade, classNum, noticeText, noticeDay, noticeAt, noticeDrawing?, teacherReadAt, createdAt }
+//   classroom_screens/{id}            { ownerUid, grade, classNum, noticeText, noticeDay, noticeAt, noticeDrawing?, classEvents?, teacherReadAt, createdAt }
 //     noticeDrawing: 선생님 그림 (src/lib/drawing.js 의 문자열). 그림이 없으면 필드를 아예 두지 않는다
+//     classEvents: 우리 반 일정 [{ id, title, start, end }] (src/lib/classEvents.js). 넣은 적이 없으면 필드가 없다
 //   classroom_screens/{id}/messages   { from: "student"|"teacher", text, name, createdAt }
 // 문서 ID 는 교실 컴퓨터 주소(?classroom=ID)에 들어가는 무작위 글자다. 규칙은 firestore.rules 참고.
 import {
@@ -23,6 +24,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { makeScreenId } from "@/lib/classroomChat";
+import { cleanClassEvents } from "@/lib/classEvents";
 
 const SCREENS = "classroom_screens";
 const toDate = (ts) => (ts && typeof ts.toDate === "function" ? ts.toDate() : null);
@@ -38,6 +40,7 @@ function screenFrom(snap) {
     noticeDay: d.noticeDay || "",
     noticeAt: toDate(d.noticeAt),
     noticeDrawing: typeof d.noticeDrawing === "string" ? d.noticeDrawing : "",
+    classEvents: cleanClassEvents(d.classEvents),
     teacherReadAt: toDate(d.teacherReadAt),
   };
 }
@@ -74,7 +77,7 @@ export function watchMessages(id, cb, max = 80) {
   );
 }
 
-/** 새 교실 화면을 만든다. carry: 주소를 바꿀 때 옮겨 갈 메시지 */
+/** 새 교실 화면을 만든다. carry: 주소를 바꿀 때 옮겨 갈 메시지·우리 반 일정 */
 export async function createScreen(uid, grade, classNum, carry = {}) {
   const id = makeScreenId();
   await setDoc(doc(db, SCREENS, id), {
@@ -85,6 +88,7 @@ export async function createScreen(uid, grade, classNum, carry = {}) {
     noticeDay: carry.noticeDay || "",
     noticeAt: carry.noticeAt ? Timestamp.fromDate(carry.noticeAt) : null,
     ...(carry.noticeDrawing ? { noticeDrawing: carry.noticeDrawing } : {}),
+    ...(carry.classEvents?.length ? { classEvents: carry.classEvents } : {}),
     teacherReadAt: null,
     createdAt: serverTimestamp(),
   });
@@ -129,6 +133,11 @@ export function setNotice(id, text, day, drawing = "") {
 
 export function clearNotice(id) {
   return updateDoc(doc(db, SCREENS, id), { noticeText: "", noticeDay: "", noticeAt: null, noticeDrawing: deleteField() });
+}
+
+/** 우리 반 일정 저장 (목록 전체를 바꾼다) */
+export function setClassEvents(id, list) {
+  return updateDoc(doc(db, SCREENS, id), { classEvents: list.map(({ id: eid, title, start, end }) => ({ id: eid, title, start, end })) });
 }
 
 /** 선생님이 대화를 확인했다 (교실 화면에 "읽음"이 뜬다) */

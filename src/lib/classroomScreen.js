@@ -32,6 +32,12 @@ export function monthDay(key) {
   return `${m}월 ${d}일`;
 }
 
+/** "2026-11-25" → "11월 25일 (수)" */
+export function shortDate(key) {
+  const wd = new Date(`${key}T00:00:00Z`).getUTCDay();
+  return `${monthDay(key)} (${WEEKDAYS[wd]})`;
+}
+
 /**
  * 오른쪽 칸에 학사일정을 몇 개 보여 줄지. 급식·학사일정·채팅 단추가 한 칸에 들어가서
  * 급식 반찬이 많은 날은 학사일정을 줄인다 (1280×720 기준으로 잰 값).

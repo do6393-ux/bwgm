@@ -1,12 +1,15 @@
-// 내 학급 › 교실 화면: 선생님 쪽 "교실에 띄울 메시지"와 "교실 채팅".
+// 내 학급 › 교실 화면: 선생님 쪽 "교실에 띄울 메시지"와 "교실 채팅", "우리 반 일정".
 // 답장도 교실 TV 에 뜨므로 반 친구들이 같이 본다. "읽음"은 선생님이 확인 단추를 누르거나 답장할 때만 바뀐다
 // (교실 컴퓨터에 선생님이 로그인해 둔 채로 자리를 비워도 저절로 읽음이 되지 않게).
 import { useEffect, useRef, useState } from "react";
-import { Megaphone, MessageSquare, Pencil } from "lucide-react";
+import { CalendarPlus, Megaphone, MessageSquare, Pencil } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
-import { clearNotice, deleteMessages, markRead, sendMessage, setNotice } from "@/lib/classroomApi";
+import { clearNotice, deleteMessages, markRead, sendMessage, setClassEvents, setNotice } from "@/lib/classroomApi";
 import { CHAT_MAX, NOTICE_MAX, cleanText, clockLabel, drawingToday, noticeToday, todayMessages, unreadFromStudents } from "@/lib/classroomChat";
+import { CLASS_EVENT_MAX, CLASS_EVENT_TITLE_MAX, checkClassEvent, dropPastEvents, removeClassEvent, upsertClassEvent } from "@/lib/classEvents";
+import { shortDate } from "@/lib/classroomScreen";
 import { encodeDrawing } from "@/lib/drawing";
+import { scheduleWhen } from "@/lib/neisSchedule";
 import { useNow } from "@/lib/useScreenAwake";
 import { dateKey } from "@/lib/workCalendar";
 import DrawingPad from "./DrawingPad";
@@ -279,12 +282,185 @@ function ChatCard({ screen, messages, now }) {
   );
 }
 
+const EMPTY_FORM = { start: "", end: "", title: "" };
+const dateField =
+  "w-full h-11 rounded-field border border-line bg-surface text-ink px-3.5 font-mono text-[14px] [color-scheme:dark] focus:outline-none focus:border-amber-400";
+
+function ClassEventsCard({ screen, today }) {
+  const { toast } = useDialog();
+  const saved = screen.classEvents || [];
+  const list = dropPastEvents(saved, today);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editId, setEditId] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const editing = editId && list.some((e) => e.id === editId) ? editId : null;
+  const titleLen = cleanText(form.title, CLASS_EVENT_TITLE_MAX).length;
+  const full = !editing && list.length >= CLASS_EVENT_MAX;
+
+  const update = (patch) => setForm((f) => ({ ...f, ...patch }));
+  const reset = () => {
+    setForm(EMPTY_FORM);
+    setEditId(null);
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (saving) return;
+    const checked = checkClassEvent(form, today);
+    const result = checked.error ? checked : upsertClassEvent(saved, checked.event, today, editing);
+    if (result.error) {
+      toast(result.error, "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await setClassEvents(screen.id, result.list);
+      toast(editing ? "일정을 고쳤어요." : "교실 화면에 일정을 넣었어요.", "success");
+      reset();
+    } catch {
+      toast("저장하지 못했어요. 잠시 뒤 다시 해 주세요.", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (ev) => {
+    try {
+      await setClassEvents(screen.id, removeClassEvent(saved, ev.id, today));
+      if (editing === ev.id) reset();
+      toast(`"${ev.title}" 일정을 지웠어요.`, "success");
+    } catch {
+      toast("지우지 못했어요. 잠시 뒤 다시 해 주세요.", "error");
+    }
+  };
+
+  return (
+    <section aria-labelledby="classroom-events-title" className="md:col-span-2 bg-surface border border-line rounded-card p-5 md:p-6 flex flex-col gap-4 min-w-0">
+      <div>
+        <h3 id="classroom-events-title" className="flex items-center gap-2 text-[16px] md:text-[18px] font-bold text-white">
+          <CalendarPlus className="w-4 h-4 text-amber-300" strokeWidth={2.4} />
+          우리 반 일정
+        </h3>
+        <p className="mt-1 text-[13px] text-ink-muted leading-relaxed">
+          교실 화면 "다가오는 일정"에 학사일정과 함께 날짜 순으로 떠요. 교실 화면에는 <span className="font-bold text-amber-300">우리 반</span> 표시가 붙어요.
+        </p>
+      </div>
+
+      <div className="grid md:grid-cols-[320px_minmax(0,1fr)] gap-4 md:gap-5">
+        <form onSubmit={save} className="rounded-field bg-well p-4 flex flex-col gap-3">
+          <span className="text-[14px] font-bold text-ink-strong">{editing ? "일정 고치기" : "일정 넣기"}</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-ink-muted">날짜</span>
+            <input type="date" value={form.start} onChange={(e) => update({ start: e.target.value })} className={dateField} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-ink-muted">
+              끝나는 날 <span className="text-ink-faint">(여러 날일 때만)</span>
+            </span>
+            <span className="flex gap-2">
+              <input type="date" value={form.end} min={form.start || undefined} onChange={(e) => update({ end: e.target.value })} className={dateField} />
+              {form.end && (
+                <button type="button" onClick={() => update({ end: "" })} className="shrink-0 h-11 px-3 rounded-field border border-line hover:border-line-hover text-ink-muted text-[12px]">
+                  하루만
+                </button>
+              )}
+            </span>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-[13px] text-ink-muted">내용</span>
+            <input
+              type="text"
+              value={form.title}
+              maxLength={CLASS_EVENT_TITLE_MAX + 5}
+              onChange={(e) => update({ title: e.target.value })}
+              placeholder="예) 정보 수행평가"
+              className="w-full h-11 rounded-field border border-line bg-surface text-ink px-3.5 text-[15px] placeholder:text-ink-ghost focus:outline-none focus:border-amber-400"
+            />
+            <span className={`self-end font-mono text-[12px] ${titleLen >= CLASS_EVENT_TITLE_MAX ? "text-amber-300" : "text-ink-faint"}`}>
+              {titleLen} / {CLASS_EVENT_TITLE_MAX}자
+            </span>
+          </label>
+          <div className="flex gap-2">
+            {editing && (
+              <button type="button" onClick={reset} className="h-11 px-4 rounded-field border border-line hover:border-line-hover text-ink text-[14px]">
+                취소
+              </button>
+            )}
+            <button
+              type="submit"
+              disabled={saving || full || !form.start || !titleLen}
+              className="flex-1 h-11 px-5 rounded-field bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-[#3a2a05] text-[14px] font-bold"
+            >
+              {saving ? "저장하는 중…" : editing ? "고쳐서 저장" : "교실 화면에 넣기"}
+            </button>
+          </div>
+          {full && <p className="text-[12px] text-amber-300">일정은 {CLASS_EVENT_MAX}개까지 넣을 수 있어요. 필요 없는 것을 지워 주세요.</p>}
+        </form>
+
+        <div className="min-w-0 flex flex-col gap-2">
+          <span className="text-[14px] font-bold text-ink-strong">
+            넣은 일정 <span className="font-mono font-normal text-ink-muted">{list.length}</span>
+          </span>
+          {list.length === 0 ? (
+            <p className="rounded-field bg-well px-4 py-6 text-center text-[13px] text-ink-faint">아직 넣은 일정이 없어요.</p>
+          ) : (
+            <ul className="max-h-[330px] overflow-y-auto overscroll-contain flex flex-col gap-2 pr-1">
+              {list.map((ev) => {
+                const when = scheduleWhen(ev, today);
+                return (
+                  <li
+                    key={ev.id}
+                    className={`flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-1.5 rounded-field bg-well pl-4 pr-2.5 py-2.5 ${
+                      editing === ev.id ? "ring-2 ring-amber-400" : ""
+                    }`}
+                  >
+                    <span className="shrink-0 w-[112px] text-[13px] text-ink-muted leading-snug">
+                      {shortDate(ev.start)}
+                      {ev.end !== ev.start && (
+                        <>
+                          <br />~ {shortDate(ev.end)}
+                        </>
+                      )}
+                    </span>
+                    <span className="flex-1 min-w-[120px] text-[15px] font-bold text-ink-strong break-keep">{ev.title}</span>
+                    <span className={`shrink-0 font-mono text-[14px] font-bold ${when.days <= 7 ? "text-emerald-400" : "text-ink"}`}>{when.label}</span>
+                    <span className="shrink-0 flex gap-1.5 ml-auto">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditId(ev.id);
+                          setForm({ start: ev.start, end: ev.end !== ev.start ? ev.end : "", title: ev.title });
+                        }}
+                        className="h-9 px-3 rounded-[10px] border border-line hover:border-line-hover text-ink text-[13px]"
+                      >
+                        고치기
+                      </button>
+                      <button type="button" onClick={() => remove(ev)} className="h-9 px-3 rounded-[10px] border border-line hover:border-rose-300 text-rose-300 text-[13px]">
+                        지우기
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="text-[12px] text-ink-faint leading-relaxed">
+            지난 일정은 끝난 다음 날 저절로 빠져요. {CLASS_EVENT_MAX}개까지 넣을 수 있어요. 교실 화면에는 가까운 몇 개만 보이고, 그 칸을 누르면 모두 보여요.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function ClassroomTeacherPanel({ screen, messages }) {
   const now = useNow(30000);
+  const today = dateKey(now);
   return (
     <div className="grid md:grid-cols-2 gap-4">
-      <NoticeCard screen={screen} today={dateKey(now)} />
+      <NoticeCard screen={screen} today={today} />
       <ChatCard screen={screen} messages={messages} now={now} />
+      <ClassEventsCard screen={screen} today={today} />
     </div>
   );
 }
