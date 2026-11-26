@@ -296,6 +296,13 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
 .w-stair .btn + .btn { border-left: none; }
 .w-stair .btn small { font-family: var(--f-mono); font-size: 11px; font-weight: 400; color: var(--muted); }
 .w-stair .btn.hot { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* 1-7반 교탁 가까이에서만 뜨는 단추 (이스터에그). PC 는 E 키, 손으로는 이 단추나 교탁을 누름 */
+.w-egg { display: flex; align-items: center; gap: 10px; padding: 10px 16px; font-size: 15px; background: var(--panel); }
+.w-egg kbd {
+  display: grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px;
+  font: 700 13px var(--f-mono); color: var(--ink-strong); border: 1px solid var(--line-hover); border-bottom-width: 3px;
+}
+.w-egg[aria-pressed="true"] kbd { border-color: var(--accent); color: var(--accent); }
 .w-cam { left: calc(max(16px, env(safe-area-inset-left, 0px)) + 4px); bottom: calc(env(safe-area-inset-bottom, 0px) + 20px); }
 .w-cam .btn { padding: 10px 14px; font-size: 13px; background: var(--panel); }
 .w-cross { left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px; pointer-events: none; }
@@ -422,6 +429,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
     <div class="ftabs" id="w-floors"></div>
   </div>
   <div class="hud w-bottom">
+    <button class="btn w-egg" id="w-egg" type="button" aria-pressed="false" hidden><kbd id="w-egg-key">E</kbd><span id="w-egg-txt">교탁 두드리기</span></button>
     <div class="w-stair" id="w-stair" role="group" aria-label="계단" hidden></div>
     <p class="w-hint" id="w-hint"></p>
   </div>
@@ -769,7 +777,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       u.className = "u";
       u.textContent = "층";
       el.append(n, u);
-      el.addEventListener("click", () => select(f.key));
+      el.addEventListener("click", () => { select(f.key); eggTap(f.key); });
       box.appendChild(el);
     });
     document.querySelectorAll(".btab").forEach((t) => t.setAttribute("aria-pressed", String(t.dataset.b === state.bld)));
@@ -921,6 +929,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
     rooms = meta.rooms || [];
     seats = meta.seats || [];
     nav = meta.nav;
+    eggPrep();
     rooms.forEach((r, i) => {
       const el = mkLabel("lbl", r.name, true);
       el.setAttribute("role", "button");
@@ -991,7 +1000,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       m.opacity = dim ? b.opacity * 0.08 : b.opacity;
       m.depthWrite = dim ? false : b.depthWrite;
       m.needsUpdate = true;
-      o.castShadow = !dim && !o.userData.glass;
+      o.castShadow = !dim && !o.userData.glass && !o.userData.egg;
     });
   }
   function visibleFloors() {
@@ -1374,7 +1383,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
   function buildGrid() {
     scene.updateMatrixWorld(true);
     const meshes = [];
-    floorKeys().forEach((k) => floorNode[k].traverse((o) => { if (o.isMesh && !o.userData.door) meshes.push([o, k]); }));   // 문짝은 충돌 없음 (다가가면 열림)
+    floorKeys().forEach((k) => floorNode[k].traverse((o) => { if (o.isMesh && !o.userData.door && !o.userData.egg) meshes.push([o, k]); }));   // 문짝은 충돌 없음 (다가가면 열림), 이스터에그 사본도 뺌
     if (campus) campus.traverse((o) => { if (o.isMesh) meshes.push([o, 0]); });
     let total = 0;
     meshes.forEach(([m]) => { const g = m.geometry; total += Math.floor((g.index ? g.index.count : g.attributes.position.count) / 3); });
@@ -1797,6 +1806,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
     const h = rayGrid(o, d, 250, 4);                             // 유리·울타리 너머를 누를 수 있게 지나침
     if (!h || (CG.F[h.tri] & 8)) return;                         // 하늘·천장
     const p = o.clone().addScaledVector(d, h.t);
+    if (eggHit(p)) { eggToggle(); return; }                     // 1-7반 교탁을 누름 (이스터에그)
     const tgt = new THREE.Vector3();
     if (CG.F[h.tri] & 1) {
       tgt.set(p.x, groundAt(p.x, p.z, p.y + 0.05), p.z);
@@ -2325,6 +2335,11 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       exitWalk();
       return;
     }
+    if (e.code === "KeyE" && EGG.near) {                        // 1-7반 교탁 앞 (한글 입력 상태여도 code 는 KeyE)
+      e.preventDefault();
+      if (!e.repeat) eggToggle();
+      return;
+    }
     if (MOVE_KEYS.has(e.code)) {
       if (!e.code.startsWith("Shift")) e.preventDefault();
       WK.keys.add(e.code);
@@ -2363,10 +2378,511 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       goal.scale.setScalar(1 + 0.12 * Math.sin(a * 6));
     }
     if (t - WK.tick > 200) { WK.tick = t; whereNow(); }
+    eggNear();
+    eggFrame(t);
     doorsFrame(dt);
     renderer.render(scene, camera);
     drawSigns(t);
     drawMap();
+  }
+
+  // ================================================================ 이스터에그: 1-7반 교탁
+  // 평소엔 다른 교실과 똑같음. 걷다가 1-7반 교탁 가까이에서 E (손으로는 아래 단추나 교탁을 누름) →
+  // 이 교실에만 색이 들어오고(의자 한 색, 뒤 사물함 치움, 뒤 창문 막음) 칠판에 글씨가 써짐. 지도에서는 2층 단추 세 번 연타.
+  // 한 번 더 하면 글씨가 지워지고 원래대로 (새로고침해도 원래대로).
+  // 원래 모델은 그대로 두고, 이 교실 안쪽만 색 입힌 사본(나무 바닥 판·벽 안쪽 면·가구·칠판 글씨)을 층 노드에 겹쳐 둠.
+  // 사본은 걷기 충돌·지도 찍기에서 빠지고(userData.egg, raycast 없음), 꺼져 있으면 안 보임
+  const EGG = {
+    room: "1-7", text: "정보쌤 말 잘 듣기", font: "Nanum Pen Script",           // 칠판 (분필 손글씨)
+    tag: "공부 열심히 하자", tagFont: "Black Han Sans",                           // 교실 뒤 벽 (빨간 스프레이 그래피티)
+    on: false, p: 0, t: 0, near: false, node: null, group: null, box: null, lec: null, board: null,
+    parts: [], floor: null, writes: [], sink: null, fontP: null, fontOK: false, tagOK: false,
+  };
+  const EGG_COL = {                                             // sRGB. 의자는 모두 한 색 (학교 의자 같은 남색)
+    wall: 0xf3e6cc, front: 0xcfe6d6, floor: 0xc79d6e, board: 0x2f5c47, tray: 0xb9bec4,
+    lectern: 0x9b6a40, desk: 0xe6cc9c, steel: 0x58616d, chair: 0x3b5487,
+  };
+  const EGG_WHITE = new THREE.Color(1, 1, 1), eggV = new THREE.Vector3(), eggLinC = {};
+  const eggLin = (hex) => eggLinC[hex] || (eggLinC[hex] = new THREE.Color(hex).convertSRGBToLinear());
+  const eggRnd = (seed) => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  function eggMesh(geo, mat) {
+    const m = new THREE.Mesh(geo, mat);
+    m.userData.egg = true;
+    m.raycast = () => {};                                       // 지도에서 실 찍기·꾹 누르기·휠 확대에 안 걸리게
+    m.receiveShadow = true;
+    EGG.group.add(m);
+    return m;
+  }
+  // 원래 재질을 복제(거칠기·흐리게 할 때 쓰는 userData.base 그대로) + 살짝 앞으로 당겨 그려 같은 자리의 원래 면을 덮음
+  function eggMat(src) {
+    const m = src.clone();
+    m.polygonOffset = true;
+    m.polygonOffsetFactor = -1;
+    m.polygonOffsetUnits = -4;
+    return m;
+  }
+  // 정점 색 사본: 켜는 동안 원래 색(base) → 목표 색(cols)으로 바뀜
+  function eggPart(pos, cols, src) {
+    if (!pos.length) return;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    const attr = new THREE.BufferAttribute(new Float32Array(cols.length), 3);
+    attr.setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute("color", attr);
+    geo.computeVertexNormals();
+    const mat = eggMat(src);
+    mat.color.setRGB(1, 1, 1);
+    mat.vertexColors = true;
+    eggMesh(geo, mat);
+    EGG.parts.push({ attr, base: src.color.clone(), cols: new Float32Array(cols) });
+  }
+  function eggPrep() {
+    const r = rooms.find((x) => x.name === EGG.room && x.kind === "classroom");
+    const node = r && floorNode[r.floor];
+    if (!node) return;
+    // 교실 안쪽 (층 노드 기준, pos_local = 가운데): 북측동 교실 10m × 8m 칸에서 벽 두께를 뺀 9.62m × 7.62m
+    const cx = r.pos_local[0], cz = r.pos_local[2];
+    const B = { x0: cx - 4.81, x1: cx + 4.81, z0: cz - 3.81, z1: cz + 3.81 };
+    const inB = (x, z, e) => x > B.x0 - e && x < B.x1 + e && z > B.z0 - e && z < B.z1 + e;
+    node.updateWorldMatrix(true, true);
+    const inv = node.matrixWorld.clone().invert(), M = new THREE.Matrix4(), v3 = new THREE.Vector3();
+    const src = {};                                             // 재질 이름 → { mat, P: 층 노드 기준 꼭짓점 (flatNormals 로 풀어 둔 삼각형 순서) }
+    node.traverse((o) => {
+      if (!o.isMesh || o.userData.door || o.geometry.index || src[o.material.name]) return;
+      const pa = o.geometry.attributes.position, P = new Float32Array(pa.count * 3);
+      M.multiplyMatrices(inv, o.matrixWorld);
+      for (let i = 0; i < pa.count; i++) v3.fromBufferAttribute(pa, i).applyMatrix4(M).toArray(P, i * 3);
+      src[o.material.name] = { mat: o.material, P, geo: o.geometry };
+    });
+    if (!src.w_furn || !src.w_wall) return;
+    const G = new THREE.Group();
+    G.name = "egg_" + EGG.room;
+    G.visible = false;
+    node.add(G);
+    Object.assign(EGG, { node, group: G, box: B, fk: r.floor, ri: rooms.indexOf(r) });
+
+    // 가구 (fl_furn.classroom): 꼭짓점이 닿은 삼각형끼리 한 상자로 묶고, 상자 높이·크기로 무엇인지 가림
+    const F = src.w_furn.P, tris = [];
+    for (let t = 0, n = F.length / 9; t < n; t++) {
+      const q = t * 9;
+      if (inB((F[q] + F[q + 3] + F[q + 6]) / 3, (F[q + 2] + F[q + 5] + F[q + 8]) / 3, 0.03)) tris.push(t);
+    }
+    const key = new Map(), par = [];
+    const find = (a) => { while (par[a] !== a) a = par[a] = par[par[a]]; return a; };
+    const vid = (i) => {
+      const k = Math.round(F[i * 3] * 500) + "," + Math.round(F[i * 3 + 1] * 500) + "," + Math.round(F[i * 3 + 2] * 500);
+      let q = key.get(k);
+      if (q === undefined) { q = par.length; par.push(q); key.set(k, q); }
+      return q;
+    };
+    const head = tris.map((t) => {
+      const a = vid(t * 3), b = vid(t * 3 + 1), c = vid(t * 3 + 2);
+      par[find(a)] = find(b);
+      par[find(b)] = find(c);
+      return a;
+    });
+    const grow = (b, i0, i1) => {
+      for (let i = i0; i < i1; i += 3) for (let d = 0; d < 3; d++) { b[d] = Math.min(b[d], F[i + d]); b[d + 3] = Math.max(b[d + 3], F[i + d]); }
+      return b;
+    };
+    const box0 = () => [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+    const bb = new Map();
+    tris.forEach((t, j) => {
+      const k = find(head[j]);
+      if (!bb.has(k)) bb.set(k, box0());
+      grow(bb.get(k), t * 9, t * 9 + 9);
+    });
+    const near = (a, b) => Math.abs(a - b) < 0.02;
+    const fp = [], fc = [], board = box0(), sink = [];
+    tris.forEach((t, j) => {
+      const b = bb.get(find(head[j])), y0 = b[1], y1 = b[4], mz = (b[2] + b[5]) / 2;
+      if (!inB((b[0] + b[3]) / 2, mz, 0)) return;               // 옆 교실 사물함·복도 쪽 문짝
+      let c = null;
+      if (y0 > 0.8 && y1 > 2) {                                 // 칠판 + 아래 분필 받침 (꼭짓점이 닿아 한 덩어리)
+        const top = Math.max(F[t * 9 + 1], F[t * 9 + 4], F[t * 9 + 7]);
+        c = top < 0.86 ? EGG_COL.tray : EGG_COL.board;
+        if (top >= 0.86) grow(board, t * 9, t * 9 + 9);
+      } else if (y0 < 0.01 && near(y1, 0.78)) { c = EGG_COL.lectern; EGG.lec = b; }
+      else if (y0 < 0.01 && y1 > 1 && y1 < 1.2) { sink.push(t); return; }   // 교실 뒤 사물함: 켜면 치움 (아래 EGG.sink)
+      else if (near(y0, 0.7) && near(y1, 0.73)) c = EGG_COL.desk;
+      else if (y0 > 0.4 && y0 < 0.47 && y1 < 0.85) c = EGG_COL.chair;   // 의자 (앉는 판 + 등받이)
+      else if (y1 < 0.71) c = EGG_COL.steel;                  // 책상 다리·의자 기둥
+      if (c == null) return;
+      const lc = eggLin(c);
+      for (let i = t * 9; i < t * 9 + 9; i += 3) { fp.push(F[i], F[i + 1], F[i + 2]); fc.push(lc.r, lc.g, lc.b); }
+    });
+    eggPart(fp, fc, src.w_furn.mat);
+    if (isFinite(board[0])) EGG.board = board;
+    // 사물함은 가구 한 덩어리에 합쳐져 있어서, 켜는 동안 그 꼭짓점만 바닥 슬래브 속(-5cm)으로 내려 치움 (끄면 원래 높이로)
+    if (sink.length) {
+      const attr = src.w_furn.geo.attributes.position, idx = [], y0 = [];
+      sink.forEach((t) => { for (let i = t * 3; i < t * 3 + 3; i++) { idx.push(i); y0.push(attr.getY(i)); } });
+      const lo = Math.min(...idx);
+      EGG.sink = { attr, idx, y0, lo, n: Math.max(...idx) - lo + 1 };
+    }
+
+    // 벽: 교실 쪽을 보는 안쪽 면만 골라 교실 범위로 자르고(옆 교실·복도까지 이어진 면이 있음) 4mm 앞으로. 칠판 벽은 다른 색
+    let front = null;
+    if (EGG.board) {
+      const bx = (board[0] + board[3]) / 2, bz = (board[2] + board[5]) / 2;
+      const d = { x0: Math.abs(bx - B.x0), x1: Math.abs(bx - B.x1), z0: Math.abs(bz - B.z0), z1: Math.abs(bz - B.z1) };
+      front = Object.keys(d).reduce((a, k) => (d[k] < d[a] ? k : a));
+    }
+    const back = front && { x0: "x1", x1: "x0", z0: "z1", z1: "z0" }[front];   // 칠판 맞은편 = 교실 뒤 벽
+    let backAt = null, backTop = -Infinity;
+    const cut = (pl, ax, sg, c) => {
+      const out = [];
+      pl.forEach((a, i) => {
+        const b = pl[(i + 1) % pl.length], da = sg * (a[ax] - c), db = sg * (b[ax] - c);
+        if (da >= 0) out.push(a);
+        if ((da >= 0) !== (db >= 0)) out.push(a.clone().lerp(b, da / (da - db)));
+      });
+      return out;
+    };
+    const W = src.w_wall.P, wp = [], wc = [], e = 0.012, N = new THREE.Vector3(), U = new THREE.Vector3();
+    for (let t = 0, n = W.length / 9; t < n; t++) {
+      const A = new THREE.Vector3().fromArray(W, t * 9), Bv = new THREE.Vector3().fromArray(W, t * 9 + 3), Cv = new THREE.Vector3().fromArray(W, t * 9 + 6);
+      N.subVectors(Bv, A).cross(U.subVectors(Cv, A));
+      if (N.lengthSq() < 1e-12) continue;
+      N.normalize();
+      let side = null;
+      if (N.x > 0.99 && Math.abs(A.x - B.x0) < 0.03) side = "x0";
+      else if (N.x < -0.99 && Math.abs(A.x - B.x1) < 0.03) side = "x1";
+      else if (N.z > 0.99 && Math.abs(A.z - B.z0) < 0.03) side = "z0";
+      else if (N.z < -0.99 && Math.abs(A.z - B.z1) < 0.03) side = "z1";
+      if (!side) continue;
+      if (side === back) {                                      // 뒤 벽은 아래에서 창문 자리까지 막은 한 장으로
+        backAt = side[0] === "x" ? A.x : A.z;
+        backTop = Math.max(backTop, A.y, Bv.y, Cv.y);
+        continue;
+      }
+      const ax = side[0] === "x" ? "z" : "x";
+      const pl = cut(cut([A, Bv, Cv], ax, 1, B[ax + "0"] - e), ax, -1, B[ax + "1"] + e);
+      if (pl.length < 3) continue;
+      const lc = eggLin(side === front ? EGG_COL.front : EGG_COL.wall);
+      pl.forEach((p) => p.addScaledVector(N, 0.004));
+      for (let i = 1; i + 1 < pl.length; i++) {
+        [pl[0], pl[i], pl[i + 1]].forEach((p) => { wp.push(p.x, p.y, p.z); wc.push(lc.r, lc.g, lc.b); });
+      }
+    }
+    if (backAt !== null) {                                      // 교실 뒤 벽 한 장: 켜면 뒤 창문이 없어짐 (1-7반 뒤 벽엔 문이 없음)
+      const ax = back[0] === "x" ? "z" : "x", sg = back[1] === "0" ? 1 : -1, c = backAt + sg * 0.004;
+      const q = [[B[ax + "0"] - e, 0], [B[ax + "1"] + e, 0], [B[ax + "1"] + e, backTop], [B[ax + "0"] - e, backTop]]
+        .map(([u, y]) => (ax === "z" ? new THREE.Vector3(c, y, u) : new THREE.Vector3(u, y, c)));
+      const n = q[1].clone().sub(q[0]).cross(q[2].clone().sub(q[0]));
+      if ((ax === "z" ? n.x : n.z) * sg < 0) q.reverse();       // 앞면이 교실 쪽을 보게
+      const lc = eggLin(EGG_COL.wall);
+      [0, 1, 2, 0, 2, 3].forEach((i) => { wp.push(q[i].x, q[i].y, q[i].z); wc.push(lc.r, lc.g, lc.b); });
+    }
+    eggPart(wp, wc, src.w_wall.mat);
+
+    // 바닥: 층 전체가 큰 판 하나라 교실 크기 나무 바닥 판을 1.2cm 위에 얹음 (색 = 원래 바닥색 → 나무 무늬)
+    const fsrc = (src.w_floor || src.w_wall).mat, fw = B.x1 - B.x0 + 2 * e, fd = B.z1 - B.z0 + 2 * e;
+    const fg = new THREE.PlaneGeometry(fw, fd);
+    fg.rotateX(-Math.PI / 2);
+    const fmat = eggMat(fsrc);
+    fmat.map = eggPlanks(fw, fd);
+    eggMesh(fg, fmat).position.set(cx, 0.012, cz);
+    EGG.floor = { mat: fmat, c0: fsrc.color.clone() };
+
+    if (EGG.board) eggBoard(EGG.board, front);
+    if (backAt !== null) eggTag(back, backAt, cx, cz, B);
+    eggApply(0);
+    $("w-egg").addEventListener("click", eggToggle);
+  }
+  function eggPlanks(w, d) {                                    // 폭 15cm · 길이 1.2m 나무 마루 (이음매 엇갈림)
+    const c = document.createElement("canvas");
+    c.width = c.height = 256;
+    const g = c.getContext("2d"), rows = 8, h = 256 / rows, rnd = eggRnd(17), base = new THREE.Color(EGG_COL.floor);
+    for (let i = 0; i < rows; i++) {
+      const seam = Math.floor(rnd() * 256);
+      [seam - 256, seam].forEach((x0) => {
+        const l = 0.9 + rnd() * 0.16;
+        g.fillStyle = "rgb(" + [base.r, base.g, base.b].map((u) => Math.round(Math.min(1, u * l) * 255)).join(",") + ")";
+        g.fillRect(x0, i * h, 256, h);
+      });
+      g.fillStyle = "rgba(70, 40, 15, 0.35)";
+      g.fillRect(0, i * h, 256, 1);
+      g.fillRect(seam, i * h, 1, h);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.encoding = THREE.sRGBEncoding;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(w / 1.2, d / 1.2);
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    return t;
+  }
+  // 벽에 붙는 그림 판 (칠판 글씨·뒤 벽 그래피티). side = 붙는 벽(x0/x1/z0/z1), c = 판 가운데 (층 노드 기준).
+  // 교실에서 보아 왼쪽 끝을 원점으로 두고, 써지는 동안 오른쪽으로 늘림 (무늬도 그만큼만 → 글씨가 써지는 것처럼)
+  const EGG_ROT = { x0: Math.PI / 2, x1: -Math.PI / 2, z0: 0, z1: Math.PI };   // 판 앞면(+z)이 교실 쪽을 보게
+  function eggDecal(side, c, W, H, px, mat, draw) {
+    const cv = document.createElement("canvas");
+    cv.width = px;
+    cv.height = Math.round((px * H) / W);
+    const tex = new THREE.CanvasTexture(cv);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    Object.assign(mat, { map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -8 });
+    mat.userData.base = { opacity: 1, transparent: true, depthWrite: false };
+    const geo = new THREE.PlaneGeometry(W, H);
+    geo.translate(W / 2, 0, 0);
+    const m = eggMesh(geo, mat), a = EGG_ROT[side];
+    m.receiveShadow = false;
+    m.rotation.y = a;                                           // 판의 +x (= 교실에서 보아 오른쪽) = (cos a, 0, -sin a)
+    m.position.set(c.x - (W / 2) * Math.cos(a), c.y, c.z + (W / 2) * Math.sin(a));
+    EGG.writes.push({ cv, tex, mesh: m, drawn: false, draw });
+  }
+  // 칠판 글씨: 칠판 판 바로 앞 6mm. b = 칠판(받침 뺀) 상자 [x0,y0,z0, x1,y1,z1], side = 칠판 벽
+  function eggBoard(b, side) {
+    const xs = side[0] === "x", sg = side[1] === "0" ? 1 : -1;
+    const c = new THREE.Vector3((b[0] + b[3]) / 2, (b[1] + b[4]) / 2, (b[2] + b[5]) / 2);
+    c[xs ? "x" : "z"] = (sg > 0 ? b[xs ? 3 : 5] : b[xs ? 0 : 2]) + sg * 0.006;
+    eggDecal(side, c, xs ? b[5] - b[2] : b[3] - b[0], b[4] - b[1], 1600, new THREE.MeshBasicMaterial({ color: 0xf2f2f2 }), eggDrawChalk);
+  }
+  // 교실 뒤 벽 그래피티: 뒤 벽 한 장(4mm) 앞 4mm, 눈높이쯤. 벽 빛을 받게 MeshStandard
+  function eggTag(side, at, cx, cz, B) {
+    const xs = side[0] === "x", sg = side[1] === "0" ? 1 : -1;
+    const W = Math.min(5.6, (xs ? B.z1 - B.z0 : B.x1 - B.x0) - 1.2);
+    const c = new THREE.Vector3(cx, 1.65, cz);
+    c[xs ? "x" : "z"] = at + sg * 0.008;
+    eggDecal(side, c, W, W * 0.34, 2048, new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 }), eggDrawTag);
+  }
+  function eggDraw() {                                          // 판마다 다시 그림 (글꼴을 늦게 받으면 한 번 더)
+    EGG.writes.forEach((d) => {
+      d.draw(d);
+      d.tex.needsUpdate = true;
+      d.drawn = true;
+    });
+  }
+  function eggDrawChalk(w) {
+    const g = w.cv.getContext("2d"), W = w.cv.width, H = w.cv.height, txt = EGG.text, hand = EGG.fontOK;
+    g.globalCompositeOperation = "source-over";
+    g.clearRect(0, 0, W, H);
+    let px = H * (hand ? 0.56 : 0.4);
+    const setFont = () => { g.font = (hand ? 400 : 700) + " " + px + 'px ' + (hand ? '"' + EGG.font + '", ' : "") + 'Pretendard, "Malgun Gothic", sans-serif'; };
+    setFont();
+    const tw = g.measureText(txt).width;
+    if (tw > W * 0.86) { px *= (W * 0.86) / tw; setFont(); }
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    const y = H * 0.46, uw = Math.min(W * 0.86, g.measureText(txt).width);
+    // 분필: 옅게 번진 자국 → 글씨 → 노란 밑줄 → 가루처럼 군데군데 빔
+    g.fillStyle = "rgba(255, 255, 255, 0.12)";
+    [[-3, 2], [3, -1], [1, 3]].forEach(([dx, dy]) => g.fillText(txt, W / 2 + dx, y + dy));
+    g.fillStyle = "rgba(255, 255, 250, 0.93)";
+    g.fillText(txt, W / 2, y);
+    g.strokeStyle = "rgba(255, 236, 150, 0.85)";
+    g.lineWidth = H * 0.022;
+    g.lineCap = "round";
+    g.beginPath();
+    g.moveTo(W / 2 - uw / 2, H * 0.8);
+    g.bezierCurveTo(W / 2 - uw / 6, H * 0.76, W / 2 + uw / 6, H * 0.84, W / 2 + uw / 2, H * 0.79);
+    g.stroke();
+    g.globalCompositeOperation = "destination-out";
+    const rnd = eggRnd(7);
+    for (let i = 0; i < 2600; i++) {
+      g.fillStyle = "rgba(0, 0, 0, " + (0.2 + rnd() * 0.5).toFixed(2) + ")";
+      const s = 1 + rnd() * 2.5;
+      g.fillRect(rnd() * W, rnd() * H, s, s * 0.6);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+  // 빨간 스프레이 그래피티: 번진 스프레이 → 그림자 → 검은 테두리 → 빨간 몸(위가 밝게) → 흘러내린 물감 → 둘레 가루 → 벽 결
+  function eggDrawTag(d) {
+    const g = d.cv.getContext("2d"), W = d.cv.width, H = d.cv.height, txt = EGG.tag, rnd = eggRnd(11);
+    const fam = (EGG.tagOK ? '"' + EGG.tagFont + '", ' : "") + 'Pretendard, "Malgun Gothic", sans-serif';
+    let px = H * 0.5;
+    const font = () => (EGG.tagOK ? 400 : 900) + " " + px + "px " + fam;
+    const pose = (c) => {                                       // 가운데 조금 위, 살짝 기울여 (손으로 뿌린 느낌)
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.translate(W / 2, H * 0.4);
+      c.rotate(-0.05);
+      c.font = font();
+      c.textAlign = "center";
+      c.textBaseline = "middle";
+      c.lineJoin = "round";
+    };
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = "source-over";
+    g.clearRect(0, 0, W, H);
+    g.font = font();
+    const tw = g.measureText(txt).width;
+    if (tw > W * 0.82) px *= (W * 0.82) / tw;
+    // 글자 모양만 따로 그려 둠: 물감이 흘러내릴 자리(글자 아래 끝)·가루 뿌릴 자리 찾기
+    const mk = document.createElement("canvas");
+    mk.width = W;
+    mk.height = H;
+    const mg = mk.getContext("2d");
+    pose(mg);
+    mg.fillText(txt, 0, 0);
+    const A = mg.getImageData(0, 0, W, H).data, on = (x, y) => A[(y * W + x) * 4 + 3] > 128;
+    pose(g);
+    g.shadowColor = "rgba(215, 25, 35, 0.6)";
+    g.shadowBlur = px * 0.22;
+    g.fillStyle = "rgba(215, 25, 35, 0.35)";
+    g.fillText(txt, 0, 0);
+    g.shadowBlur = 0;
+    g.shadowColor = "transparent";
+    g.fillStyle = "rgba(40, 5, 8, 0.85)";
+    g.fillText(txt, px * 0.05, px * 0.06);
+    g.lineWidth = px * 0.1;
+    g.strokeStyle = "#16090a";
+    g.strokeText(txt, 0, 0);
+    const gr = g.createLinearGradient(0, -px * 0.45, 0, px * 0.45);
+    gr.addColorStop(0, "#ff4a3d");
+    gr.addColorStop(0.55, "#e01b24");
+    gr.addColorStop(1, "#a90f1a");
+    g.fillStyle = gr;
+    g.fillText(txt, 0, 0);
+    g.save();
+    g.beginPath();
+    g.rect(-W, -px * 0.5, 2 * W, px * 0.28);
+    g.clip();
+    g.fillStyle = "rgba(255, 255, 255, 0.2)";
+    g.fillText(txt, 0, 0);
+    g.restore();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    // 흘러내린 물감: 글자 아래 끝에서 곧장 아래로 (끝에 방울)
+    g.lineCap = "round";
+    g.strokeStyle = g.fillStyle = "#c8141f";
+    for (let tries = 0, made = 0; tries < 400 && made < 16; tries++) {
+      const x = Math.floor(W * 0.06 + rnd() * W * 0.88);
+      let yb = -1;
+      for (let y = H - 1; y >= 0; y--) if (on(x, y)) { yb = y; break; }
+      if (yb < 0) continue;
+      const len = H * (0.04 + rnd() * rnd() * 0.34), lw = px * (0.022 + rnd() * 0.03);
+      if (yb + len > H - lw * 2) continue;
+      g.lineWidth = lw;
+      g.beginPath();
+      g.moveTo(x, yb - lw);
+      g.lineTo(x, yb + len);
+      g.stroke();
+      g.beginPath();
+      g.arc(x, yb + len, lw * 0.75, 0, Math.PI * 2);
+      g.fill();
+      made++;
+    }
+    // 스프레이 가루: 글자 둘레에 작은 점
+    const pts = [];
+    for (let i = 0; i < 8000 && pts.length < 1500; i++) {
+      const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H);
+      if (on(x, y)) pts.push([x, y]);
+    }
+    g.fillStyle = "rgba(205, 22, 32, 0.55)";
+    for (let i = 0; i < 1600 && pts.length; i++) {
+      const [x, y] = pts[Math.floor(rnd() * pts.length)], a = rnd() * Math.PI * 2, r = px * (0.06 + rnd() * rnd() * 0.25), s = 1 + rnd() * 2.2;
+      g.fillRect(x + Math.cos(a) * r, y + Math.sin(a) * r, s, s);
+    }
+    // 벽 결: 물감이 거친 벽에 뿌려진 것처럼 군데군데 옅게
+    g.globalCompositeOperation = "destination-out";
+    for (let i = 0; i < 2200; i++) {
+      g.fillStyle = "rgba(0, 0, 0, " + (0.1 + rnd() * 0.2).toFixed(2) + ")";
+      const s = 1 + rnd() * 2;
+      g.fillRect(rnd() * W, rnd() * H, s, s);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+  // 칠판 손글씨(Nanum Pen Script)·그래피티(Black Han Sans) 글꼴은 처음 켜거나 교탁에 다가갈 때 이 글자들만 받아 둠.
+  // 못 받으면 기본 글꼴로 씀
+  function eggFont() {
+    if (EGG.fontP || !document.fonts) return;
+    const fams = [EGG.font, EGG.tagFont], chars = EGG.text + EGG.tag;
+    EGG.fontP = new Promise((res) => {
+      const l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = "https://fonts.googleapis.com/css2?" + fams.map((f) => "family=" + f.replace(/ /g, "+")).join("&") + "&text=" + encodeURIComponent(chars);
+      const one = (f) => document.fonts.load('100px "' + f + '"', chars).then((r) => r.length > 0, () => false);
+      l.onload = () => Promise.all(fams.map(one)).then(res);
+      l.onerror = () => res([false, false]);
+      document.head.appendChild(l);
+    }).then(([pen, tag]) => {
+      EGG.fontOK = pen;
+      EGG.tagOK = tag;
+      if ((pen || tag) && EGG.writes.some((d) => d.drawn)) eggDraw();   // 기본 글꼴로 먼저 썼으면 다시
+    });
+  }
+  function eggApply(k) {                                        // 색: 0 = 원래 색, 1 = 다 들어옴
+    EGG.group.visible = k > 0;
+    EGG.parts.forEach((q) => {
+      const a = q.attr.array, c = q.cols, b = q.base;
+      for (let i = 0; i < a.length; i += 3) {
+        a[i] = b.r + (c[i] - b.r) * k;
+        a[i + 1] = b.g + (c[i + 1] - b.g) * k;
+        a[i + 2] = b.b + (c[i + 2] - b.b) * k;
+      }
+      q.attr.needsUpdate = true;
+    });
+    if (EGG.floor) EGG.floor.mat.color.copy(EGG.floor.c0).lerp(EGG_WHITE, k);
+    const s = EGG.sink;                                         // 사물함이 바닥으로 가라앉음 (0 = 원래 높이 그대로)
+    if (s) {
+      s.idx.forEach((i, j) => s.attr.setY(i, s.y0[j] * (1 - k) - 0.05 * k));
+      s.attr.updateRange.offset = s.lo * 3;
+      s.attr.updateRange.count = s.n * 3;
+      s.attr.needsUpdate = true;
+    }
+  }
+  function eggWrite(w) {                                        // 칠판 글씨·뒤 벽 그래피티: 0 = 없음, 1 = 다 씀
+    const s = Math.max(w, 0.001);
+    EGG.writes.forEach((d) => {
+      d.mesh.visible = w > 0;
+      d.mesh.scale.x = s;
+      d.tex.repeat.x = s;
+    });
+  }
+  function eggFrame(t) {
+    const dt = EGG.t ? Math.min(0.1, Math.max(0, (t - EGG.t) / 1000)) : 0;
+    EGG.t = t;
+    const goal = EGG.on ? 1 : 0;
+    if (!EGG.group || EGG.p === goal) return;
+    EGG.p = goal ? Math.min(1, EGG.p + dt / 2.2) : Math.max(0, EGG.p - dt / 1.2);
+    eggApply(easeOf(THREE.MathUtils.clamp(EGG.p / 0.35, 0, 1)));    // 켤 때: 색이 먼저 0.8초 동안 들어오고
+    eggWrite(THREE.MathUtils.clamp((EGG.p - 0.3) / 0.65, 0, 1));    // 그다음 글씨가 써짐 (끌 때는 거꾸로: 글씨부터 지워짐)
+  }
+  function eggToggle() {
+    if (!EGG.group) return;
+    EGG.on = !EGG.on;
+    if (EGG.on) eggFont();
+    if (EGG.on && EGG.writes.length && !EGG.writes[0].drawn) eggDraw();
+    eggBtn();
+  }
+  // 지도(걷기 아닐 때): 오른쪽 층 단추 중 1-7반 층(2층)을 1.5초 안에 세 번 → 켜기/끄기 + 그 교실로 날아가 보여 줌.
+  // 층 단추는 누를 때마다 골랐다/풀었다 하므로 세 번째엔 그 층이 골라진 채
+  const eggTaps = [];
+  function eggTap(k) {
+    if (!EGG.group || k !== EGG.fk) { eggTaps.length = 0; return; }
+    const now = performance.now();
+    eggTaps.push(now);
+    while (now - eggTaps[0] > 1500) eggTaps.shift();
+    if (eggTaps.length < 3) return;
+    eggTaps.length = 0;
+    eggToggle();
+    if (state.sel !== EGG.fk) select(EGG.fk, false);
+    flyDyn(roomView(EGG.ri), 1000);
+  }
+  function eggBtn() {
+    const b = $("w-egg");
+    b.hidden = !EGG.near;
+    b.setAttribute("aria-pressed", String(EGG.on));
+    $("w-egg-key").hidden = !WK.fine;                             // 손으로 쓰는 화면엔 E 글자 없이
+    $("w-egg-txt").textContent = EGG.on ? "원래대로" : "교탁 두드리기";
+  }
+  // 교탁 2.2m 안 + 1-7반 안(벽 너머 옆 교실 말고) + 같은 층
+  function eggNear() {
+    let near = false;
+    if (EGG.lec) {
+      const L = EGG.node.worldToLocal(eggV.set(WK.pos.x, WK.ground, WK.pos.z)), B = EGG.box, c = EGG.lec;
+      near = Math.abs(L.y) < 0.5 && L.x > B.x0 && L.x < B.x1 && L.z > B.z0 && L.z < B.z1
+        && Math.hypot(L.x - (c[0] + c[3]) / 2, L.z - (c[2] + c[5]) / 2) < 2.2;
+    }
+    if (near === EGG.near) return;
+    EGG.near = near;
+    if (near) eggFont();
+    eggBtn();
+  }
+  function eggHit(p) {                                          // 걷는 중 누른 곳이 교탁인지 (가까이 있을 때만)
+    if (!EGG.near) return false;
+    const L = EGG.node.worldToLocal(eggV.copy(p)), c = EGG.lec, e = 0.06;
+    return L.x > c[0] - e && L.x < c[3] + e && L.y > c[1] - e && L.y < c[4] + e && L.z > c[2] - e && L.z < c[5] + e;
   }
 
   // ---------------------------------------------------------------- 매 프레임
@@ -2388,6 +2904,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
 
   function frame(t) {
     if (WK.on) { walkFrame(t); requestAnimationFrame(frame); return; }
+    eggFrame(t);                                                // 걷기를 끝낸 뒤에도 켜진 채로 지도에서 보임
     let dy = 0;
     for (const id in EX) {
       const ex = EX[id];
