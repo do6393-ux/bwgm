@@ -893,6 +893,19 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
         });
       });
     });
+    // 여닫는 문짝 (유리문·양문): 층 노드 바로 밑 'door_' 노드. 원점 = 경첩, 로컬 +X = 문짝 끝 쪽 → 걸을 때 다가가면 열림
+    floorKeys().forEach((k) => floorNode[k].children.forEach((o) => {
+      if (!/^door_/.test(o.name)) return;
+      let w = 0;
+      o.traverse((m) => {
+        if (!m.isMesh) return;
+        m.userData.door = true;
+        m.geometry.computeBoundingBox();
+        w = Math.max(w, m.geometry.boundingBox.max.x);
+      });
+      DOORS.push({ obj: o, q0: o.quaternion.clone(), w, a: 0, want: false, side: 1,
+                   H: new THREE.Vector3(), U: new THREE.Vector3(), N: new THREE.Vector3() });
+    }));
     mixer = new THREE.AnimationMixer(root);
     BLD.forEach((b, i) => {
       const clip = gltf.animations.find((a) => a.name === b.animation) || (i === 0 ? gltf.animations[0] : null);
@@ -1325,6 +1338,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
     here: -1, stair: -1, fk: null, where: "", tick: 0, fine: false,
   };
   let CG = null, NP = null, ADJ = null, SIGNS = null, CEIL = null;
+  const DOORS = [];
   const WALK_SKY = new THREE.Color(0xb7bbbe);
   const lamp = new THREE.PointLight(0xffffff, 0, 16, 1.4);         // 눈 위치에 따라다니는 빛: 가까운 벽은 밝고 먼 곳은 조금 어둡게 (깊이감)
   scene.add(lamp);
@@ -1349,6 +1363,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
     if (WK.on) buildWalkData();
   }
   function buildWalkData() {
+    doorGeom();
     buildGrid();
     buildNav();
     buildCeil();
@@ -1359,7 +1374,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
   function buildGrid() {
     scene.updateMatrixWorld(true);
     const meshes = [];
-    floorKeys().forEach((k) => floorNode[k].traverse((o) => { if (o.isMesh) meshes.push([o, k]); }));
+    floorKeys().forEach((k) => floorNode[k].traverse((o) => { if (o.isMesh && !o.userData.door) meshes.push([o, k]); }));   // 문짝은 충돌 없음 (다가가면 열림)
     if (campus) campus.traverse((o) => { if (o.isMesh) meshes.push([o, 0]); });
     let total = 0;
     meshes.forEach(([m]) => { const g = m.geometry; total += Math.floor((g.index ? g.index.count : g.attributes.position.count) / 3); });
@@ -1658,6 +1673,45 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       const el = mkLabel("wsign", roomName(i, false), true);
       SIGNS.push({ el, pos, feet: room.y, seen: false, chk: 0 });
     });
+  }
+
+  // ---------------------------------------------------------------- 자동문 (유리문·양문)
+  // 문짝에서 DOOR_NEAR 안으로 오면 내 반대쪽으로 열리고, DOOR_FAR 밖으로 멀어지면 닫힘. 문짝은 충돌 격자에 안 넣음
+  const DOOR_OPEN = 1.62, DOOR_NEAR = 2.2, DOOR_FAR = 3.0, DQ = new THREE.Quaternion(), DY = new THREE.Vector3(0, 1, 0);
+  function doorsClose() {
+    DOORS.forEach((d) => { d.a = 0; d.want = false; d.obj.quaternion.copy(d.q0); });
+  }
+  // 닫힌 문짝의 경첩·방향 (걷는 동안은 분해 0 이라 그대로)
+  function doorGeom() {
+    doorsClose();
+    scene.updateMatrixWorld(true);
+    DOORS.forEach((d) => {
+      d.obj.getWorldPosition(d.H);
+      d.U.set(1, 0, 0).transformDirection(d.obj.matrixWorld);
+      d.U.y = 0;
+      d.U.normalize();
+      d.N.set(d.U.z, 0, -d.U.x);                                  // 로컬 Y 축으로 + 만큼 돌리면 문짝 끝이 N 쪽으로 감
+    });
+  }
+  function doorsFrame(dt) {
+    const px = WK.pos.x, pz = WK.pos.z;
+    for (const d of DOORS) {
+      if (Math.abs(WK.ground - d.H.y) > 1.3) d.want = false;
+      else {
+        const rx = px - d.H.x, rz = pz - d.H.z;
+        const s = THREE.MathUtils.clamp(rx * d.U.x + rz * d.U.z, 0, d.w);
+        const dist = Math.hypot(rx - d.U.x * s, rz - d.U.z * s);
+        if (dist < DOOR_NEAR) d.want = true;
+        else if (dist > DOOR_FAR) d.want = false;
+        // 닫혀 있는 동안은 열 쪽을 계속 고름: 내가 있는 쪽 반대로 밀어서 열림
+        if (Math.abs(d.a) < 0.05) d.side = (rx - d.U.x * d.w * 0.5) * d.N.x + (rz - d.U.z * d.w * 0.5) * d.N.z > 0 ? -1 : 1;
+      }
+      const goal = d.want ? d.side * DOOR_OPEN : 0;
+      if (d.a === goal) continue;
+      d.a += (goal - d.a) * (1 - Math.exp(-dt * (d.want ? 9 : 4.5)));
+      if (Math.abs(goal - d.a) < 0.003) d.a = goal;
+      d.obj.quaternion.copy(d.q0).multiply(DQ.setFromAxisAngle(DY, d.a));
+    }
   }
 
   // ---------------------------------------------------------------- 움직이기
@@ -2130,6 +2184,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       $("walkhud").hidden = true;
       if (CEIL) CEIL.visible = false;
       if (SIGNS) SIGNS.forEach((s) => { s.el.hidden = true; });
+      doorsClose();
       camera.fov = 35; camera.near = 1; camera.far = 5000;
       camera.rotation.order = "XYZ";
       camera.updateProjectionMatrix();
@@ -2308,6 +2363,7 @@ body.wlock #stage canvas, body.wlock #stage canvas:active { cursor: none; }
       goal.scale.setScalar(1 + 0.12 * Math.sin(a * 6));
     }
     if (t - WK.tick > 200) { WK.tick = t; whereNow(); }
+    doorsFrame(dt);
     renderer.render(scene, camera);
     drawSigns(t);
     drawMap();
