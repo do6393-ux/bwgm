@@ -17,6 +17,7 @@ const DRY_RUN = process.env.DRY_RUN === '1' || process.env.DRY_RUN === 'true';
 // 학급마다 컴시간 페이지를 새로 받아 온다. 그래서 내부 로더(ComciganPage)를 직접 쓴다.
 // 패키지가 이 파일을 공개하지 않으므로 package.json 에서 버전을 고정해 둔다.
 // 2026-11-12: 컴시간이 필드 이름을 또 바꿔 1.4.0 이 멈췄다 → 1.6.0 (일과시간 필드를 data() 가 채워 준다).
+// 2026-11-26: 11/25 컴시간이 시간표 요청을 GET → POST 로 바꿔 1.6.0 이 멈췄다 → 1.7.0 (load·search·data·render 모양은 그대로).
 async function loadComciganPage() {
   const entry = require.resolve('parse-comcigan'); // .../dist/index.js
   const loaderUrl = pathToFileURL(path.join(path.dirname(entry), 'loader.js')).href;
