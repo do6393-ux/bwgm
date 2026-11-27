@@ -27,4 +27,14 @@ export default defineConfig([
     files: ['classroom-app/setup.js'],
     languageOptions: { sourceType: 'script', globals: globals.browser },
   },
+  // Vercel 서버 기능 (교실 채팅 휴대폰 알림 보내기): Node
+  {
+    files: ['api/**/*.js'],
+    languageOptions: { globals: globals.node },
+  },
+  // 휴대폰 알림을 받는 서비스 워커
+  {
+    files: ['public/push-sw.js'],
+    languageOptions: { sourceType: 'script', globals: globals.serviceworker },
+  },
 ])

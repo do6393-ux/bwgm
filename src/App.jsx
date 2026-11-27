@@ -1,4 +1,4 @@
-import { useState, useEffect, useLayoutEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import { auth } from "@/lib/firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { useWorkAccess } from "@/lib/useWorkAccess";
@@ -18,6 +18,8 @@ import HomeworkManager from "@/components/homework/HomeworkManager";
 import ClassroomKiosk from "@/components/tabs/homeroom/ClassroomKiosk";
 import ClassroomInboxToast from "@/components/layout/ClassroomInboxToast";
 import { useClassroomInbox } from "@/lib/useClassroomInbox";
+import { chatLinkFromMessage, readChatLink } from "@/lib/chatPush";
+import { clearChatLinkFromUrl } from "@/lib/chatPushClient";
 
 // 탭별 색은 src/index.css 의 [data-theme] 블록에 있고, 여기서는 그 색 이름(page, ink, line …)만 쓴다.
 const THEME_CLASSES = {
@@ -50,15 +52,55 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("class");
   const [isLoginOpen, setIsLoginOpen] = useState(false);
 
+  // 내 학급을 특정 작은 탭으로 열기 (알림의 "보고 답장하기", 휴대폰 알림 누르기). n 이 바뀌면 내 학급을 새로 연다.
+  // focus: "chat" 이면 교실 채팅 카드까지 내려 준다
+  const [homeroomEntry, setHomeroomEntry] = useState({ n: 0, subtab: undefined, focus: undefined });
+  const goTab = (tab) => {
+    setHomeroomEntry((e) => ({ ...e, subtab: undefined, focus: undefined }));
+    setActiveTab(tab);
+  };
+  const openClassroomChat = useCallback((screen) => {
+    try {
+      localStorage.setItem("homeroom_grade", screen.grade);
+      localStorage.setItem("homeroom_class", screen.classNum);
+    } catch {
+      // 저장소를 못 쓰면 지금 설정한 학급으로 연다
+    }
+    setHomeroomEntry((e) => ({ n: e.n + 1, subtab: "classroom", focus: "chat" }));
+    setActiveTab("homeroom");
+  }, [setHomeroomEntry, setActiveTab]);
+
+  // 휴대폰 알림을 눌러 새 창으로 들어온 경우 (?chat=교실화면ID&g=학년&c=반) — 로그인이 확인되면 그 교실 채팅을 연다
+  const chatLinkRef = useRef(classroomScreenId === null ? readChatLink(urlParams) : null);
+
   useEffect(() => {
     return onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      // 로그인하면 교무실(시간표) 탭으로, 로그아웃하면 공개 탭으로 이동.
-      // 단, 정보 수업 작은 탭 주소(…/#lessons, #homework, #timer)로 들어왔으면 정보 수업 탭에 그대로 둔다.
-      setActiveTab(user && !isClassSubtabHash(window.location.hash) ? "office" : "class");
+      const chatLink = chatLinkRef.current;
+      if (user && chatLink) {
+        chatLinkRef.current = null;
+        clearChatLinkFromUrl();
+        openClassroomChat(chatLink);
+      } else {
+        // 로그인하면 교무실(시간표) 탭으로, 로그아웃하면 공개 탭으로 이동.
+        // 단, 정보 수업 작은 탭 주소(…/#lessons, #homework, #timer)로 들어왔으면 정보 수업 탭에 그대로 둔다.
+        setActiveTab(user && !isClassSubtabHash(window.location.hash) ? "office" : "class");
+      }
       setAuthReady(true);
     });
-  }, []);
+  }, [openClassroomChat]);
+
+  // 포털 창이 이미 열려 있을 때 휴대폰 알림을 누르면, 알림 쪽(public/push-sw.js)이 이 창에 알려 준다
+  useEffect(() => {
+    const sw = typeof navigator !== "undefined" ? navigator.serviceWorker : null;
+    if (!sw || classroomScreenId !== null) return undefined;
+    const onMessage = (event) => {
+      const link = chatLinkFromMessage(event.data);
+      if (link) openClassroomChat(link);
+    };
+    sw.addEventListener("message", onMessage);
+    return () => sw.removeEventListener("message", onMessage);
+  }, [openClassroomChat, classroomScreenId]);
 
   // 정보 업무는 관리자 + 관리자가 허용한 교사(teachers/{이메일}.canWork)만 열람 가능
   const { canWork, ready: workAccessReady, workRole } = useWorkAccess(currentUser);
@@ -69,23 +111,6 @@ export default function App() {
     const strip = (t) => t.replace(/^\(\d+\) /, "");
     document.title = inbox.count > 0 ? `(${inbox.count}) ${strip(document.title)}` : strip(document.title);
   }, [inbox.count]);
-
-  // 내 학급을 특정 작은 탭으로 열기 (알림의 "보고 답장하기"). n 이 바뀌면 내 학급을 새로 연다
-  const [homeroomEntry, setHomeroomEntry] = useState({ n: 0, subtab: undefined });
-  const goTab = (tab) => {
-    setHomeroomEntry((e) => ({ ...e, subtab: undefined }));
-    setActiveTab(tab);
-  };
-  const openClassroomChat = (screen) => {
-    try {
-      localStorage.setItem("homeroom_grade", screen.grade);
-      localStorage.setItem("homeroom_class", screen.classNum);
-    } catch {
-      // 저장소를 못 쓰면 지금 설정한 학급으로 연다
-    }
-    setHomeroomEntry((e) => ({ n: e.n + 1, subtab: "classroom" }));
-    setActiveTab("homeroom");
-  };
 
   // 비로그인 상태에서는 어떤 경로로 activeTab 이 바뀌어도 공개 탭만 렌더링
   // 정보 업무 탭은 관리자/허용된 교사만, 나머지 교사 탭은 로그인한 교사만 접근 가능
@@ -187,7 +212,7 @@ export default function App() {
         {canWork && visibleTab === "work" && <TabWork currentUser={currentUser} admin={isAdmin(currentUser)} workRole={workRole} />}
         {currentUser && visibleTab === "office" && <TabOffice currentUser={currentUser} canWork={canWork} onOpenTab={goTab} />}
         {currentUser && visibleTab === "homeroom" && (
-          <TabHomeroom key={homeroomEntry.n} currentUser={currentUser} currentTheme={currentTheme} initialSubtab={homeroomEntry.subtab} />
+          <TabHomeroom key={homeroomEntry.n} currentUser={currentUser} currentTheme={currentTheme} initialSubtab={homeroomEntry.subtab} initialFocus={homeroomEntry.focus} />
         )}
       </main>
 

@@ -12,6 +12,7 @@ import { encodeDrawing } from "@/lib/drawing";
 import { scheduleWhen } from "@/lib/neisSchedule";
 import { useNow } from "@/lib/useScreenAwake";
 import { dateKey } from "@/lib/workCalendar";
+import ClassroomPushSettings from "./ClassroomPushSettings";
 import DrawingPad from "./DrawingPad";
 import DrawingView from "./DrawingView";
 
@@ -167,7 +168,7 @@ function NoticeCard({ screen, today }) {
   );
 }
 
-function ChatCard({ screen, messages, now }) {
+function ChatCard({ screen, messages, now, focusOnMount }) {
   const { toast, confirm } = useDialog();
   const chat = todayMessages(messages, now);
   const unread = unreadFromStudents(chat, screen.teacherReadAt);
@@ -175,6 +176,14 @@ function ChatCard({ screen, messages, now }) {
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
   const listRef = useRef(null);
+  const cardRef = useRef(null);
+
+  // 알림을 눌러 들어왔으면 이 카드까지 내려 준다 (위 칸들이 그려진 뒤에)
+  useEffect(() => {
+    if (!focusOnMount) return undefined;
+    const t = setTimeout(() => cardRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 300);
+    return () => clearTimeout(t);
+  }, [focusOnMount]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -213,7 +222,11 @@ function ChatCard({ screen, messages, now }) {
   };
 
   return (
-    <section aria-labelledby="classroom-chat-title" className="bg-surface border border-line rounded-card p-5 md:p-6 flex flex-col gap-3 min-w-0">
+    <section
+      ref={cardRef}
+      aria-labelledby="classroom-chat-title"
+      className="bg-surface border border-line rounded-card p-5 md:p-6 flex flex-col gap-3 min-w-0 scroll-mt-4"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <h3 id="classroom-chat-title" className="flex items-center gap-2 text-[16px] md:text-[18px] font-bold text-white">
@@ -278,6 +291,7 @@ function ChatCard({ screen, messages, now }) {
         </button>
       </form>
       <p className="-mt-1 text-[12px] text-ink-faint">답장은 교실 TV에 떠서 반 친구들도 같이 봐요. 대화는 일주일 지나면 저절로 지워져요.</p>
+      <ClassroomPushSettings screen={screen} />
     </section>
   );
 }
@@ -453,13 +467,14 @@ function ClassEventsCard({ screen, today }) {
   );
 }
 
-export default function ClassroomTeacherPanel({ screen, messages }) {
+// focusChat: 처음 그릴 때 교실 채팅 카드까지 내려 준다 (휴대폰 알림을 눌러 들어왔을 때)
+export default function ClassroomTeacherPanel({ screen, messages, focusChat = false }) {
   const now = useNow(30000);
   const today = dateKey(now);
   return (
     <div className="grid md:grid-cols-2 gap-4">
       <NoticeCard screen={screen} today={today} />
-      <ChatCard screen={screen} messages={messages} now={now} />
+      <ChatCard screen={screen} messages={messages} now={now} focusOnMount={focusChat} />
       <ClassEventsCard screen={screen} today={today} />
     </div>
   );

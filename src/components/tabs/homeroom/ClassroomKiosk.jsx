@@ -6,6 +6,7 @@ import { Maximize, Minimize2 } from "lucide-react";
 import { watchMessages, watchScreen, sendMessage } from "@/lib/classroomApi";
 import { classroomApp, noticeKey, useEscToLower, useRaiseOnNotice } from "@/lib/classroomApp";
 import { isScreenId } from "@/lib/classroomChat";
+import { notifyTeacherPhone } from "@/lib/chatPushClient";
 import { useFullscreen, useWakeLock } from "@/lib/useScreenAwake";
 import ClassroomScreen from "./ClassroomScreen";
 
@@ -109,7 +110,11 @@ export default function ClassroomKiosk({ screenId }) {
     return <div className="fixed inset-0 bg-[#2b2b2b]" />;
   }
 
-  const onSend = ({ text, name }) => sendMessage(screenId, { from: "student", text, name });
+  // 보낸 뒤 선생님 휴대폰에 알림 (선생님이 "이 휴대폰으로 알림 받기"를 켜 둔 기기에만 간다)
+  const onSend = ({ text, name }) =>
+    sendMessage(screenId, { from: "student", text, name }).then((ref) => {
+      notifyTeacherPhone(screenId, ref.id);
+    });
   const cornerButton = `fixed left-3 bottom-3 flex items-center gap-2 px-4 py-2.5 rounded-full bg-black/70 hover:bg-black text-white text-[14px] font-bold transition-opacity ${
     showButton ? "opacity-100" : "opacity-0 pointer-events-none"
   }`;

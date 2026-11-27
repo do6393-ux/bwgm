@@ -12,6 +12,7 @@ rules_version = '2';
 //   - 그 외(학생·외부인): 공지/수업자료/과제 읽기, 과제 제출(쓰기), 제출 확인 목록(학번·가린 이름) 읽기만 가능.
 //   - 교실 컴퓨터(로그인 없음): 교실 화면 주소(무작위 글자)를 아는 기기만 그 교실 화면·대화 읽기와
 //     학생으로 메시지 보내기. 학급 시간표·교시 시각 읽기 (아래 classroom_screens, timetable_schedules).
+//   - 휴대폰 알림 서버 기능(api/chat-push.js, Vercel): 로그인 없이 위 교실 화면·대화·알림 받는 기기(push)를 읽기만 한다.
 //
 //  Firebase 콘솔 > Authentication 에서 이메일/비밀번호 "가입(sign-up)"은
 //  켜 두어야 포털에서 교사 계정을 만들 수 있습니다. 외부인이 계정을 만들어도
@@ -334,6 +335,29 @@ service cloud.firestore {
                         || (request.resource.data.from == 'teacher' && isScreenOwner(sid)));
       allow delete: if isScreenOwner(sid);
       allow update: if false;
+    }
+
+    //   classroom_screens/{id}/push/{did}: 교실 채팅 휴대폰 알림을 받는 선생님 기기 { endpoint, p256dh, auth, label, createdAt } (2026-11-27)
+    //     did = endpoint 의 SHA-256 앞 32자(16진수, src/lib/chatPush.js 의 pushDeviceId).
+    //     알림을 보내는 서버 기능(api/chat-push.js)이 로그인 없이 읽으므로, 대화처럼 교실 화면 주소를 아는 기기는 읽을 수 있다.
+    //     이 값만으로는 알림을 보낼 수 없다 (보내려면 Vercel 환경 변수에만 있는 비밀 열쇠로 서명해야 한다).
+    //     넣기·지우기는 그 교실 화면을 만든 선생님만.
+    match /classroom_screens/{sid}/push/{did} {
+      allow read: if exists(/databases/$(database)/documents/classroom_screens/$(sid));
+      allow create, update: if isScreenOwner(sid)
+                    && did.matches('[0-9a-f]{32}')
+                    && request.resource.data.keys().hasOnly(['endpoint', 'p256dh', 'auth', 'label', 'createdAt'])
+                    && request.resource.data.keys().hasAll(['endpoint', 'p256dh', 'auth', 'createdAt'])
+                    && request.resource.data.endpoint is string
+                    && request.resource.data.endpoint.size() <= 1000
+                    && request.resource.data.endpoint.matches('https://[^/]+/.+')
+                    && request.resource.data.p256dh is string
+                    && request.resource.data.p256dh.size() <= 200
+                    && request.resource.data.auth is string
+                    && request.resource.data.auth.size() <= 100
+                    && strOk(request.resource.data, 'label', 40)
+                    && request.resource.data.createdAt == request.time;
+      allow delete: if isScreenOwner(sid);
     }
 
     // ---------- 교사 공용 ----------

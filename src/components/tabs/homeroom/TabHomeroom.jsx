@@ -21,10 +21,12 @@ const SUBTABS = [
 ];
 
 // initialSubtab: 처음 열 작은 탭 (교실 채팅 알림의 "보고 답장하기"는 "classroom")
-export default function TabHomeroom({ currentUser, initialSubtab }) {
+// initialFocus: "chat" 이면 교실 화면 작은 탭에서 교실 채팅 카드까지 내려 준다 (알림을 눌러 들어왔을 때)
+export default function TabHomeroom({ currentUser, initialSubtab, initialFocus }) {
   const userId = currentUser?.uid || "default_teacher";
 
   const [activeSubtab, setActiveSubtab] = useState(() => (SUBTABS.some((t) => t.id === initialSubtab) ? initialSubtab : "contacts"));
+  const [focusChat, setFocusChat] = useState(initialFocus === "chat"); // 작은 탭을 직접 바꾸면 끈다
   const [grade, setGrade] = useState(() => Number(localStorage.getItem("homeroom_grade")) || 1);
   const [classNum, setClassNum] = useState(() => Number(localStorage.getItem("homeroom_class")) || 7);
   const [isClassModalOpen, setIsClassModalOpen] = useState(false);
@@ -123,7 +125,10 @@ export default function TabHomeroom({ currentUser, initialSubtab }) {
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveSubtab(tab.id)}
+                onClick={() => {
+                  setFocusChat(false);
+                  setActiveSubtab(tab.id);
+                }}
                 className={`flex items-center justify-center gap-2 px-1 md:px-5 py-2 md:py-2.5 rounded-full text-[12px] md:text-[13px] font-medium transition-all ${
                   isActive
                     ? "bg-white text-black shadow-[0_4px_12px_rgba(255,255,255,0.15)] font-bold"
@@ -143,7 +148,7 @@ export default function TabHomeroom({ currentUser, initialSubtab }) {
         {activeSubtab === "seating" && <SubtabSeating userId={userId} grade={grade} classNum={classNum} contacts={contacts} excludedStudentNums={excludedStudentNums} setExcludedStudentNums={setExcludedStudentNums} contactsLoading={contactsLoading} currentUser={currentUser} />}
         {activeSubtab === "cleaning" && <SubtabCleaning userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
         {activeSubtab === "records" && <SubtabRecords userId={userId} grade={grade} classNum={classNum} contacts={contacts} currentUser={currentUser} />}
-        {activeSubtab === "classroom" && <SubtabClassroom grade={grade} classNum={classNum} currentUser={currentUser} />}
+        {activeSubtab === "classroom" && <SubtabClassroom grade={grade} classNum={classNum} currentUser={currentUser} focusChat={focusChat} />}
       </section>
 
       {isClassModalOpen && (

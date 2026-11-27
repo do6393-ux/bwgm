@@ -5,11 +5,13 @@ import { Copy, ExternalLink, Link2, Maximize, RefreshCw } from "lucide-react";
 import { useDialog } from "@/components/ui/dialogContext";
 import { createScreen, pruneOldMessages, replaceScreen, sendMessage, watchMessages, watchMyScreens } from "@/lib/classroomApi";
 import { KEEP_DAYS, screenLink } from "@/lib/classroomChat";
+import { notifyTeacherPhone } from "@/lib/chatPushClient";
 import { useFullscreen, useWakeLock } from "@/lib/useScreenAwake";
 import ClassroomScreen from "./ClassroomScreen";
 import ClassroomTeacherPanel from "./ClassroomTeacherPanel";
 
-export default function SubtabClassroom({ grade, classNum, currentUser }) {
+// focusChat: 처음 열 때 교실 채팅 카드까지 내려 준다 (알림을 눌러 들어왔을 때)
+export default function SubtabClassroom({ grade, classNum, currentUser, focusChat = false }) {
   const uid = currentUser?.uid || null;
   const { toast, confirm } = useDialog();
   const boxRef = useRef(null);
@@ -92,8 +94,12 @@ export default function SubtabClassroom({ grade, classNum, currentUser }) {
     }
   };
 
-  // 선생님 계정으로 전체 화면을 띄워 둔 교실에서도 학생이 채팅을 보낼 수 있게 (주소가 있을 때만)
-  const onStudentSend = ({ text, name }) => sendMessage(screenId, { from: "student", text, name });
+  // 선생님 계정으로 전체 화면을 띄워 둔 교실에서도 학생이 채팅을 보낼 수 있게 (주소가 있을 때만).
+  // 휴대폰 알림도 교실 컴퓨터에서 보낸 것과 똑같이 간다
+  const onStudentSend = ({ text, name }) =>
+    sendMessage(screenId, { from: "student", text, name }).then((ref) => {
+      notifyTeacherPhone(screenId, ref.id);
+    });
 
   return (
     <div className="space-y-4">
@@ -186,7 +192,7 @@ export default function SubtabClassroom({ grade, classNum, currentUser }) {
         )}
       </section>
 
-      {screen && <ClassroomTeacherPanel screen={screen} messages={msgList} />}
+      {screen && <ClassroomTeacherPanel screen={screen} messages={msgList} focusChat={focusChat} />}
 
       <div
         ref={boxRef}
