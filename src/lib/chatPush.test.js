@@ -111,6 +111,11 @@ describe("deviceLabel · isPhoneLike", () => {
     expect(deviceLabel(edge)).toBe("Windows · Edge");
     expect(deviceLabel("")).toBe("브라우저");
   });
+  it("아이패드 사파리는 Mac 인 척하지만 터치가 되면 아이패드", () => {
+    const ipad = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15";
+    expect(deviceLabel(ipad, 5)).toBe("아이패드 · Safari");
+    expect(deviceLabel(ipad, 0)).toBe("Mac · Safari");
+  });
   it("휴대폰인지", () => {
     expect(isPhoneLike(samsung)).toBe(true);
     expect(isPhoneLike(iphone)).toBe(true);

@@ -88,8 +88,12 @@ export async function pushDeviceId(endpoint) {
   return Array.from(bytes.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** 기기 이름: "안드로이드 · 삼성 인터넷", "Windows · Chrome" 처럼 */
-export function deviceLabel(ua = "") {
+/**
+ * 기기 이름: "안드로이드 · 삼성 인터넷", "Windows · Chrome" 처럼.
+ * touchPoints = navigator.maxTouchPoints (아이패드는 사파리가 Mac 인 척해서, 터치가 되는 "Mac" 이면 아이패드로 본다)
+ */
+export function deviceLabel(ua = "", touchPoints = 0) {
+  if (/Macintosh/.test(ua) && touchPoints > 1) ua = ua.replace("Macintosh", "iPad");
   const browser = /SamsungBrowser/.test(ua)
     ? "삼성 인터넷"
     : /Whale\//.test(ua)

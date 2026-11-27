@@ -58,7 +58,7 @@ export async function enablePush(screenId) {
 
   const { endpoint, keys } = sub.toJSON();
   const deviceId = await pushDeviceId(endpoint);
-  await savePushDevice(screenId, deviceId, { endpoint, p256dh: keys.p256dh, auth: keys.auth, label: deviceLabel(navigator.userAgent) });
+  await savePushDevice(screenId, deviceId, { endpoint, p256dh: keys.p256dh, auth: keys.auth, label: deviceLabel(navigator.userAgent, navigator.maxTouchPoints || 0) });
   try {
     localStorage.setItem(DEVICE_KEY, deviceId);
   } catch {
@@ -82,7 +82,7 @@ export async function healPushDevice(screenId, devices, nowId) {
   const sub = await currentSubscription();
   if (!sub) return;
   const { endpoint, keys } = sub.toJSON();
-  await savePushDevice(screenId, nowId, { endpoint, p256dh: keys.p256dh, auth: keys.auth, label: deviceLabel(navigator.userAgent) });
+  await savePushDevice(screenId, nowId, { endpoint, p256dh: keys.p256dh, auth: keys.auth, label: deviceLabel(navigator.userAgent, navigator.maxTouchPoints || 0) });
   await deletePushDevice(screenId, oldId);
   localStorage.setItem(DEVICE_KEY, nowId);
 }

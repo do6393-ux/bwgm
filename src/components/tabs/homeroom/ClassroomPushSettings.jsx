@@ -101,7 +101,8 @@ export default function ClassroomPushSettings({ screen }) {
           <p className="text-[13px] text-ink leading-relaxed">이 브라우저에서는 알림을 받을 수 없어요.</p>
           <ul className="rounded-field bg-well px-3.5 py-3 flex flex-col gap-2 text-[13px] text-ink-muted leading-relaxed">
             <li>
-              <b className="text-ink-strong">아이폰</b> · 사파리에서 공유 › '홈 화면에 추가'를 한 뒤, 홈 화면의 포털 아이콘으로 열어서 다시 눌러 주세요. (iOS 16.4 이상)
+              <b className="text-ink-strong">아이폰·아이패드</b> · 사파리에서 공유 › '홈 화면에 추가'를 한 뒤, 홈 화면의 포털 아이콘으로 열고 다시 로그인해서
+              눌러 주세요. (iOS·iPadOS 16.4 이상)
             </li>
             <li>
               <b className="text-ink-strong">안드로이드</b> · 삼성 인터넷이나 Chrome 으로 열어 주세요. 카톡 안에서 연 창은 알림을 못 받아요.
